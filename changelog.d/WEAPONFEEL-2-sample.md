@@ -1,0 +1,1 @@
+- 09_openworld: the player's EventSfx3D also plays sounds for reload start and end, an empty-gun click and a weapon switch.

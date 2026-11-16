@@ -1,0 +1,1 @@
+- Kit: `r.merge_budget` (or `Kit3DExtract::set_merge_budget`) caps the `StaticMerge3D` cells merged per frame, so an area streaming in merges over several frames instead of hitching; the waiting cells' children draw on their own and `Kit3DStats::merge_pending` counts them (M-OPENWORLD A3). 0, the default, merges at once as before.

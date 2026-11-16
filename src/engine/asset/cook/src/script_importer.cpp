@@ -16,7 +16,7 @@ constexpr const char* kStage = "cook.script";
 class ScriptImporter final : public IImporter {
 public:
     StringView id() const override { return "script"; }
-    u32 version() const override { return 2; }  // 2: names and types checked
+    u32 version() const override { return 3; }  // 2: names and types checked; 3: bytecode with debug names (debugLevel 2)
     ChunkType type() const override { return ChunkType::Script; }
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override { return ext == ".luau"; }

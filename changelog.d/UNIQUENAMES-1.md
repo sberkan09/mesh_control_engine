@@ -1,0 +1,1 @@
+- Editor, M-UNIQUENAMES: Edit > Make names unique gives entities that share a name a numbered suffix (Wall, Wall (2), Wall (3)); one undo step.

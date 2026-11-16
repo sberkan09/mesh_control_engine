@@ -1,6 +1,14 @@
+#include "audio_decode.h"
+#include "fbx_importer.h"
 #include "importer_common.h"
+#include "obj_importer.h"
 
 namespace mce::cook {
+
+mem::UniquePtr<IImporter> make_hlod_importer();  // .mchlod -> CHNK_MESH (M-OPENWORLD A3), hlod_importer.cpp
+
+// .mcroads -> CHNK_ROADS (M-OPENWORLD B1), declared here rather than in importer.h, which 170 TUs include.
+mem::UniquePtr<IImporter> make_roads_importer();
 
 void ImporterRegistry::add(mem::UniquePtr<IImporter> importer) {
     MCE_ASSERT_MSG(importer && !find(importer->id()), "importer missing or registered twice");
@@ -19,16 +27,30 @@ const IImporter* ImporterRegistry::for_extension(StringView lower_ext) const {
     return nullptr;
 }
 
+#if !MCE_HAS_FBX
+bool dump_fbx_scene_json(StringView, Span<const byte>, String&, String& error) {
+    error = String("this build has no FBX reader (a cross build); run `mce import fbx` with the host's mce_cook");
+    return false;
+}
+#endif
+
 void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_texture_importer());
     reg.add(make_wav_importer());
     reg.add(make_ogg_importer());
+    reg.add(make_mp3_importer());
+    reg.add(make_flac_importer());
     reg.add(make_sound_set_importer());
     reg.add(make_video_importer());
     reg.add(make_font_importer());
     reg.add(make_material_importer());
     reg.add(make_scene_importer());
     reg.add(make_gltf_importer());
+    reg.add(make_obj_importer());
+    reg.add(make_mtl_importer());
+#if MCE_HAS_FBX
+    reg.add(make_fbx_importer());
+#endif
     reg.add(make_prefab_importer());
     reg.add(make_tilemap_importer());
     reg.add(make_spritesheet_importer());
@@ -42,6 +64,8 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_input_map_importer());
     reg.add(make_store_importer());
     reg.add(make_config_importer());
+    reg.add(make_convar_defaults_importer());
+    reg.add(make_items_importer());
     reg.add(make_services_importer());
     reg.add(make_ui_importer());
     reg.add(make_ui_theme_importer());
@@ -49,6 +73,8 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_envmap_importer());
     reg.add(make_terrain_importer());
     reg.add(make_navmesh_importer());
+    reg.add(make_hlod_importer());
+    reg.add(make_roads_importer());
 #if MCE_HAS_SCRIPT
     reg.add(make_script_importer());
 #endif
@@ -67,6 +93,15 @@ namespace detail {
 
 void error_at(DiagList& diags, Errc code, StringView file, JsonValue at, const char* stage, StringView msg) {
     diags.error(code, file, at.valid() ? at.line() : 0, at.valid() ? at.col() : 0, stage, msg);
+}
+
+bool check_format_version(JsonValue doc, u32 current, const char* what, StringView file, const char* stage, DiagList& diags) {
+    const JsonValue ver = doc.get("version");
+    if (ver.is_integer() && ver.as_number() >= 1 && ver.as_number() <= current) return true;
+    String msg;
+    appendf(msg, "unsupported %s version (this cook reads version %u)", what, current);
+    error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, stage, msg);
+    return false;
 }
 
 bool check_keys(JsonValue obj, std::initializer_list<StringView> allowed, StringView file, const char* stage, DiagList& diags) {

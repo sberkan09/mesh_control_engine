@@ -1,0 +1,1 @@
+- Sample (M-ITEMFX 3): `samples/12_loot`'s hero is wounded, drinks a healing potion and wears a helm that adds armor and max health; the headless test pins `health 65/120 armor 0.2`. Docs: `18-samples.md`. Closes M-ITEMFX.

@@ -1,0 +1,1 @@
+- M-WEATHER milestone record (follow-up of M-DAYNIGHT): weather state, environment response, precipitation and lightning, Luau and a demo, planned in `docs/milestones/M-WEATHER.md`. M-GPU-VERIFY notes that long windowed `-capture_ticks` runs stalled under a loaded CI run.

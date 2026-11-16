@@ -294,3 +294,92 @@ TEST_CASE("FR-INP-040: bad and stale binding files") {
     in.push_event(key_event(Key::K, true, in_tick(1)));  // code 14 = K
     CHECK(in.sample_for_tick(1).jump_pressed);
 }
+
+TEST_CASE("FR-INP-040: cancel_rebind ends a waiting capture and leaves a finished one alone") {
+    InputSystem in;
+    test::setup_default(in);
+    in.sample_for_tick(1);
+    CHECK(in.rebind_state() == RebindState::Idle);
+    in.cancel_rebind();  // nothing to cancel
+    CHECK(in.rebind_state() == RebindState::Idle);
+
+    REQUIRE(in.begin_rebind(kGameplay, kJump, 0));
+    CHECK(in.rebind_state() == RebindState::Waiting);
+    in.cancel_rebind();
+    CHECK(in.rebind_state() == RebindState::Cancelled);
+    // The next press acts normally: nothing is swallowed and nothing is recorded.
+    in.push_event(key_event(Key::K, true, in_tick(2)));
+    in.sample_for_tick(2);
+    CHECK(in.binding_overrides().empty());
+
+    REQUIRE(in.begin_rebind(kGameplay, kJump, 0));
+    in.push_event(key_event(Key::K, false, in_tick(3)));
+    in.push_event(key_event(Key::L, true, in_tick(3)));
+    in.sample_for_tick(3);
+    REQUIRE(in.rebind_state() == RebindState::Captured);
+    in.cancel_rebind();  // a captured result is not a waiting capture
+    CHECK(in.rebind_state() == RebindState::Captured);
+}
+
+TEST_CASE("gamepad: quadratic and cubic curves shape a stick and keep its sign; an unknown slot reads as no axis") {
+    InputMapBuilder b;
+    b.map(MCE_SID("M"));
+    for (const auto& [name, curve] :
+         {std::pair<StringId, Curve>{MCE_SID("Quad"), Curve::Quadratic}, {MCE_SID("Cube"), Curve::Cubic}}) {
+        BindingDef w;
+        w.device = Device::GamepadAxis;
+        w.code = static_cast<u32>(GamepadAxis::RightX);
+        w.curve = curve;
+        b.action(name, ActionType::Axis1D).bind(w);
+    }
+    Array<byte> chunk;
+    b.encode(chunk);
+
+    InputSystem in;
+    REQUIRE(in.load_map(chunk.span()).has_value());
+    in.set_tick_origin_us(0);
+    in.push_event(pad_added(0, in_tick(1)));
+    in.push_event(pad_axis(0, GamepadAxis::RightX, 0.5f, in_tick(1)));
+    const InputState& s1 = in.sample_for_tick(1);
+    CHECK(s1.axis(MCE_SID("Quad")) == doctest::Approx(0.25f));
+    CHECK(s1.axis(MCE_SID("Cube")) == doctest::Approx(0.125f));
+    CHECK(in.gamepad_axis(0, GamepadAxis::RightX) == doctest::Approx(0.5f));
+
+    in.push_event(pad_axis(0, GamepadAxis::RightX, -0.5f, in_tick(2)));
+    const InputState& s2 = in.sample_for_tick(2);
+    CHECK(s2.axis(MCE_SID("Quad")) == doctest::Approx(-0.25f));
+    CHECK(s2.axis(MCE_SID("Cube")) == doctest::Approx(-0.125f));
+
+    CHECK(in.gamepad_axis(99, GamepadAxis::RightX) == 0.f);  // no such slot
+    in.release_pad(0);
+    in.release_pad(99);  // harmless
+}
+
+TEST_CASE("FR-INP-040: a mouse-only capture takes a mouse button and ignores keys; cancel_rebind stops a wait") {
+    InputSystem in;
+    test::setup_default(in);
+    in.sample_for_tick(1);
+    CHECK_FALSE(in.begin_rebind(kGameplay, kJump, 9));
+    in.cancel_rebind();  // nothing waiting: nothing changes
+    CHECK(in.rebind_state() == RebindState::Idle);
+
+    REQUIRE(in.begin_rebind(kGameplay, kJump, 0, 5.f, RebindAccept::Mouse));
+    in.push_event(key_event(Key::K, true, in_tick(2)));  // a key is not accepted: it acts normally
+    in.sample_for_tick(2);
+    CHECK(in.rebind_state() == RebindState::Waiting);
+    in.push_event(key_event(Key::K, false, in_tick(3)));
+    in.push_event(test::simple_event(platform::EventType::MouseButtonDown, in_tick(3),
+                                     static_cast<u32>(platform::MouseButton::Right)));
+    in.sample_for_tick(3);
+    REQUIRE(in.rebind_state() == RebindState::Captured);
+    CHECK(in.rebind_result().device == Device::MouseButton);
+    CHECK(in.rebind_result().code == static_cast<u32>(platform::MouseButton::Right));
+
+    REQUIRE(in.begin_rebind(kGameplay, kJump, 0));
+    CHECK(in.rebind_state() == RebindState::Waiting);
+    in.cancel_rebind();
+    CHECK(in.rebind_state() == RebindState::Cancelled);
+    in.push_event(key_event(Key::K, true, in_tick(4)));  // after a cancel nothing is captured
+    in.sample_for_tick(4);
+    CHECK(in.rebind_state() == RebindState::Cancelled);
+}

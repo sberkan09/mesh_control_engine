@@ -137,6 +137,7 @@ if(MCE_WITH_SCRIPT)
     add_subdirectory(src/engine/script)
 endif()
 if(NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(tools/bench)  # M-BENCH: headless micro-benchmarks
     add_subdirectory(tools/cook)  # a cross build cooks with the host's (MCE_HOST_COOK, cmake/MceMobile.cmake)
 endif()
 add_subdirectory(src/module)

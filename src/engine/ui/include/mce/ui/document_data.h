@@ -12,7 +12,8 @@
 //
 // Chunk layout v3 (v2: action / bind / format strings; v3: the theme and each widget's font role)
 // (little-endian, POD records): UiDocHeader | UiWidgetRecord[widget_count] | string blob (names,
-// texts, convars, actions, bindings).
+// texts, convars, actions, bindings) | UiMinimapRecord per Minimap widget, in widget order (M-MISSION
+// step 2: a document without a Minimap has none, so older chunks load unchanged).
 //
 // Themes (M-UI-DATA step 3): a `.mcuitheme` asset (cooked by the `uitheme` importer to
 // CHNK_UITHEME) restyles every document that uses it. apply_theme gives each widget style field the
@@ -59,6 +60,7 @@ struct WidgetData {
     FixedString<32> format;
     FontRole font_role = FontRole::Auto;  // which of the skin's fonts the text uses
     TextAlign text_align = TextAlign::Left;  // a Text widget's lines across its rect
+    Minimap minimap;  // a Minimap widget's values (other kinds leave the defaults)
     u8 own_style = 0;  // StyleOwn bits: style fields apply_theme leaves alone though they equal the default
 };
 
@@ -118,6 +120,12 @@ struct ThemeData {
     Style styles[kWidgetKindCount][kWidgetStateCount];  // each kind's default look under this theme
 
     asset::Guid font(FontRole role) const { return role == FontRole::Auto ? asset::Guid{} : fonts[static_cast<u32>(role) - 1]; }
+    // The font for text that belongs to no document (subtitles, captions, the cutscene skip prompt): the
+    // theme's Body font, else its Title font; null when the theme sets neither.
+    asset::Guid overlay_font() const {
+        const asset::Guid body = font(FontRole::Body);
+        return body.is_null() ? font(FontRole::Title) : body;
+    }
 };
 
 // Every kind's look made of `palette`'s colors (what a theme with no "styles" overrides gets).

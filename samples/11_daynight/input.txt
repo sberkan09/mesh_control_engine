@@ -1,0 +1,3 @@
+# 11_daynight scripted run (60 ticks a second; the 60 s day is 3600 ticks, 150 per game hour, from 05:00).
+# Jump (Space) at tick 200 skips to noon (clock.set(12)).
+200 Jump

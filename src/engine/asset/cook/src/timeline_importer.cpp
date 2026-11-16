@@ -547,13 +547,7 @@ bool read_timeline_document(JsonValue doc, StringView file, TimelineDocument& ou
         detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-timeline\"");
         return false;
     }
-    const JsonValue ver = doc.get("version");
-    if (!ver.is_integer() || ver.as_number() != kTimelineFormatVersion) {
-        String msg;
-        appendf(msg, "unsupported timeline version (this cook reads version %u)", kTimelineFormatVersion);
-        detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-        return false;
-    }
+    if (!detail::check_format_version(doc, kTimelineFormatVersion, "timeline", file, kStage, diags)) return false;
     Reader r{file, diags};
     if (const JsonValue name = doc.get("name"); name.valid()) {
         if (!name.is_string() || name.as_string().size() >= 32) r.error(name, "'name' must be a string of at most 31 bytes");

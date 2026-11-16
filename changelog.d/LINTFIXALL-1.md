@@ -1,0 +1,1 @@
+- MCP, M-LINTFIXALL: `scene_lint_all` takes `fix: true` and repairs every scene and prefab under assets/ in one call.

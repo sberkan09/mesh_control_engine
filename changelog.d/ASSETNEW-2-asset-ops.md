@@ -1,0 +1,1 @@
+- Asset operations, M-ASSETNEW step 2: `create_asset`, `duplicate_asset`, `delete_asset` and `references_to` in editor core make a cooked starter file of any JSON source kind, copy an asset under a fresh GUID (a sidecar source with its own sidecar), delete an asset with its sidecar and list who names it. The Assets panel menu follows in step 3.

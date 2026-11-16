@@ -403,3 +403,38 @@ TEST_CASE("skeleton2d editor: the viewport overlay places the previewed bones on
     CHECK(lines[2].b.y == doctest::Approx(1.5f));
     CHECK(lines[2].width_px > lines[0].width_px);
 }
+
+TEST_CASE("skeleton2d editor: new_text reads back, selection and preview time stay in range") {
+    const Result<asset::Guid> parsed = asset::parse_guid(kArmTex);
+    REQUIRE(parsed.has_value());
+    const asset::Guid guid = parsed.value();
+    const cook::String text = sk::new_text(guid, "hero", "root");
+    CHECK(str(text).find("\"hero\"") != std::string::npos);
+    cook::String err;
+    cook::String edited(text.view());
+    CHECK(sk::add_bone(edited, bone("arm", "root", 1, 0), err));  // the fresh text is a skeleton document
+    CHECK(err.empty());
+
+    const std::string root = skel_project("skel_ed_range");
+    EditorSession session;
+    REQUIRE(session.open_project(sv(root)));
+    Skeleton2DEditor ed;
+    REQUIRE(ed.create(session, "hero.mcskel2d"));
+    build_arm(ed);
+
+    ed.select_bone(2);
+    CHECK(ed.selected_bone() == 2);
+    ed.select_bone(99);  // past the last bone selects none
+    CHECK(ed.selected_bone() == kNoSkeleton2DBone);
+
+    ed.set_time(-3.0f);
+    CHECK(ed.time() == 0.0f);
+
+    CHECK(ed.animation_length() == 0.0f);  // no animation previewed
+    REQUIRE(ed.key(rotate_key("wave", "upper", 0, 0)));
+    REQUIRE(ed.key(rotate_key("wave", "upper", 2, 90)));
+    ed.set_animation("wave");
+    CHECK(ed.animation_length() == doctest::Approx(2.0f));
+    ed.set_animation("nonesuch");
+    CHECK(ed.animation_length() == 0.0f);  // an unknown animation has no length
+}

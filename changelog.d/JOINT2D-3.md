@@ -1,0 +1,1 @@
+- Physics, M-JOINT2D: the `physics2d_headless` sample gains a hinged plank bridge and a swinging door built from `Joint2D` components; the Inspector ranges for `lower` and `upper` now match the -180..180 the engine accepts.

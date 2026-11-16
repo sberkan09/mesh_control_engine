@@ -1,0 +1,515 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "14d14000-0000-4000-8000-000000000001",
+ "name": "seasons",
+ "entities": [
+  {
+   "name": "Ground North",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.2,
+      34.5
+     ],
+     "scale": [
+      2,
+      1,
+      1.15
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000005",
+     "tint": [
+      0.32,
+      0.45,
+      0.2,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Ground South",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.2,
+      -34.5
+     ],
+     "scale": [
+      2,
+      1,
+      1.15
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000005",
+     "tint": [
+      0.32,
+      0.45,
+      0.2,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Ground East",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      34.5,
+      -0.2,
+      0
+     ],
+     "scale": [
+      1.15,
+      1,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000005",
+     "tint": [
+      0.32,
+      0.45,
+      0.2,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Ground West",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -34.5,
+      -0.2,
+      0
+     ],
+     "scale": [
+      1.15,
+      1,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000005",
+     "tint": [
+      0.32,
+      0.45,
+      0.2,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Lakebed",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -2.5,
+      0
+     ],
+     "scale": [
+      0.4,
+      1,
+      0.4
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000005",
+     "tint": [
+      0.35,
+      0.3,
+      0.22,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Sky",
+   "components": {
+    "Environment3D": {
+     "sun_direction": [
+      -0.5,
+      -0.55,
+      -0.4
+     ],
+     "sun_intensity": 2.2,
+     "fog_density": 0.004,
+     "bloom": 1,
+     "bloom_intensity": 0.08
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "fov_deg": 55
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      7,
+      16
+     ],
+     "rotation": [
+      -0.1784,
+      0,
+      0,
+      0.984
+     ]
+    }
+   }
+  },
+  {
+   "name": "Lake",
+   "components": {
+    "Water": {
+     "half_extent": 25,
+     "level_y": 0,
+     "amplitude": 0.15
+    },
+    "WaterIce": {},
+    "WorldClock": {
+     "hour": 0,
+     "day_length_seconds": 2,
+     "drive_environment": 0
+    },
+    "Season": {
+     "year_days": 30,
+     "start_phase": 0
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Weather",
+   "components": {
+    "Weather": {},
+    "WindDirection": {},
+    "WindSway": {},
+    "SnowCover": {},
+    "LeafFall": {
+     "manual": 0
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Tree 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      7.35,
+      2,
+      10.11
+     ],
+     "scale": [
+      0.07,
+      4,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.4,
+      0.27,
+      0.15,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Canopy 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      7.35,
+      4.3,
+      10.11
+     ]
+    },
+    "Foliage3D": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.3,
+      0.55,
+      0.22,
+      1
+     ],
+     "half_extents": [
+      2.5,
+      2.5
+     ],
+     "count": 50,
+     "seed": 14,
+     "scale_min": 0.25,
+     "scale_max": 0.5,
+     "wind_amplitude": 0.08,
+     "wind_frequency": 0.6,
+     "wind_height": 1,
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "name": "Tree 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      11.89,
+      2,
+      -3.86
+     ],
+     "scale": [
+      0.07,
+      4,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.4,
+      0.27,
+      0.15,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Canopy 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      11.89,
+      4.3,
+      -3.86
+     ]
+    },
+    "Foliage3D": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.3,
+      0.55,
+      0.22,
+      1
+     ],
+     "half_extents": [
+      2.5,
+      2.5
+     ],
+     "count": 50,
+     "seed": 15,
+     "scale_min": 0.25,
+     "scale_max": 0.5,
+     "wind_amplitude": 0.08,
+     "wind_frequency": 0.6,
+     "wind_height": 1,
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "name": "Tree 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0.0,
+      2,
+      -12.5
+     ],
+     "scale": [
+      0.07,
+      4,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.4,
+      0.27,
+      0.15,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Canopy 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0.0,
+      4.3,
+      -12.5
+     ]
+    },
+    "Foliage3D": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.3,
+      0.55,
+      0.22,
+      1
+     ],
+     "half_extents": [
+      2.5,
+      2.5
+     ],
+     "count": 50,
+     "seed": 16,
+     "scale_min": 0.25,
+     "scale_max": 0.5,
+     "wind_amplitude": 0.08,
+     "wind_frequency": 0.6,
+     "wind_height": 1,
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "name": "Tree 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -11.89,
+      2,
+      -3.86
+     ],
+     "scale": [
+      0.07,
+      4,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.4,
+      0.27,
+      0.15,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Canopy 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -11.89,
+      4.3,
+      -3.86
+     ]
+    },
+    "Foliage3D": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.3,
+      0.55,
+      0.22,
+      1
+     ],
+     "half_extents": [
+      2.5,
+      2.5
+     ],
+     "count": 50,
+     "seed": 17,
+     "scale_min": 0.25,
+     "scale_max": 0.5,
+     "wind_amplitude": 0.08,
+     "wind_frequency": 0.6,
+     "wind_height": 1,
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "name": "Tree 5",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -7.35,
+      2,
+      10.11
+     ],
+     "scale": [
+      0.07,
+      4,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.4,
+      0.27,
+      0.15,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Canopy 5",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -7.35,
+      4.3,
+      10.11
+     ]
+    },
+    "Foliage3D": {
+     "mesh": "guid:14d14000-0000-4000-8000-000000000006",
+     "tint": [
+      0.3,
+      0.55,
+      0.22,
+      1
+     ],
+     "half_extents": [
+      2.5,
+      2.5
+     ],
+     "count": 50,
+     "seed": 18,
+     "scale_min": 0.25,
+     "scale_max": 0.5,
+     "wind_amplitude": 0.08,
+     "wind_frequency": 0.6,
+     "wind_height": 1,
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "name": "Script: seasons",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:14d14000-0000-4000-8000-000000000003",
+     "phase": "Post"
+    },
+    "LocalTransform": {}
+   }
+  }
+ ]
+}

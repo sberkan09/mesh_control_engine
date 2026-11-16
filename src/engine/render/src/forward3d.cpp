@@ -1,12 +1,33 @@
 #include "mce/render/forward3d.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 
 #include "mce/convar.h"
+#include "mce/hash.h"
 #include "mce/log.h"
+#include "mce/render/caustics.h"
+#include "mce/render/cirrus.h"
+#include "mce/render/cloud_shadow.h"
+#include "mce/render/dynres.h"
+#include "mce/render/edge_outline.h"
+#include "mce/render/halo.h"
+#include "mce/render/gi_probes.h"
+#include "mce/render/heat_haze.h"
+#include "mce/render/lens_flare.h"
+#include "mce/render/lens_rain.h"
+#include "mce/render/light_cookie.h"
+#include "mce/render/quality.h"
+#include "mce/render/ssr_blur.h"
+#include "mce/render/sun_shafts.h"
+#include "mce/render/translucency.h"
+#include "mce/render/underwater.h"
+#include "mce/render/water_optics.h"
 #include "shaders3d.h"
+#include "unit_clamp.h"
 
 namespace mce::render {
 
@@ -25,6 +46,17 @@ MCE_CVAR(cv_ssao, "r.ssao", true,
 MCE_CVAR(cv_ssr, "r.ssr", true,
          "Screen-space reflections for scenes that ask for them (ScreenSpaceReflections::enabled; off = the probes only)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_ssr_blur, "r.ssr.blur", true,
+         "SSR roughness blur: a rough reflecting pixel gathers 8 taps of the trace (M-REFLECT2; 0 = one sharp tap)",
+         CVarFlags::None);
+MCE_CVAR(cv_ssr_motion, "r.ssr.motion", true,
+         "SSR reads the velocity buffer at hits when TAA, motion blur or depth of field has it (M-REFLECT2; 0 = camera "
+         "reprojection only)",
+         CVarFlags::None);
+MCE_CVAR(cv_water_reflect, "r.water.reflect", true, "Water reflects on-screen geometry (M-WATER2; 0 = the sky only)",
+         CVarFlags::None);
+MCE_CVAR(cv_water_refract, "r.water.refract", true,
+         "Water shows what lies under it (M-WATER2; 0 = the depth tint only)", CVarFlags::None);
 MCE_CVAR(cv_contact_shadows, "r.contact_shadows", true,
          "Contact shadows for scenes that ask for them (ContactShadows::enabled; off = the sun's cascades only)",
          CVarFlags::RequiresRestart);
@@ -39,10 +71,17 @@ MCE_CVAR(cv_taa, "r.taa", true,
 MCE_CVAR(cv_gi, "r.gi", true,
          "Irradiance-volume global illumination for scenes that ask for it (GiVolume::enabled; off = the sky's ambient)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_gi_visibility, "r.gi.visibility", true,
+         "Irradiance-volume visibility and probe classification for volumes that ask for them (GiVisibility3D); "
+         "0 = the plain lookup (the volume keeps its layout and its bake, refills once without the vis pass)",
+         CVarFlags::None);
 MCE_CVAR(cv_volumetrics, "r.volumetrics", true,
          "Volumetric fog for scenes that ask for it (Volumetrics::enabled; off = the exp² fog)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_post_fx, "r.post_fx", true,
          "Auto exposure, depth of field and motion blur for scenes that ask for them (PostFx; off = none of them)",
+         CVarFlags::RequiresRestart);
+MCE_CVAR(cv_instancing, "r.instancing", true,
+         "Copies of one rigid mesh and material draw as one instanced draw per pass (M-VISUAL3 5a; off = single draws)",
          CVarFlags::RequiresRestart);
 MCE_CVAR(cv_local_shadows, "r.local_shadows", true,
          "Shadow maps for spot and point lights that ask for them (PointLight::cast_shadows; off = unshadowed)",
@@ -71,7 +110,7 @@ struct Forward3DPassU {
     vec4 probe_min[kMaxReflectionProbes];  // w: blend distance
     vec4 probe_max[kMaxReflectionProbes];  // w: first ibl_env layer
     vec4 ao;           // x: SSAO on, y: contact shadows on (bank kAo's g)
-    vec4 local;        // x: local-light shadows on (M-VISUAL 4), y: shadow-map layer of cascade 0
+    vec4 local;        // x: local-light shadows on (M-VISUAL 4), y: shadow-map layer of cascade 0, z: light cookies on (M-LIGHTCOOKIE 40d: a spot's or the sun's)
     vec4 gi;           // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
     vec4 gi_min;
     vec4 gi_max;
@@ -83,7 +122,93 @@ struct Forward3DPassU {
     vec4 vol_scale;   // x: local light scale, y: ambient scale
     vec4 decals;      // x: decals to apply (M-VISUAL 9)
     vec4 ssr;         // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
+    vec4 sky_rot;     // M-VISUAL3 4: x cos, y sin of the sky texture's yaw (y = 0: no rotation)
+    vec4 wet;         // M-WETSURFACE 5b: x wetness (0 = off), y puddle coverage, z 1 / puddle cell (m), w darken
+    vec4 wet2;        // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on
+    vec4 snow;        // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise), w wind bias
+    vec4 ripple;      // M-RAINFX 7b: x strength (0 = off), y density, z ring width (>= 0.01), w speed-scaled time mod 60 s
+    vec4 snow2;       // M-WINDDIR 8c: xy the snow wind direction (xz unit vector), zw 0
+    vec4 cloud;       // M-CLOUDS 9b: x coverage (0 = off), y density, z 1 / noise cell (1/m), w plane height (m)
+    vec4 cloud2;      // xy the drift in noise cells mod kCloudPeriod (wind_dir * speed * time), zw 0
+    vec4 night;       // M-NIGHTSKY 14d: x moon cos size, y moon intensity (0 = no moon), z phase, w night fade
+    vec4 night2;      // x star density (0 = no stars), y star brightness, z twinkle, w star time mod kStarPeriod (s)
+    vec4 moon;        // xyz the unit direction toward the moon, w cos(2 pi phase) (the sun-moon elongation)
+    vec4 moon2;       // rgb the moon's tint, w sin(2 pi phase)
+    vec4 water;       // M-WATER 15c: x level (local y), y wave count (0 = flat), z steepness, w half extent (m)
+    vec4 water2;      // rgb the shallow tint, w depth scale (m)
+    vec4 water3;      // rgb the deep tint, w reflectivity
+    vec4 water4;      // x roughness, y foam amount, z foam width (m), w 1 = the opaque depth is bound
+    vec4 water5;      // xy the detail ripples' phases (rad), z detail slope (0 = none), w 0
+    vec4 wave[8];     // per Gerstner wave: xy the wave vector on xz (rad/m), z amplitude (m), w phase (rad)
+    vec4 aurora;      // M-AURORA 16c: x level (0 = off), y base height, z height span (sines), w time mod kAuroraPeriod
+    vec4 aurora2;     // xy the arc centre (xz unit vector), z cos of the arc's half-width, w curtain count (1..6)
+    vec4 aurora3;     // rgb the low (base) colour, w 0
+    vec4 aurora4;     // rgb the high (top) colour, w speed (0..4)
+    vec4 rainbow;     // M-RAINBOW 17c: x level (0 = off), y band width (0.5..2), z secondary (0..1), w 0
+    vec4 rainbow2;    // xyz the anti-solar direction (unit), w 0
+    vec4 meteor;      // M-METEOR 18c: x level (0 = off), y brightness (0..4), z length (0.5..2), w speed (0.5..2)
+    vec4 meteor2;     // x rate (0..30 per minute), y the wrapped time (0..60 s), z seed (0..65535), w 0
+    vec4 sun_cookie;  // M-LIGHTCOOKIE 40e: x atlas layer, y strength, z size (m), w 1 = the sun has a cookie
+    vec4 sun_cookie2; // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
+    vec4 translucency;  // M-TRANSLUCENT 41d: x 1 = the back side's ambient, y 1 = the forward-scatter lobe (translucency_frame)
+    vec4 ssr2;          // M-REFLECT2 48c: x 1 = the SSR roughness blur (r.ssr.blur), yzw 0
+    vec4 water6;        // M-WATER2 49c/49d: x 1 = the trace, y 1 = the refraction, z 1 = the copy at bank 7
+    vec4 cirrus;        // M-CIRRUS 53b: x coverage (0 = off), y density, z 1 / cell across the wind (1/m), w height (m)
+    vec4 cirrus2;       // xy the wind's xz unit vector, z stretch (1..16), w the drift along it in cells mod kCirrusPeriod
+    vec4 halo;          // M-HALO 54b: x strength (0 = off), y sun dogs, z moon, w dispersion: the block's last vec4
 };
+static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
+static_assert(
+    offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
+        offsetof(Forward3DPassU, wet2) == offsetof(Forward3DPassU, wet) + 16 &&
+        offsetof(Forward3DPassU, snow) == offsetof(Forward3DPassU, wet2) + 16 &&
+        offsetof(Forward3DPassU, ripple) == offsetof(Forward3DPassU, snow) + 16 &&
+        offsetof(Forward3DPassU, snow2) == offsetof(Forward3DPassU, ripple) + 16 &&
+        offsetof(Forward3DPassU, cloud) == offsetof(Forward3DPassU, snow2) + 16 &&
+        offsetof(Forward3DPassU, cloud2) == offsetof(Forward3DPassU, cloud) + 16 &&
+        offsetof(Forward3DPassU, night) == offsetof(Forward3DPassU, cloud2) + 16 &&
+        offsetof(Forward3DPassU, night2) == offsetof(Forward3DPassU, night) + 16 &&
+        offsetof(Forward3DPassU, moon) == offsetof(Forward3DPassU, night2) + 16 &&
+        offsetof(Forward3DPassU, moon2) == offsetof(Forward3DPassU, moon) + 16 &&
+        offsetof(Forward3DPassU, water) == offsetof(Forward3DPassU, moon2) + 16 &&
+        offsetof(Forward3DPassU, water2) == offsetof(Forward3DPassU, water) + 16 &&
+        offsetof(Forward3DPassU, water3) == offsetof(Forward3DPassU, water2) + 16 &&
+        offsetof(Forward3DPassU, water4) == offsetof(Forward3DPassU, water3) + 16 &&
+        offsetof(Forward3DPassU, water5) == offsetof(Forward3DPassU, water4) + 16 &&
+        offsetof(Forward3DPassU, wave) == offsetof(Forward3DPassU, water5) + 16 &&
+        offsetof(Forward3DPassU, aurora) == offsetof(Forward3DPassU, wave) + 8 * 16 &&
+        offsetof(Forward3DPassU, aurora2) == offsetof(Forward3DPassU, aurora) + 16 &&
+        offsetof(Forward3DPassU, aurora3) == offsetof(Forward3DPassU, aurora2) + 16 &&
+        offsetof(Forward3DPassU, aurora4) == offsetof(Forward3DPassU, aurora3) + 16 &&
+        offsetof(Forward3DPassU, rainbow) == offsetof(Forward3DPassU, aurora4) + 16 &&
+        offsetof(Forward3DPassU, rainbow2) == offsetof(Forward3DPassU, rainbow) + 16 &&
+        offsetof(Forward3DPassU, meteor) == offsetof(Forward3DPassU, rainbow2) + 16 &&
+        offsetof(Forward3DPassU, meteor2) == offsetof(Forward3DPassU, meteor) + 16 &&
+        offsetof(Forward3DPassU, sun_cookie) == offsetof(Forward3DPassU, meteor2) + 16 &&
+        offsetof(Forward3DPassU, sun_cookie2) == offsetof(Forward3DPassU, sun_cookie) + 16 &&
+        offsetof(Forward3DPassU, translucency) == offsetof(Forward3DPassU, sun_cookie2) + 16 &&
+        offsetof(Forward3DPassU, ssr2) == offsetof(Forward3DPassU, translucency) + 16 &&
+        offsetof(Forward3DPassU, water6) == offsetof(Forward3DPassU, ssr2) + 16 &&
+        offsetof(Forward3DPassU, cirrus) == offsetof(Forward3DPassU, water6) + 16 &&
+        offsetof(Forward3DPassU, cirrus2) == offsetof(Forward3DPassU, cirrus) + 16 &&
+        offsetof(Forward3DPassU, halo) == offsetof(Forward3DPassU, cirrus2) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, halo) + 16,
+    "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
+    "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_rainbow / p_rainbow2 / p_meteor / "
+    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_translucency / p_ssr2 / p_water6 / p_cirrus / p_cirrus2 / p_halo "
+    "follow p_sky_rot as in MCE_GLSL_PASS_U");
+// PassU stays a whole number of 256-byte slots (the ring's upload alignment, rhi::kUniformAlignment), so an upload
+// costs exactly its size. M-WATER 15c filled 1280 bytes (80 vec4); M-AURORA 16c grew it by one slot to 1536 bytes (96
+// vec4): the aurora's four, 12 free (p_free). Each PassU upload costs 256 more ring bytes than before (one a frame for
+// the main pass, at most 6 * kGiMaxBatchProbes = 192 more on a GI fill frame: 48 KiB of the 1 MiB ring); the block
+// is far under every backend's limit (GL 16 KiB minimum, SDL GPU's 32 KiB push, WebGPU's 16 KiB binding). M-RAINBOW
+// 17c took two of the free vec4 (p_rainbow, p_rainbow2): 10 free, the size unchanged. M-METEOR 18c took two more
+// (p_meteor, p_meteor2): 8 free, the size unchanged. M-LIGHTCOOKIE 40e took two more (p_sun_cookie, p_sun_cookie2): 6
+// free, the size unchanged. M-TRANSLUCENT 41d took one (p_translucency): 5 free, the size unchanged. M-REFLECT2 48c
+// took one (p_ssr2): 4 free. M-WATER2 49c took one (p_water6): 3 free, the size unchanged. M-CIRRUS 53b took two
+// (p_cirrus, p_cirrus2): 1 free, the size unchanged. M-HALO 54b took the last one (p_halo): 0 free, the size
+// unchanged; the next PassU member needs a growth seam (one more 256-byte slot) first.
+static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 0 vec4 free)");
 
 namespace {
 
@@ -118,7 +243,7 @@ struct SsrU {  // kSsrFS
     mat4 proj;
     mat4 reproject;  // this frame's view space -> last frame's (jittered) clip space
     vec4 params;     // x: max distance, y: thickness, z: steps, w: edge fade
-    vec4 misc;       // x: last frame's color is valid
+    vec4 misc;       // x: last frame's color is valid, y: read the velocity at the hit, zw: last frame's jitter (uv)
 };
 
 struct ContactU {  // kContactFS
@@ -134,9 +259,12 @@ struct ProbeU {  // kProbeReprojectFS
 };
 
 struct GiProjectU {  // kGiProjectFS
-    vec4 size;    // x: texels per row, y: rows in the batch, z: face size
-    vec4 params;  // x: probes per row, y: weight of the new value
+    vec4 size;    // x: texels per row, y: rows in the batch, z: face size, w: texels per probe (M-GI2: 4 or 10)
+    vec4 params;  // x: probes per row, y: weight of the new value, z: the pass's first face probe, w: record mode
+    vec4 vis;     // x: dmax (m), the record's distance range (M-GI2 50d)
+    vec4 offsets[32];  // M-GI2 50f: per probe of the pass's run, the relocation offset as texel 8 stores it, minus 0.5, times 2
 };
+static_assert(sizeof(GiProjectU) == 35 * 16, "GiProjectU: kGiProjectFS's block");
 
 struct PrefilterU {  // kProbePrefilterFS
     vec4 params;  // y: samples, w: roughness
@@ -151,12 +279,29 @@ struct ObjectU {
     vec4 params;    // x: alpha cutoff (0 = no mask), y: unlit, z: roughness, w: metallic
     vec4 maps;      // x: normal map, y: ORM map, z: occlusion in ORM.r, w: occlusion-only
     mat4 dequant;   // skinned draws: quantized -> bind space
-    vec4 skin;      // x: first palette joint, -1 = rigid; instanced: y first visible slot, z time
+    vec4 skin;      // x: first palette joint, -1 = rigid; instanced: y first visible slot, z time; w: translucency_object
     vec4 inst;      // instanced (M-VISUAL 9): wind amplitude, frequency, direction xz
     vec4 coat;      // M-VISUAL2 4 (material_ext_uniforms): clear coat, its alpha, anisotropy, its rotation
     vec4 sheen;     // rgb color, w alpha
     vec4 ext;       // x: lobes on, y: ior (0 = 1.5), z: transmission
+    vec4 pom;       // M-VISUAL3 2 (parallax_uniforms): height scale, min and max march steps, fade-out view depth
 };
+// M-TRANSLUCENT 41d: o_skin.w carries the draw's translucency_object value (t8 + 256 * w8, 0 = off); the block keeps its
+// 23 vec4 (368 bytes, one 512-byte ring slot per draw) and its member order (MCE_GLSL_OBJECT_U).
+static_assert(sizeof(ObjectU) == 23 * 16, "ObjectU: 23 vec4 as MCE_GLSL_OBJECT_U");
+static_assert(offsetof(ObjectU, skin) == 17 * 16 && offsetof(ObjectU, inst) == 18 * 16 && offsetof(ObjectU, pom) == 22 * 16,
+              "ObjectU: o_skin after o_dequant, o_pom last, as MCE_GLSL_OBJECT_U");
+
+// A parallax material's march in ObjectU's terms; all zero (the shader skips it) for any other draw.
+void parallax_uniforms(const MaterialOverride* m, const ParallaxSettings& p, ObjectU& ou) {
+    ou.pom = {};
+    if (!m || !m->parallax || !m->ext.parallax() || p.distance <= 0.0f || p.max_steps < 4) return;
+    u32 lo = m->ext.parallax_steps & 0xffffu, hi = m->ext.parallax_steps >> 16;
+    if (lo == 0 && hi == 0) lo = 8, hi = 32;
+    hi = min(clamp(hi, 4u, 64u), p.max_steps);
+    lo = min(clamp(lo, 4u, 64u), hi);
+    ou.pom = {m->ext.height_scale, f32(lo), f32(hi), p.distance};
+}
 
 // The MaterialExt lobes in ObjectU's terms; all zero for a plain material.
 void material_ext_uniforms(const asset::MaterialExt& e, ObjectU& ou) {
@@ -208,6 +353,12 @@ struct PostU {
     vec4 params;  // x: threshold, y: knee, z: first pass, w: exposure
 };
 
+// The tonemap pass's FilmU block (shaders3d.h kTonemapFS), bank kPass.
+struct FilmU {
+    vec4 lens;   // vignette, vignette smoothness, grain, grain cell size
+    vec4 lens2;  // chromatic aberration, lens dirt intensity, tonemapper, grain seed
+};
+
 enum Stage : u32 {
     kTsBegin, kTsClusters, kTsScale, kTsSsao, kTsSsr, kTsContact, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
 };
@@ -237,6 +388,256 @@ struct MbU {
     vec4 texel;
     vec4 params;  // intensity, max length, taps
 };
+
+// M-LENSFLARE 38c: kFlareOccFS / kFlareFS's FlareU (shaders3d.h MCE_GLSL_FLARE_U), bank kPass. Filled from
+// lens_flare_frame only (record_flare).
+struct FlareU {
+    vec4 sun;    // xy sun uv, z aspect (width / height), w occlusion disk radius (fraction of the view height)
+    vec4 color;  // rgb the sun's light times the strength, w halo strength
+    vec4 shape;  // x halo radius, y starburst strength, z rays, w ghost count
+    vec4 ghost[2 * shaders3d::kFlareMaxGhosts];  // per ghost: centre xy, radius, intensity; then tint rgb, 0
+};
+static_assert(shaders3d::kFlareMaxGhosts == i32(kLensFlareMaxGhosts), "FlareU: f_ghost holds kLensFlareMaxGhosts ghosts");
+static_assert(sizeof(FlareU) == shaders3d::kFlareUBytes, "FlareU: 15 vec4, as MCE_GLSL_FLARE_U");
+static_assert(offsetof(FlareU, sun) == 0 && offsetof(FlareU, color) == 16 && offsetof(FlareU, shape) == 32 &&
+                  offsetof(FlareU, ghost) == 48,
+              "FlareU: f_sun / f_color / f_shape / f_ghost[12] as in MCE_GLSL_FLARE_U");
+
+// M-LENSRAIN 42c: kLensRainFS's LensRainU (shaders3d.h), bank kPass. Filled from lens_rain_frame and the tier's grid
+// count only (record_lens_rain).
+struct LensRainU {
+    vec4 drop;   // amount, density, size, refraction
+    vec4 look;   // blur, trail, view heights a speed-1 drop falls per kLensRainPeriod, the wrapped time / the period
+    vec4 frame;  // aspect, seed & 0xffff, seed >> 16, drop grids (1 or 2)
+};
+static_assert(sizeof(LensRainU) == shaders3d::kLensRainUBytes, "LensRainU: 3 vec4, as kLensRainFS");
+static_assert(offsetof(LensRainU, drop) == 0 && offsetof(LensRainU, look) == 16 && offsetof(LensRainU, frame) == 32,
+              "LensRainU: r_drop / r_look / r_frame as in kLensRainFS");
+
+// M-HEATHAZE 43c: kHazeFS's HazeU (shaders3d.h), bank kPass. Filled from heat_haze_frame, the view's projection and
+// the scene clock only (record_heat_haze).
+struct HazeU {
+    vec4 frame;    // volumes, aspect, 1 / proj[0][0], 1 / proj[1][1] (0, 0 for an orthographic view, which is unsupported)
+    vec4 vol[16];  // per volume: centre uv, near distance, screen radius; strength, rise phase (cells), scale, softness
+};
+static_assert(sizeof(HazeU) == shaders3d::kHazeUBytes, "HazeU: 17 vec4, as kHazeFS");
+static_assert(offsetof(HazeU, frame) == 0 && offsetof(HazeU, vol) == 16, "HazeU: h_frame / h_vol[16] as in kHazeFS");
+static_assert(2 * shaders3d::kHazeMaxVolumes == 16 && u32(shaders3d::kHazeMaxVolumes) == kHeatHazeMaxVolumes,
+              "HazeU: two vec4 per volume, the shader's loop bound is kHeatHazeMaxVolumes");
+
+// M-UNDERWATER 44c: kUnderwaterFS's UnderwaterU (shaders3d.h), bank kPass. Filled from underwater_frame only (and the two
+// constants of mce/render/underwater.h the shader must not repeat: the window's critical cosine and the far cap), in
+// record_underwater.
+struct UnderwaterU {
+    vec4 frame;    // submersion, aspect, 1 / proj[0][0], 1 / proj[1][1]
+    vec4 right;    // the camera's right (world), w: its depth below the mean surface (m, render-relative)
+    vec4 up;       // the camera's up, w: kUnderwaterWindowCos
+    vec4 fwd;      // the camera's forward, w: kUnderwaterFarCap
+    vec4 sigma;    // absorption per metre (detail 0: times kUnderwaterFlatDistance), w: wobble amplitude (view heights)
+    vec4 scatter;  // the fog colour, w: the detail tier (0, 1, 2)
+    vec4 lid;      // the window colour, w: the window's edge softness
+    vec4 phase;    // the wobble phases (radians): octave 1 x, y, octave 2 x, y
+};
+static_assert(sizeof(UnderwaterU) == shaders3d::kUnderwaterUBytes, "UnderwaterU: 8 vec4, as kUnderwaterFS");
+static_assert(offsetof(UnderwaterU, frame) == 0 && offsetof(UnderwaterU, right) == 16 && offsetof(UnderwaterU, up) == 32 &&
+                  offsetof(UnderwaterU, fwd) == 48 && offsetof(UnderwaterU, sigma) == 64 &&
+                  offsetof(UnderwaterU, scatter) == 80 && offsetof(UnderwaterU, lid) == 96 &&
+                  offsetof(UnderwaterU, phase) == 112,
+              "UnderwaterU: u_frame / u_right / u_up / u_fwd / u_sigma / u_scatter / u_lid / u_phase as in kUnderwaterFS");
+
+// M-SUNSHAFTS 45c: kShaftsFS / kShaftsCompFS's ShaftsU (shaders3d.h MCE_GLSL_SHAFTS_U), bank kPass, one block for both
+// passes. Filled from sun_shafts_frame only (record_sun_shafts).
+struct ShaftsU {
+    vec4 sun;    // xy sun uv (may lie outside 0..1), z aspect, w length
+    vec4 shape;  // x per-sample weight factor decay^(32 / N), y threshold, z cap, w samples N
+    vec4 color;  // rgb tint * intensity * strength, w the jitter seed (shaders3d::kShaftsSeed as an exact float)
+    vec4 comp;   // x the veil distance scatter_m, yzw 0
+};
+static_assert(sizeof(ShaftsU) == shaders3d::kShaftsUBytes, "ShaftsU: 4 vec4, as MCE_GLSL_SHAFTS_U");
+static_assert(offsetof(ShaftsU, sun) == 0 && offsetof(ShaftsU, shape) == 16 && offsetof(ShaftsU, color) == 32 &&
+                  offsetof(ShaftsU, comp) == 48,
+              "ShaftsU: s_sun / s_shape / s_color / s_comp as in MCE_GLSL_SHAFTS_U");
+static_assert(shaders3d::kShaftsMaxSamples == 32 && shaders3d::kShaftsSeed < (1u << 24),
+              "kShaftsFS: the loop bound is 32 (sun_shafts_samples' largest count); the seed rides a float exactly");
+
+// M-CLOUDSHADOW 51c: kCloudShadowFS's CloudShadowU (shaders3d.h MCE_GLSL_CLOUD_SHADOW_U), bank kPass. Filled in
+// record_cloud_shadow from the view, the sky's own cloud values (cloud_params: p_cloud, p_cloud2), the setting, the tier's
+// octave count and cloud_shadow_sun_share.
+struct CloudShadowU {
+    vec4 proj;   // proj[0][0], proj[1][1], proj[2][0], proj[2][1] (the unjittered projection, as the SSAO pass)
+    vec4 right;  // the camera's right (world), w 1 / noise cell (p_cloud.z)
+    vec4 up;     // the camera's up, w the plane's height above the camera (p_cloud.w)
+    vec4 back;   // the camera's back (-forward), w coverage (p_cloud.x)
+    vec4 sun;    // the unit direction toward the sun, w the layer's density (p_cloud.y)
+    vec4 shade;  // strength, sun share, softness, octaves (1..3)
+    vec4 drift;  // xy the drift in noise cells (p_cloud2.xy), z the exp² fog density (0 with volumetrics), w 0
+    vec4 fog;    // rgb the exp² fog colour, w 0
+};
+static_assert(sizeof(CloudShadowU) == shaders3d::kCloudShadowUBytes, "CloudShadowU: 8 vec4, as MCE_GLSL_CLOUD_SHADOW_U");
+static_assert(offsetof(CloudShadowU, proj) == 0 && offsetof(CloudShadowU, right) == 16 && offsetof(CloudShadowU, up) == 32 &&
+                  offsetof(CloudShadowU, back) == 48 && offsetof(CloudShadowU, sun) == 64 &&
+                  offsetof(CloudShadowU, shade) == 80 && offsetof(CloudShadowU, drift) == 96 &&
+                  offsetof(CloudShadowU, fog) == 112,
+              "CloudShadowU: c_proj / c_right / c_up / c_back / c_sun / c_shade / c_drift / c_fog as in MCE_GLSL_CLOUD_SHADOW_U");
+
+// M-CAUSTICS 52b: kCausticsFS's CausticsU (shaders3d.h MCE_GLSL_CAUSTICS_U), bank kPass. Filled in record_caustics from
+// the view, the water, the sun (caustics_gate), the setting and the tier's octave count; the same values as the CPU twin's
+// CausticsParams (mce/render/caustics.h).
+struct CausticsU {
+    vec4 proj;   // proj[0][0], proj[1][1], proj[2][0], proj[2][1] (the unjittered projection, as the SSAO pass)
+    vec4 right;  // the camera's right (world), w 1 / the pattern's cell
+    vec4 up;     // the camera's up, w the water level minus the camera's y (< 0: the camera above the water)
+    vec4 back;   // the camera's back (-forward), w the water square's half size
+    vec4 sun;    // the unit direction toward the sun, w the absorption per metre
+    vec4 color;  // rgb the light added per unit of term (caustics_gate), w max_depth
+    vec4 plane;  // xy caustics_offset, zw caustics_water_centre
+    vec4 misc;   // x caustics_phase, y octaves (1..3), z the exp² fog density (0 with volumetrics), w 0
+    vec4 vol;       // the volumetric fog as PassU::vol (x 1 = on this view, else 0 and the volume is not read)
+    vec4 vol_grid;  // as PassU::vol_grid
+};
+static_assert(sizeof(CausticsU) == shaders3d::kCausticsUBytes, "CausticsU: 10 vec4, as MCE_GLSL_CAUSTICS_U");
+static_assert(offsetof(CausticsU, proj) == 0 && offsetof(CausticsU, right) == 16 && offsetof(CausticsU, up) == 32 &&
+                  offsetof(CausticsU, back) == 48 && offsetof(CausticsU, sun) == 64 && offsetof(CausticsU, color) == 80 &&
+                  offsetof(CausticsU, plane) == 96 && offsetof(CausticsU, misc) == 112 && offsetof(CausticsU, vol) == 128 &&
+                  offsetof(CausticsU, vol_grid) == 144,
+              "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc / c_vol / c_vol_grid as in "
+              "MCE_GLSL_CAUSTICS_U");
+static_assert(kCausticsCells == 64u && kCausticsLineWidth == 0.16f && kCausticsFacingLo == 0.6f &&
+                  kCausticsFacingHi == 0.95f && kCausticsMaxChroma == 4.0f && kCausticsMinLuma == 1.0e-4f &&
+                  kCausticsLoopRadius == 0.18f && kCausticsSurfaceFade == 0.25f && kCausticsDeepFade == 0.2f,
+              "caustics.h and kCausticsFS (shaders3d.h) carry the same constants");
+
+// M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
+struct OutlineU {
+    vec4 line;  // rgb the line colour, w opacity
+    vec4 tap;   // xy the tap distance in uv, zw the source's texel size
+    vec4 edge;  // x depth threshold, y normal threshold, z depth weight, w normal weight
+    vec4 fade;  // x fade start, y fade end, z fog density, w taps
+    vec4 misc;  // x sky silhouette (1 or 0), y strength, zw 0
+};
+static_assert(shaders3d::kOutlineMaxTaps == i32(kEdgeOutlineMaxTaps), "kOutlineTaps holds kEdgeOutlineTaps");
+static_assert(sizeof(OutlineU) == shaders3d::kOutlineUBytes, "OutlineU: 5 vec4, as kOutlineFS");
+static_assert(offsetof(OutlineU, line) == 0 && offsetof(OutlineU, tap) == 16 && offsetof(OutlineU, edge) == 32 &&
+                  offsetof(OutlineU, fade) == 48 && offsetof(OutlineU, misc) == 64,
+              "OutlineU: o_line / o_tap / o_edge / o_fade / o_misc as in kOutlineFS");
+
+namespace {
+
+// Whether init created the prepass for SSAO, SSR or contact shadows: each creates its own pipeline exactly then
+// (failing init otherwise). The water's depth read follows this, not "the prepass exists": since M-OUTLINE 39c the
+// prepass is also created for the edge outline alone, and a renderer that has it only for the outline keeps drawing
+// its water as before.
+bool screen_space_prepass(rhi::PipelineHandle ao, rhi::PipelineHandle ssr, rhi::PipelineHandle contact) {
+    return !ao.is_null() || !ssr.is_null() || !contact.is_null();
+}
+
+// The edge outline's frame for this view (M-OUTLINE 39c), shared by record_outline and reserve_instancing so both take
+// the same strength-0 decision. `volumetric_fog`: the view records the volumetric fog (stats_.volumetrics, which
+// replaces the exp^2 Fog in the main pass), so the lines fade only with fade_start / fade_end; otherwise, with
+// fog_follow, they fade in the exp^2 Fog the main pass draws. tap_uv = thickness / the output size: the thickness is in
+// output pixels, also when the frame is drawn smaller.
+EdgeOutlineFrame outline_frame(const Scene3D& scene, bool volumetric_fog) {
+    const EdgeOutline& setting = scene.post().outline;
+    const f32 fog = setting.fog_follow && !volumetric_fog ? scene.fog().density : 0.0f;
+    const rhi::Extent2D out = scene.view().viewport;
+    return edge_outline_frame(setting, out.width, out.height, fog, quality_settings(quality_tier()).edge_outline_wide);
+}
+
+// ---- M-LIGHTCOOKIE 40c / 40d: light cookies (record_cookie_bake, upload_cookie_records; the packing in shaders3d.h
+// MCE_GLSL_COOKIE).
+
+// kCookieBakeFS's CookieBakeU, bank kPass.
+struct CookieBakeU {
+    vec4 tap;    // x source lod, y four taps, z tap offset (uv)
+    vec4 clamp;  // xy lowest uv, zw highest
+};
+static_assert(sizeof(CookieBakeU) == shaders3d::kCookieBakeUBytes, "CookieBakeU: 2 vec4, as kCookieBakeFS");
+
+// The frame-level switch beyond Forward3DDesc::light_cookies (create_pipelines clears that for -r.light_cookies 0 at
+// startup): the cvar now (Saved, so it can change while running) and the tier.
+bool cookies_allowed() {
+    static const ConVar* cv = ConVar::find(MCE_SID("r.light_cookies"));
+    return (!cv || cv->get_bool()) && quality_settings(quality_tier()).light_cookies;
+}
+
+// cookie_records_ holds this view's record count (at most kMaxCookieLights) and, in this bit, whether a view of the
+// current frame has baked or bound the atlas already: record_view keeps the bit across a frame's later views and clears
+// it on the first. Until it is set the atlas may be recreated (forward3d.h is frozen for this milestone: no new member).
+constexpr u32 kCookieAtlasInUse = 1u << 31;
+// M-LIGHTCOOKIE 40e: and in this one whether the view's sun has its cookie (atlas layer 0, plan_cookies puts the sun
+// first). Any bit below 31 set means the view reads the atlas (bank 2 is then the atlas, forward3d_scale.cpp bind_decals).
+constexpr u32 kCookieSunOn = 1u << 30;
+u32 cookie_count(u32 records) { return records & ~(kCookieAtlasInUse | kCookieSunOn); }
+
+// The tier's atlas: S (a power of two, 16..2048) and its layer count (1..kMaxCookieLayers).
+u32 cookie_atlas_size(const QualitySettings& q) {
+    u32 s = 16;
+    while (s < 2048 && s * 2 <= q.light_cookie_size) s *= 2;
+    return s;
+}
+u32 cookie_atlas_layers(const QualitySettings& q) { return clamp(q.light_cookie_layers, 1u, kMaxCookieLayers); }
+
+// What an atlas layer holds: the key, the TextureStore generation (its handle) and whether it was resident when baked
+// (a texture not loaded yet bakes white and is retried until it is). Never 0, the value of an empty layer.
+u32 cookie_tag(const TextureStore& textures, u32 key) {
+    const bool resident = textures.contains(key);
+    const rhi::TextureHandle h = resident ? textures.get(key) : rhi::TextureHandle{};
+    const u32 words[4] = {key, h.index, h.generation, resident ? 1u : 0u};
+    u32 x = 2166136261u;
+    for (u32 w : words)
+        for (u32 b = 0; b < 4; ++b) x = (x ^ ((w >> (8 * b)) & 0xFFu)) * 16777619u;
+    return x | 1u;
+}
+
+// The cookies of this view: the sun's (layer 0 when it has one, 40e) and the spots'. Without a sun cookie the spots keep
+// the layers they had in 40d.
+CookiePlan view_cookie_plan(const Scene3D& scene, const QualitySettings& q, Span<u32> light_record) {
+    return plan_cookies(scene.point_lights(), scene.light(), cookie_atlas_layers(q), q.light_cookie_lights, light_record);
+}
+
+// What layer `layer` of the plan must hold: cookie_tag, told apart for the sun's layer, which is baked with the source's
+// repeat (record_cookie_bake), so a key that moves between the sun and a spot re-bakes.
+u32 layer_tag(const TextureStore& textures, const CookiePlan& plan, u32 layer) {
+    const u32 t = cookie_tag(textures, plan.key[layer]);
+    return layer == plan.sun_layer ? ((t ^ 0x9E3779B9u) * 16777619u) | 1u : t;
+}
+
+// PassU's sun cookie (M-LIGHTCOOKIE 40e; shaders3d.h sun_cookie_uv): layer, strength, size and the roll as
+// sun_cookie_uv clamps them, and the offset with the camera's absolute position folded in (the floating origin plus the
+// view's position: the shader projects the point relative to the camera, so its fract stays precise far from the
+// origin, and the pattern stays on the world after a rebase). sun_cookie_uv's ground point is linear in the world
+// point, so the camera's own ground point, rotated by the roll, adds to the offset; in f64, wrapped by the size (a whole
+// repeat is the same texel), so the f32 stays small.
+void sun_cookie_params(const DirectionalLight& sun, u32 layer, const f64 origin[3], vec3 camera, PassU& pu) {
+    const SunCookie& c = sun.cookie;
+    vec3 d = normalize(sun.direction);
+    if (!(length_sq(d) > 0.0f)) d = {0, -1, 0};  // as bind_main_state's p_light_dir
+    const f64 dy = f64(sun_cookie_dy(d.y));
+    const f64 cx = origin[0] + f64(camera.x), cy = origin[1] + f64(camera.y), cz = origin[2] + f64(camera.z);
+    const f64 px = cx - cy * f64(d.x) / dy, py = cz - cy * f64(d.z) / dy;
+    const f32 roll = std::isfinite(c.roll) ? c.roll : 0.0f;
+    const f64 cr = std::cos(f64(roll)), sr = std::sin(f64(roll));
+    const f32 size = detail::ranged(c.size, 0.5f, 1000.0f, 20.0f);
+    auto wrapped = [size](f64 v) {
+        const f32 w = f32(v - f64(size) * std::floor(v / f64(size)));
+        return w < size ? w : 0.0f;  // v just below a whole repeat can round up to size
+    };
+    const f64 ox = (std::isfinite(c.offset.x) ? f64(c.offset.x) : 0.0) + cr * px + sr * py;
+    const f64 oy = (std::isfinite(c.offset.y) ? f64(c.offset.y) : 0.0) - sr * px + cr * py;
+    pu.sun_cookie = {f32(layer), detail::ranged(c.strength, 0.0f, 1.0f, 1.0f), size, 1.0f};
+    pu.sun_cookie2 = {wrapped(ox), wrapped(oy), std::cos(roll), std::sin(roll)};
+}
+
+// PassU's translucency switches (M-TRANSLUCENT 41d / 41e, translucency_frame): the back side's ambient and the
+// forward-scatter lobe, both 0 when Forward3DDesc::translucency, r.translucency or the tier says off. Only a draw whose
+// o_skin.w is not 0 reads them, so a frame without a translucent material is the same whatever they hold.
+void translucency_params(bool renderer_on, PassU& pu) {
+    if (!renderer_on) return;
+    const TranslucencyFrame t = translucency_frame(quality_settings(quality_tier()));
+    pu.translucency = {t.ambient ? 1.0f : 0.0f, t.scatter ? 1.0f : 0.0f, 0.0f, 0.0f};
+}
+
+}  // namespace
 
 struct VelPassU {  // kVelocityVS
     mat4 jittered;
@@ -282,11 +683,376 @@ rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& d
     pu.sky_zenith = vec4(sky.zenith, sky.enabled ? 1.0f : 0.0f);
     pu.sky_horizon = vec4(sky.horizon, sky.specular_ambient);
     pu.sky_ground = vec4(sky.ground, sky_lod);
-    if (atmosphere.is_null())
+    if (atmosphere.is_null()) {
         pu.sun = {sky.sun_size, sky.sun_intensity, sky.texture_intensity, sky.texture_additive ? 1.0f : 0.0f};
-    else
-        pu.sun = {sky.sun_size, sky.sun_intensity, 1.0f, 0.0f};
+        // Rotation 0 stays (1, 0): the shader takes its no-rotation branch (sin == 0), so the frame is unchanged.
+        pu.sky_rot = sky.rotation != 0.0f ? vec4(std::cos(sky.rotation), std::sin(sky.rotation), 0.0f, 0.0f) : vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    } else {
+        // The atmosphere's baked sky has no yaw. Sky::texture_additive adds the gradient under it, as under a star
+        // texture (Kit3DExtract's twilight floor: the single-scattering sky goes black soon after sunset).
+        pu.sun = {sky.sun_size, sky.sun_intensity, 1.0f, sky.texture_additive ? 1.0f : 0.0f};
+        pu.sky_rot = vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    }
     return sky_tex;
+}
+
+// The wet, snow and ripple members are clamped again here (apply_quality's clamps: a caller may skip it).
+using detail::noise_cell;
+using detail::unit01;
+using detail::unit_wind_dir;
+// The floating origin mod 256 m, in f64: the wet and snow noise is periodic over 256 m (the shader fits whole cells
+// into that span), so float precision does not depend on how far the world has rebased.
+f32 wrap256(f64 x) { return f32(x - 256.0 * std::floor(x / 256.0)); }
+
+// The main pass's wet-surface members (M-WETSURFACE 5b). Wetness 0 leaves them zero: the shader skips its branch
+// and the frame is the dry one bit for bit.
+void wet_params(const WetSurfaces& w, const f64 origin[3], PassU& pu) {
+    const f32 wetness = unit01(w.wetness);
+    if (wetness <= 0.0f) return;
+    const bool puddles = w.puddles_enabled && unit01(w.puddles) > 0.0f;
+    pu.wet = vec4(wetness, puddles ? unit01(w.puddles) : 0.0f, 1.0f / noise_cell(w.puddle_scale), unit01(w.darken));
+    pu.wet2 = vec4(wrap256(origin[0]), wrap256(origin[2]), unit01(w.roughness), puddles ? 1.0f : 0.0f);
+}
+
+// The snow's wind direction (M-WINDDIR 8c): p_snow2.xy, the xz unit vector the lee bias leans along (normalized
+// again, NaN or zero length -> +x). The default (1, 0) stays (1, 0) exactly, so the shader's dot is ng.x and the
+// frame the pre-8c one bit for bit. Written by snow_params only, so a snowless frame keeps p_snow2 zero.
+void snow_wind_params(const SnowCover& s, PassU& pu) {
+    const vec2 d = unit_wind_dir(s.wind_dir);
+    pu.snow2 = vec4(d.x, d.y, 0.0f, 0.0f);
+}
+
+// The main pass's snow members (M-SNOWCOVER 6b). Cover 0 leaves p_snow (and p_snow2) zero: the shader skips its
+// branch and the frame is the snowless one bit for bit. The noise shares the wet origin (p_wet2.xy), written here
+// too when the scene is dry; without noise (Low) z is 0 and the shader draws an even layer.
+void snow_params(const SnowCover& s, const f64 origin[3], PassU& pu) {
+    const f32 cover = unit01(s.cover);
+    if (cover <= 0.0f) return;
+    pu.snow = vec4(cover, unit01(s.coverage), s.noise_enabled ? 1.0f / noise_cell(s.noise_scale) : 0.0f,
+                   unit01(s.wind_bias));
+    snow_wind_params(s, pu);
+    pu.wet2.x = wrap256(origin[0]);
+    pu.wet2.y = wrap256(origin[2]);
+}
+
+// The main pass's ripple member (M-RAINFX 7b). Strength 0 or `enabled` false leaves p_ripple zero: the shader skips
+// its branch and the frame is the ripple-less one bit for bit (it also skips it where no puddle lies, so the wet
+// members need no change here). The clock is the scene's (Scene3D::set_time), scaled by the speed and wrapped in f64
+// to 0..60 s: every drop period (3 to 6 quarter seconds) divides 60 s, so the wrap does not show (the scene clock
+// itself is f32, so its resolution is bounded by that). A non-finite time counts as 0. A ring width (and a density) of 0 survives the clamp: the width is
+// floored at 0.01, the shader divides by it.
+void ripple_params(const Ripples& r, f32 time, PassU& pu) {
+    const f32 strength = unit01(r.strength);
+    if (!r.enabled || strength <= 0.0f) return;
+    if (!std::isfinite(time)) time = 0.0f;
+    const f64 t = f64(time) * f64(detail::ripple_speed(r.speed));
+    const f32 ring_width = unit01(r.ring_width);
+    pu.ripple = vec4(strength, unit01(r.density), ring_width > 0.01f ? ring_width : 0.01f,
+                     f32(t - 60.0 * std::floor(t / 60.0)));
+}
+
+// The main pass's cloud members (M-CLOUDS 9b). Coverage 0 (or `enabled` false) leaves p_cloud and p_cloud2 zero:
+// the sky shader skips its branch and the frame is the cloudless one bit for bit. The layer is camera-relative: the
+// shader projects the view ray onto a plane height_m above the camera, so neither the camera's xz nor the floating
+// origin enters it and a rebase (or a walk) leaves the clouds where they are in the sky. Only the drift moves them:
+// wind_dir * speed * kCloudDrift m/s * the scene clock, in noise cells, wrapped in f64 to the noise's period
+// (kCloudPeriod cells: the shader's octaves fit whole lattices into it), so float precision does not degrade as the
+// clock runs. A non-finite time counts as 0.
+constexpr f64 kCloudDrift = 10.0;   // m/s at speed 1
+constexpr f64 kCloudPeriod = 64.0;  // noise cells of the first octave (kSkyFS's 64.0)
+void cloud_params(const Clouds& c, f32 time, PassU& pu) {
+    const f32 coverage = unit01(c.coverage);
+    if (!c.enabled || coverage <= 0.0f) return;
+    if (!std::isfinite(time)) time = 0.0f;
+    const f32 scale = detail::cloud_scale(c.scale_m);
+    const vec2 dir = unit_wind_dir(c.wind_dir);
+    const f64 cells = f64(time) * f64(detail::cloud_speed(c.speed)) * kCloudDrift / f64(scale);
+    const auto wrap = [](f64 x) { return f32(x - kCloudPeriod * std::floor(x / kCloudPeriod)); };
+    pu.cloud = vec4(coverage, unit01(c.density), 1.0f / scale, detail::cloud_height(c.height_m));
+    pu.cloud2 = vec4(wrap(cells * f64(dir.x)), wrap(cells * f64(dir.y)), 0.0f, 0.0f);
+}
+
+// The main pass's cirrus members (M-CIRRUS 53b), from the CPU twin's cirrus_shader_params (mce/render/cirrus.h), so
+// the uniforms the test compares against are these. Coverage 0 (the default; the Low tier and `r.cirrus 0` zero it in
+// apply_quality), a NaN coverage or `enabled` false leave p_cirrus and p_cirrus2 zero: the sky shader skips
+// apply_cirrus and the frame is the one without it bit for bit. The rest is clamped again (a caller may skip
+// apply_quality). Camera-relative as the low layer (the plane is height_m above the camera): only the drift moves the
+// streaks, one scalar along the wind in cells (time * speed * kCirrusDrift / (scale_m * stretch)), wrapped in f64 to the
+// noise's 64-cell period (every octave is a whole lattice per period).
+void cirrus_params(const Cirrus& c, f32 time, PassU& pu) {
+    const CirrusParams p = cirrus_shader_params(c, time);
+    if (!(p.coverage > 0.0f)) return;
+    pu.cirrus = vec4(p.coverage, p.density, p.inv_cell, p.height_m);
+    pu.cirrus2 = vec4(p.wind.x, p.wind.y, p.stretch, p.drift);
+}
+
+// The main pass's halo member (M-HALO 54b), from the CPU twin's halo_shader_params (mce/render/halo.h). Strength 0
+// (the default; the Low tier and `r.halo 0` zero it in apply_quality), a NaN strength or `enabled` false leave p_halo
+// zero: cirrus_layer skips halo_term and the frame is the one without it bit for bit. The rest is clamped again (a
+// caller may skip apply_quality). The shader draws it only through the cirrus (p_cirrus), so with no cirrus p_halo is
+// uploaded but never read. Direction-only: no camera position, no floating origin, no clock.
+void halo_params(const Halo& h, PassU& pu) {
+    const HaloParams p = halo_shader_params(h);
+    if (!(p.strength > 0.0f)) return;
+    pu.halo = vec4(p.strength, p.sun_dogs, p.moon, p.dispersion);
+}
+
+// The main pass's night sky members (M-NIGHTSKY 14d). Moon intensity 0 and star density 0 (or `enabled` false, or a
+// night fade of 0) leave p_night, p_night2, p_moon and p_moon2 zero: the sky shader skips its branch and the frame is
+// the one without a night sky bit for bit. The values are clamped again (apply_quality's clamps: a caller may skip
+// it); the cos size stops short of 1 so the shader's disk radius never reaches 0. The moon's lit side: the sun sits
+// 2 pi * phase ahead of the moon along the moon's daily path (moon.h puts the moon on the sun's arc, phase * 24 h
+// behind it), so the shader takes the elongation's cos and sin, evaluated here in f64. The twinkle clock is wrapped
+// in f64 to kStarPeriod: every star's twinkle rate is a whole number of cycles per period (kSkyFS), so the wrap does
+// not show and the clock never costs precision; a non-finite time counts as 0. The layer is direction-only (no
+// camera position, no floating origin).
+constexpr f64 kStarPeriod = 60.0;  // seconds (kSkyFS's twinkle rates are k / 60 Hz)
+constexpr f64 kTau64 = 6.283185307179586477;
+void night_sky_params(const NightSky& n, PassU& pu) {
+    const f32 moon = detail::scaled(n.moon_intensity, 8.0f, 0.0f);
+    const f32 stars = unit01(n.star_density);
+    const f32 fade = unit01(n.night_fade);
+    if (!n.enabled || fade <= 0.0f || (moon <= 0.0f && stars <= 0.0f)) return;
+    const f32 phase = unit01(n.moon_phase);
+    const f32 cos_size = min(detail::moon_cos_size(n.moon_cos_size), 0.99999f);
+    const f64 t = std::isfinite(n.star_time) ? f64(n.star_time) : 0.0;
+    const f64 elong = kTau64 * f64(phase);
+    const vec3 dir = detail::unit_dir3(n.moon_dir);
+    pu.night = vec4(cos_size, moon, phase, fade);
+    pu.night2 = vec4(stars, detail::scaled(n.star_brightness, 4.0f, 1.0f), unit01(n.star_twinkle),
+                     f32(t - kStarPeriod * std::floor(t / kStarPeriod)));
+    pu.moon = vec4(dir, f32(std::cos(elong)));
+    pu.moon2 = vec4(detail::scaled(n.moon_color.x, 1.0f, 0.0f), detail::scaled(n.moon_color.y, 1.0f, 0.0f),
+                    detail::scaled(n.moon_color.z, 1.0f, 0.0f), f32(std::sin(elong)));
+}
+
+// The main pass's aurora members (M-AURORA 16c). Level 0 (the Low tier and `r.aurora 0` zero it in apply_quality, the
+// kit folds the latitude gate and the night fade into it), a NaN level or `enabled` false leave p_aurora .. p_aurora4
+// zero: the sky shader skips aurora_layer and the frame is the one without it bit for bit. The values are clamped again
+// (apply_quality's clamps: a caller may skip it). The time is the carrier's, wrapped once more in f64 to
+// kAuroraPeriod (kit::kAuroraPeriodSeconds: every rate of the curtains is a whole number of cycles per period, so the
+// wrap does not show); a non-finite time counts as 0. The half-width cosine is kept to 0..cos 5 degrees (the kit's
+// width_deg Range 10..180), so the shader's arc never has zero width. Direction-only, as the night sky: no camera
+// position, no floating origin.
+constexpr f64 kAuroraPeriod = 64.0;  // kit::kAuroraPeriodSeconds (the renderer does not include the kit)
+void aurora_params(const AuroraSky& a, PassU& pu) {
+    const f32 level = detail::ranged(a.level, 0.0f, 4.0f, 0.0f);
+    if (!a.enabled || !(level > 0.0f)) return;
+    const f32 base = detail::ranged(a.base_height, 0.02f, 0.6f, 0.18f);
+    const f32 span = detail::ranged(a.height_span, 0.05f, 0.8f, 0.35f);
+    const f64 t = std::isfinite(a.time) ? f64(a.time) : 0.0;
+    f64 tw = t - kAuroraPeriod * std::floor(t / kAuroraPeriod);
+    if (!(tw < kAuroraPeriod)) tw = 0.0;
+    const vec2 az = detail::unit_dir2_z(a.azimuth);
+    const f32 count = detail::ranged(f32(a.curtain_count), 1.0f, 6.0f, 3.0f);
+    const auto unit = [](f32 x) { return detail::ranged(x, 0.0f, 1.0f, 0.0f); };
+    pu.aurora = vec4(level, base, span, f32(tw));
+    pu.aurora2 = vec4(az.x, az.y, detail::ranged(a.half_width_cos, 0.0f, 0.9962f, 0.8192f), std::floor(count));
+    pu.aurora3 = vec4(unit(a.low_color.x), unit(a.low_color.y), unit(a.low_color.z), 0.0f);
+    pu.aurora4 = vec4(unit(a.high_color.x), unit(a.high_color.y), unit(a.high_color.z),
+                      detail::ranged(a.speed, 0.0f, 4.0f, 1.0f));
+}
+
+// The main pass's rainbow members (M-RAINBOW 17c). Level 0 (the Low tier and `r.rainbow 0` zero it in apply_quality,
+// the kit folds the sun, wetness, rain and cloud gates into it), a NaN level or `enabled` false leave p_rainbow and
+// p_rainbow2 zero: the sky shader skips rainbow_layer and the frame is the one without it bit for bit. The values are
+// clamped again (apply_quality's clamps: a caller may skip it); the anti-solar direction is normalised (non-finite or
+// zero: +z, as apply_quality). Direction-only, as the night sky and the aurora: no camera position, no floating origin.
+void rainbow_params(const RainbowSky& r, PassU& pu) {
+    const f32 level = detail::ranged(r.level, 0.0f, 4.0f, 0.0f);
+    if (!r.enabled || !(level > 0.0f)) return;
+    const vec3 a = detail::unit_dir3_or(r.anti_solar, vec3{0.0f, 0.0f, 1.0f});
+    pu.rainbow = vec4(level, detail::ranged(r.band_width, 0.5f, 2.0f, 1.0f), detail::ranged(r.secondary, 0.0f, 1.0f, 0.0f),
+                      0.0f);
+    pu.rainbow2 = vec4(a.x, a.y, a.z, 0.0f);
+}
+
+// The main pass's meteor members (M-METEOR 18c). Level 0 (the Low tier and `r.meteor 0` zero it in apply_quality, the
+// kit folds the night, cloud and rain gates into it), a NaN level, `enabled` false, `rate` 0 or `brightness` 0 leave
+// p_meteor and p_meteor2 zero: the sky shader skips meteor_layer and the frame is the one without it bit for bit. The
+// values are clamped again (apply_quality's clamps: a caller may skip it); the time is the carrier's, already wrapped
+// to the 60 s period by the extract (kit::meteor_wrap_time; non-finite: 0), the seed goes over as an exact float.
+// Direction-only, as the night sky: no camera position, no floating origin.
+void meteor_params(const MeteorSky& m, PassU& pu) {
+    const f32 level = detail::ranged(m.level, 0.0f, 4.0f, 0.0f);
+    const f32 rate = detail::ranged(m.rate, 0.0f, 30.0f, 4.0f);
+    const f32 brightness = detail::ranged(m.brightness, 0.0f, 4.0f, 1.0f);
+    if (!m.enabled || !(level > 0.0f) || !(rate > 0.0f) || !(brightness > 0.0f)) return;
+    const f32 t = std::isfinite(m.time) ? detail::ranged(m.time, 0.0f, 60.0f, 0.0f) : 0.0f;
+    pu.meteor = vec4(level, brightness, detail::ranged(m.length, 0.5f, 2.0f, 1.0f),
+                     detail::ranged(m.speed, 0.5f, 2.0f, 1.0f));
+    pu.meteor2 = vec4(rate, t, f32(m.seed < 65535u ? m.seed : 65535u), 0.0f);
+}
+
+// ---- the water plane (M-WATER 15c). The wave tables are kit::water_wave_set's (mce/kit/water.h; the renderer does not
+// include the kit): a change there goes here too, and test_render3d_water_gl's normal probes compare the drawn surface
+// with kit::water_normal, so the two cannot drift apart unnoticed.
+constexpr f64 kWaterPeriod = 64.0;  // kit::kWaterPeriodSeconds: every omega is a whole multiple of 2 pi / this
+constexpr u32 kWaterWaves = 8;
+constexpr f32 kWaterGravity = 9.81f;
+constexpr f32 kWaterDirDeg[kWaterWaves] = {0.0f, 17.0f, -23.0f, 41.0f, -52.0f, 66.0f, -78.0f, 90.0f};
+constexpr f32 kWaterLenRatio[kWaterWaves] = {1.0f, 0.62f, 0.41f, 0.27f, 0.19f, 0.13f, 0.09f, 0.06f};
+constexpr f32 kWaterAmpRatio[kWaterWaves] = {1.0f, 0.6f, 0.4f, 0.27f, 0.18f, 0.12f, 0.08f, 0.05f};
+constexpr f32 kWaterPhaseSeed[kWaterWaves] = {0.0f, 1.3f, 2.7f, 4.1f, 5.2f, 0.9f, 3.6f, 5.9f};
+// The two detail ripples (kWaterFS kWaterDetailK: the same directions and wavelengths): a unit direction on xz, the
+// wavelength (m) and the whole cycles per kWaterPeriod at speed 1. Their slope is kWaterDetailSlope at an amplitude of
+// 0.2 m and above, less below, none on a flat plane.
+struct WaterDetail {
+    f32 x, z, wavelength;
+    f64 cycles;
+};
+constexpr WaterDetail kWaterDetail[2] = {{0.8f, 0.6f, 1.7f, 61.0}, {-0.6f, 0.8f, 1.1f, 77.0}};
+constexpr f32 kWaterDetailSlope = 0.03f;
+
+// x mod 2 pi in [0, 2 pi), in f64.
+f32 wrap_tau(f64 x) { return f32(x - kTau64 * std::floor(x / kTau64)); }
+
+// Whether the frame draws the plane: `enabled` and a finite level (apply_quality's r.water 0 clears `enabled`).
+bool water_on(const WaterSurface& w) { return w.enabled && std::isfinite(w.level_y); }
+constexpr u32 kWaterGrid = 16;  // kWaterVS's cells per side: the draw is 6 * kWaterGrid^2 vertices
+
+// M-WATER2 49c/49d: kWaterFS repeats mce/render/water_optics.h's constants as text; a change there goes there too.
+static_assert(kWaterTraceSteps == 24 && kWaterTraceRefine == 4 && kWaterTraceMaxDist == 80.0f &&
+                  kWaterEdgeFade == 0.1f && kWaterTraceFadeStart == 0.7f && kWaterFacingFade == 0.6f &&
+                  kWaterRefractScale == 0.5f && kWaterRefractMaxPath == 4.0f && kWaterRefractMaxUv == 0.05f &&
+                  kWaterOpticsPeriod == kWaterPeriod,
+              "water_optics.h and kWaterFS (shaders3d.h) carry the same constants");
+
+// Whether the camera is above the water's mean level (floating-origin local, as water_params uploads it): below it the
+// underwater look covers the view, and the reflection and the refraction of M-WATER2 stay off.
+bool water_camera_above(const WaterSurface& w, const f64 origin[3], vec3 camera) {
+    const f32 level = detail::ranged(w.level_y, -1000.0f, 1000.0f, 0.0f);
+    return camera.y > f32(f64(level) - origin[1]);
+}
+
+// M-CAUSTICS 52b / 52f: the caustics pass's gate and CausticsU for this view, shared by the two places it draws (record_main
+// into the water's refraction copy with the camera above the water, record_caustics on the frame with the camera under it).
+// The renderer state the gate reads comes in as plain values, so forward3d.h gets no new member. False: nothing to draw.
+struct CausticsFrameIn {
+    bool water_drawn = false;     // water_on and the water pipeline made
+    bool render_texture = false;  // out_.linear_output
+    bool post_source = false;     // the post chain has a source frame of non-zero size
+    bool see_through = true;      // CausticsGate::see_through
+    const f64* origin = nullptr;  // the floating origin
+    bool volumetrics = false;     // this view drew the volumetric fog in place of the exp² one (vol / vol_grid below)
+    vec4 vol{0.0f, 1.0f, 1.0f, 1.0f}, vol_grid{1.0f, 1.0f, 1.0f, 1.0f};
+};
+bool caustics_frame(const Scene3D& scene, const CausticsFrameIn& in, CausticsU& cu, f32& strength) {
+    const Caustics& setting = scene.post().caustics;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.caustics"));
+    const WaterSurface& water = scene.water();
+    const View3D& view = scene.view();
+    const DirectionalLight& light = scene.light();
+    CausticsGate g;
+    g.enabled = setting.enabled;
+    g.tier = q.caustics;
+    g.octaves = q.caustics_octaves;
+    g.cvar = !cv || cv->get_bool();
+    g.water = in.water_drawn;
+    g.render_texture = in.render_texture;
+    g.post_source = in.post_source;
+    g.perspective = cloud_shadow_perspective(view.proj);
+    g.toward_sun = {-light.direction.x, -light.direction.y, -light.direction.z};
+    g.sun_color = light.color;
+    g.intensity = light.intensity;
+    g.strength = detail::ranged(setting.strength, 0.0f, 4.0f, 1.0f);
+    g.sun_share = cloud_shadow_sun_share(light.color, light.intensity, light.ambient_sky);
+    g.see_through = in.see_through;
+    vec3 sun, color;
+    if (!caustics_gate(g, sun, color)) return false;
+    const f64* origin = in.origin;
+    const f32 level = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
+    const f32 half_extent = detail::ranged(water.half_extent, 1.0f, 20000.0f, 500.0f);
+    const f32 scale = detail::ranged(setting.scale, 0.25f, 16.0f, 2.0f);
+    const mat4& pr = view.proj;
+    const mat4& v = view.view;
+    cu.proj = {pr.c[0][0], pr.c[1][1], pr.c[2][0], pr.c[2][1]};
+    cu.right = {v.c[0][0], v.c[1][0], v.c[2][0], 1.0f / scale};
+    // The plane's height above the camera in f64 (the floating origin's y and the local y summed first), so a rebase
+    // gives the same float.
+    cu.up = {v.c[0][1], v.c[1][1], v.c[2][1], f32(f64(level) - (origin[1] + f64(view.position.y)))};
+    cu.back = {v.c[0][2], v.c[1][2], v.c[2][2], half_extent};
+    cu.sun = {sun.x, sun.y, sun.z, detail::ranged(setting.absorption, 0.0f, 4.0f, 0.15f)};
+    cu.color = {color.x, color.y, color.z, detail::ranged(setting.max_depth, 0.5f, 200.0f, 30.0f)};
+    const vec2 offset = caustics_offset(origin[0] + f64(view.position.x), origin[2] + f64(view.position.z), scale);
+    const vec2 centre = caustics_water_centre(vec2{view.position.x, view.position.z}, half_extent);
+    cu.plane = {offset.x, offset.y, centre.x, centre.y};
+    const f32 fog = scene.fog().density;
+    // The main pass squares the density, so any finite non-zero density (a negative one too) fogs there.
+    const f32 fog_density = !in.volumetrics && std::isfinite(fog) && fog != 0.0f ? fog : 0.0f;
+    cu.misc = {caustics_phase(scene.time(), setting.speed), f32(q.caustics_octaves < 3u ? q.caustics_octaves : 3u),
+               fog_density, 0.0f};
+    cu.vol = in.vol;
+    cu.vol_grid = in.vol_grid;
+    strength = g.strength;
+    return true;
+}
+
+// The main pass's water members. Clamped again (apply_quality's clamps: a caller may skip it). The wave set is
+// kit::water_wave_set's, evaluated here in the same f32 steps: wave i travels along the main direction (the
+// carrier's unit wind_dir, as an angle) turned by kWaterDirDeg[i], k = 2 pi / (wavelength * kWaterLenRatio[i]),
+// A = amplitude * kWaterAmpRatio[i], omega = speed * sqrt(g k) rounded to a whole multiple of 2 pi / kWaterPeriod (at
+// least one; 0 at speed 0). The shader gets K = k * dir and one phase per wave, seed + K . origin - omega * t, summed
+// in f64 and wrapped to 2 pi, so neither the floating origin nor the clock ever reaches the GPU as a large float and
+// a rebase leaves the pattern where it is; the shader works in the pass's local coordinates. The steepness goes as
+// authored: the shader derives Q = min(1, steepness / (count k A)) per wave as the kit does. An amplitude of 0 (the
+// Low tier, or calm water) uploads no waves (count 0): a flat mirror. `depth_read`: the opaque depth is bound at
+// bank 6 (p_water4.w). `reflect` / `refract` (M-WATER2 49d / 49c): the trace and the refraction run, reading the copy
+// of the opaque frame at bank 7 (p_water6; record_main decides, and only with the depth read). The current
+// (M-WATER2 49f, `flow`, m/s on xz, clamped to -5..5 per component, NaN 0) Doppler-shifts every wave and both detail
+// ripples: water_flow_cycles(K, flow) whole cycles per kWaterPeriod are added to the wave's own (kit::
+// water_wave_set_flow, the same rounding), so every frequency stays a whole multiple of 2 pi / kWaterPeriod and the
+// wrapped clock still repeats. A zero flow adds 0 cycles: exactly the phases without a current. No shader change.
+void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, bool reflect, bool refract, PassU& pu) {
+    using detail::ranged;
+    const f32 level = ranged(w.level_y, -1000.0f, 1000.0f, 0.0f);
+    const u32 count = static_cast<u32>(ranged(static_cast<f32>(w.wave_count), 1.0f, 8.0f, 4.0f));
+    const f32 amp = ranged(w.amplitude, 0.0f, 10.0f, 0.0f);
+    const f32 len = ranged(w.wavelength, 1.0f, 500.0f, 24.0f);
+    const f32 speed = ranged(w.speed_scale, 0.0f, 4.0f, 1.0f);
+    const vec2 wind = unit_wind_dir(w.wind_dir);
+    const f64 t0 = std::isfinite(w.time) ? f64(w.time) : 0.0;
+    const f64 t = t0 - kWaterPeriod * std::floor(t0 / kWaterPeriod);
+    const bool waves = amp > 0.0f;
+    pu.water = vec4(f32(f64(level) - origin[1]), waves ? f32(count) : 0.0f, unit01(w.steepness),
+                    ranged(w.half_extent, 1.0f, 20000.0f, 500.0f));
+    pu.water2 = vec4(unit01(w.shallow_color.x), unit01(w.shallow_color.y), unit01(w.shallow_color.z),
+                     ranged(w.depth_scale_m, 0.1f, 200.0f, 8.0f));
+    pu.water3 = vec4(unit01(w.deep_color.x), unit01(w.deep_color.y), unit01(w.deep_color.z),
+                     ranged(w.reflectivity, 0.0f, 1.0f, 1.0f));
+    pu.water4 = vec4(ranged(w.roughness, 0.0f, 1.0f, 0.08f), unit01(w.foam_amount),
+                     ranged(w.foam_width_m, 0.05f, 20.0f, 1.5f), depth_read ? 1.0f : 0.0f);
+    reflect = reflect && depth_read;
+    refract = refract && depth_read;
+    pu.water6 = vec4(reflect ? 1.0f : 0.0f, refract ? 1.0f : 0.0f, reflect || refract ? 1.0f : 0.0f, 0.0f);
+    if (!waves) return;
+    const vec2 flow{ranged(w.flow.x, -5.0f, 5.0f, 0.0f), ranged(w.flow.y, -5.0f, 5.0f, 0.0f)};
+    const f64 base = kTau64 / kWaterPeriod;
+    const f32 main_deg = math::degrees(std::atan2(wind.y, wind.x));
+    for (u32 i = 0; i < count; ++i) {
+        const f32 a = math::radians(main_deg + kWaterDirDeg[i]);
+        const f32 dx = std::cos(a), dz = std::sin(a);
+        const f32 k = static_cast<f32>(kTau64) / (len * kWaterLenRatio[i]);
+        const f64 omega = f64(speed) * f64(std::sqrt(kWaterGravity * k));
+        const f64 mult = (omega > 0.0 ? std::max(1.0, std::round(omega / base)) : 0.0) +
+                         water_flow_cycles(vec2{k * dx, k * dz}, flow);
+        // omega * t mod 2 pi = 2 pi * frac(mult * t / period): exact for the whole multiple, in f64
+        const f64 turns = mult * t / kWaterPeriod;
+        const f64 phase = f64(kWaterPhaseSeed[i]) + f64(k) * (f64(dx) * origin[0] + f64(dz) * origin[2]) -
+                          kTau64 * (turns - std::floor(turns));
+        pu.wave[i] = vec4(k * dx, k * dz, amp * kWaterAmpRatio[i], wrap_tau(phase));
+    }
+    f32 ph[2];
+    for (u32 j = 0; j < 2; ++j) {
+        const WaterDetail& d = kWaterDetail[j];
+        const f32 k = static_cast<f32>(kTau64) / d.wavelength;
+        const f64 cycles = (speed > 0.0f ? std::max(1.0, std::round(f64(speed) * d.cycles)) : 0.0) +
+                           water_flow_cycles(vec2{k * d.x, k * d.z}, flow);
+        const f64 turns = cycles * t / kWaterPeriod;
+        ph[j] = wrap_tau(f64(k) * (f64(d.x) * origin[0] + f64(d.z) * origin[2]) - kTau64 * (turns - std::floor(turns)));
+    }
+    pu.water5 = vec4(ph[0], ph[1], kWaterDetailSlope * min(amp / 0.2f, 1.0f), 0.0f);
 }
 
 // IEEE half from a finite float, round to nearest (the atmosphere's RGBA16F upload).
@@ -314,8 +1080,8 @@ u64 sky_radiance_key(const Sky& sky, rhi::TextureHandle sky_tex, f32 sky_lod) {
         const auto* b = static_cast<const u8*>(p);
         for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
-    const f32 f[11] = {sky.zenith.x,  sky.zenith.y,  sky.zenith.z,  sky.horizon.x,         sky.horizon.y, sky.horizon.z,
-                       sky.ground.x,  sky.ground.y,  sky.ground.z,  sky.texture_intensity, sky_lod};
+    const f32 f[12] = {sky.zenith.x,  sky.zenith.y,  sky.zenith.z,  sky.horizon.x,         sky.horizon.y, sky.horizon.z,
+                       sky.ground.x,  sky.ground.y,  sky.ground.z,  sky.texture_intensity, sky_lod,       sky.rotation};
     const u32 u[3] = {sky.texture_additive ? 1u : 0u, sky_tex.index, sky_tex.generation};
     mix(f, sizeof(f));
     mix(u, sizeof(u));
@@ -323,14 +1089,17 @@ u64 sky_radiance_key(const Sky& sky, rhi::TextureHandle sky_tex, f32 sky_lod) {
 }
 
 // What a probe's capture depends on: its placement, its version and the sky lighting it.
-u64 probe_key(const ReflectionProbe& p, u64 sky_key) {
+// Keys are taken in absolute coordinates (`origin`: the floating-origin shifts seen so far), so a rebase that moves a
+// probe or the volume with the rest of the world keeps its capture.
+u64 probe_key(const ReflectionProbe& p, u64 sky_key, const f64 (&origin)[3]) {
     u64 h = sky_key;
     auto mix = [&h](const void* q, usize n) {
         const auto* b = static_cast<const u8*>(q);
         for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
-    const f32 f[9] = {p.position.x, p.position.y, p.position.z, p.bounds.min.x, p.bounds.min.y,
-                      p.bounds.min.z, p.bounds.max.x, p.bounds.max.y, p.bounds.max.z};
+    const f64 f[9] = {p.position.x + origin[0], p.position.y + origin[1], p.position.z + origin[2],
+                      p.bounds.min.x + origin[0], p.bounds.min.y + origin[1], p.bounds.min.z + origin[2],
+                      p.bounds.max.x + origin[0], p.bounds.max.y + origin[1], p.bounds.max.z + origin[2]};
     mix(f, sizeof(f));
     mix(&p.version, sizeof(p.version));
     return h | 1u;
@@ -348,17 +1117,70 @@ void probe_face_views(vec3 pos, f32 near_z, f32 far_z, mat4 (&view)[6], mat4 (&v
     }
 }
 
-// The volume's contents depend on its placement, its version and its bake (or the lack of one).
-u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked) {
+// M-GI2 50e: whether the volume's visibility runs: it asks for it and r.gi.visibility is on. The cvar switches only the
+// vis pass and the lookup's weight, never the texel layout (gi_texels_per_probe reads the carrier), so a 10-texel bake
+// is still accepted and read with the plain lookup. (50f: relocation is meant to follow the same switch.)
+bool gi_visibility_on(const GiVolume& gi) { return gi.visibility && cv_gi_visibility.get_bool(); }
+// M-GI2 50f: relocation follows the same switch (r.gi.visibility 0 treats the volume as if relocate were false).
+bool gi_relocate_on(const GiVolume& gi) { return gi.relocate && cv_gi_visibility.get_bool(); }
+// M-GI2 50g: a volume follows the camera only where it is captured at runtime (apply_quality clears `follow` without
+// `updates`; a carrier that keeps it anyway keeps the 10-texel layout and a fixed box). A following volume is always
+// filled at runtime: its bake (of the authored box) is used only where it does not follow (the Low tier).
+bool gi_follow_on(const GiVolume& gi) { return gi.follow && gi.updates; }
+
+// The box the volume covers this frame: the authored one, or the following volume's snapped box.
+aabb3 gi_box(const GiVolume& gi, const GiProbeState* ps, const f64 (&origin)[3]) {
+    if (!ps || !ps->follow_valid || !gi_follow_on(gi)) return gi.bounds;
+    return gi_follow_box(ps->follow, gi.bounds, gi.counts, origin[0], origin[2]);
+}
+
+// The grid position of the probe at local index (ix, iy, iz) of `box` (the capture, the queue and the relocation agree).
+vec3 gi_probe_position(const aabb3& box, const u32 (&counts)[3], u32 ix, u32 iy, u32 iz) {
+    const vec3 t{counts[0] > 1 ? f32(ix) / f32(counts[0] - 1) : 0.5f, f32(iy) / f32(max(counts[1] - 1, 1u)),
+                 f32(iz) / f32(max(counts[2] - 1, 1u))};
+    return box.min + (box.max - box.min) * t;
+}
+
+// M-GI2 50f: the solids relocation pushes probes out of: the vis pass's occluders (rigid, a bounding radius of at least
+// `min_radius`), each its submesh's box (the draw's model maps the quantized [-1, 1] cube to world). A flat box (an axis
+// under 0.1 mm: a quad, a decal plane) holds nothing and is left out (its model has no inverse).
+void gi_relocation_solids(const Scene3D& scene, f32 min_radius, Array<GiSolid>& out) {
+    for (const Scene3D::Draw& d : scene.probe_draws()) {
+        if (d.mesh->skinned() || d.radius < min_radius) continue;
+        bool flat = false;
+        for (u32 i = 0; i < 3; ++i) flat = flat || length(vec3{d.model.c[i][0], d.model.c[i][1], d.model.c[i][2]}) < 1e-4f;
+        if (!flat) out.push_back({d.model, aabb3{{-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}}, d.center, d.radius});
+    }
+}
+
+// The volume's contents depend on its placement, its version, its bake (or the lack of one) and whether its fill
+// captures the record's visibility (M-GI2: r.gi.visibility refills once even when the width stays) and relocates. A
+// following volume (50g) hashes its spacing, its y band (world, whole millimetres) and its counts instead of the box:
+// a step of the camera is a scroll, not a refill, and a rebase changes nothing.
+u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked, const f64 (&origin)[3]) {
     u64 h = 1469598103934665603ull;
     auto mix = [&h](const void* q, usize n) {
         const auto* b = static_cast<const u8*>(q);
         for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
-    const f32 f[6] = {gi.bounds.min.x, gi.bounds.min.y, gi.bounds.min.z, gi.bounds.max.x, gi.bounds.max.y, gi.bounds.max.z};
-    const u32 u[6] = {gi.counts[0], gi.counts[1], gi.counts[2], gi.version, baked.index, baked.generation};
-    mix(f, sizeof(f));
+    if (gi_follow_on(gi)) {
+        const i64 band[4] = {std::llround(gi_follow_spacing(gi.bounds.min.x, gi.bounds.max.x, gi.counts[0]) * 1000.0),
+                             std::llround(gi_follow_spacing(gi.bounds.min.z, gi.bounds.max.z, gi.counts[2]) * 1000.0),
+                             std::llround((f64(gi.bounds.min.y) + origin[1]) * 1000.0),
+                             std::llround((f64(gi.bounds.max.y) + origin[1]) * 1000.0)};
+        mix(band, sizeof(band));
+    } else {
+        const f64 f[6] = {gi.bounds.min.x + origin[0], gi.bounds.min.y + origin[1], gi.bounds.min.z + origin[2],
+                          gi.bounds.max.x + origin[0], gi.bounds.max.y + origin[1], gi.bounds.max.z + origin[2]};
+        mix(f, sizeof(f));
+    }
+    const u32 u[7] = {gi.counts[0], gi.counts[1], gi.counts[2], gi.version, baked.index, baked.generation,
+                      u32(gi_visibility_on(gi)) | u32(gi_relocate_on(gi)) << 1 | u32(gi_follow_on(gi)) << 2};
     mix(u, sizeof(u));
+    if (gi_relocate_on(gi)) {  // where the probes may move to (apply_quality's clamp, as gi_relocate takes it)
+        const f32 mo = gi.max_offset == gi.max_offset ? clamp(gi.max_offset, 0.0f, kGiMaxOffsetLimit) : 0.0f;
+        mix(&mo, sizeof(mo));
+    }
     return h | 1u;
 }
 
@@ -373,6 +1195,43 @@ void destroy(rhi::RenderDevice& d, rhi::TextureHandle& t) {
     if (!t.is_null()) d.destroy_texture(t);
     t = {};
 }
+
+// M-DYNRES 46c: what Forward3D::dynres_ points at. forward3d.h only forward-declares DynResState (the pure controller's
+// state, dynres.h), so the driver's own bookkeeping derives from it: the pointer type stays honest, and the object is
+// always created and deleted as a DynResDriver, here. Exists only while the controller is on (created by the first
+// enabled frame, deleted by the first frame that resolves off and by shutdown), so a default renderer holds none.
+struct DynResDriver : DynResState {
+    // One frame the controller chose a scale for: matched with a sample of that frame (a GPU timestamp set or an
+    // injected cost) when it arrives MCE_FRAMES_IN_FLIGHT frames later. One spare entry over the latency, so the frame a
+    // sample names is still here even when it arrives a frame later than the nominal latency (SDL GPU's fence waiter).
+    struct Frame {
+        u64 device_frame = ~u64(0);  // RenderDevice::frame_index() of the frame (~0 = empty)
+        u64 frame = 0;               // the controller's own frame number (the injection schedule's clock)
+        f32 scale = 0.0f;            // the scale its window views drew at
+        u32 window_views = 0;        // 3D window views recorded in it (the multi-view cost estimate)
+        bool stamped_window = false; // its stamps came from a window view (the frame's `first` view was not a render
+                                     // texture); otherwise its measured span is not a sample (render textures draw at the
+                                     // tier's static scale, and record_views records them first)
+    };
+    static constexpr u32 kRing = MCE_FRAMES_IN_FLIGHT + 1;
+    Frame ring[kRing];
+    u64 frames = 0;              // controller frames run; frame `frames - 1` is the current one
+    u64 consumed = ~u64(0);      // device frame of the last sample looked at (~0 = none): a sample is consumed once
+    u64 inject_key = 0;          // fnv1a64 of the r.dynres.inject text last parsed (0 = none)
+    DynResInject inject;
+    bool inject_ok = false;      // that text parsed
+    f32 cost_ms = 0.0f;          // the smoothed cost at the current scale (Forward3DStats::dynres_cost_ms)
+
+    Frame* current() { return frames == 0 ? nullptr : &ring[(frames - 1) % kRing]; }
+    const Frame* find(u64 device_frame) const {
+        if (device_frame == ~u64(0)) return nullptr;
+        for (const Frame& f : ring)
+            if (f.device_frame == device_frame) return &f;
+        return nullptr;
+    }
+};
+
+DynResDriver& dynres_driver(DynResState* s) { return *static_cast<DynResDriver*>(s); }
 
 }  // namespace
 
@@ -533,7 +1392,13 @@ ResultV Forward3D::create_pipelines() {
     }
     const bool ssao = desc_.ssao && cv_ssao.get_bool(), ssr = desc_.ssr && cv_ssr.get_bool();
     const bool contact = desc_.contact_shadows && cv_contact_shadows.get_bool();
-    if (ssao || ssr || contact) {  // the half-resolution prepass both read
+    // M-OUTLINE 39c: the edge outline reads the prepass too, so it is created for it as well (which also gives the lens
+    // flare its depth on a renderer without SSAO, SSR and contact shadows). The water's depth read keeps following
+    // the first three only (screen_space_prepass in record_main), so its frames do not change. -r.edge_outline 0 at
+    // startup creates none of it (the convar lives in quality.cpp, which also applies it to PostFx::outline).
+    const ConVar* cv_edge_outline = ConVar::find(MCE_SID("r.edge_outline"));
+    const bool outline = desc_.edge_outline && (!cv_edge_outline || cv_edge_outline->get_bool());
+    if (ssao || ssr || contact || outline) {  // the half-resolution prepass they read
         rhi::GraphicsPipelineDesc ap = pd;  // the mesh vertex stage, depth-tested, both faces
         ap.fragment_shader = {kAoPrepassFS, "ssao_prepass.frag"};
         ap.state = {};
@@ -571,6 +1436,110 @@ ResultV Forward3D::create_pipelines() {
         fs.debug_name = "ssao.blur";
         MCE_TRY_ASSIGN(ao_blur_, device_->create_pipeline(fs));
     }
+    if (!ao_prepass_.is_null()) {
+        // M-LENSFLARE 38c: the sun flare's occlusion sample (it reads the prepass's view depth, so it needs the prepass)
+        // and its composite. A driver that refuses either keeps the frame without the flare rather than failing init.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kFlareOccFS, "lens_flare_occ.frag"};
+        fs.debug_name = "lens_flare.occlusion";
+        if (auto p = device_->create_pipeline(fs)) flare_occ_pipe_ = p.value();
+        fs.fragment_shader = {kFlareFS, "lens_flare.frag"};
+        fs.debug_name = "lens_flare";
+        if (auto p = device_->create_pipeline(fs)) flare_pipe_ = p.value();
+        if (flare_occ_pipe_.is_null() || flare_pipe_.is_null()) {
+            MCE_LOG_WARN("render3d: the lens flare shaders failed, drawing frames without the flare");
+            for (rhi::PipelineHandle* p : {&flare_occ_pipe_, &flare_pipe_}) {
+                if (!p->is_null()) device_->destroy_pipeline(*p);
+                *p = {};
+            }
+        }
+    }
+    if (outline && !ao_prepass_.is_null()) {
+        // M-OUTLINE 39c: the edge outline's composite. A driver that refuses it keeps the frame without the outline.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kOutlineFS, "edge_outline.frag"};
+        fs.debug_name = "edge_outline";
+        if (auto p = device_->create_pipeline(fs)) outline_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the edge outline shader failed, drawing frames without the outline");
+    }
+    {
+        // M-LENSRAIN 42c: the lens rain composite. It reads only post_source_, so unlike the flare it needs no
+        // prepass and is made on every renderer. A driver that refuses it keeps the frame without the drops rather than
+        // failing init.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kLensRainFS, "lens_rain.frag"};
+        fs.debug_name = "lens_rain";
+        if (auto p = device_->create_pipeline(fs)) rain_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the lens rain shader failed, drawing frames without the drops");
+    }
+    {
+        // M-UNDERWATER 44c: the underwater composite. Like the lens rain it reads only post_source_ (detail 1 and 2 add the
+        // prepass when it exists, detail 0 binds ao_off_), so it is made on every renderer at startup: per-renderer
+        // behaviour (a null handle means this renderer's driver refused it) and no compile hitch on the first dive. A
+        // driver that refuses it keeps the frame without the look rather than failing init; record_underwater says so.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {shaders3d::kUnderwaterFS, "underwater.frag"};
+        fs.debug_name = "underwater";
+        if (auto p = device_->create_pipeline(fs)) underwater_pipe_ = p.value();
+    }
+    if (!ao_prepass_.is_null()) {
+        // M-HEATHAZE 43c: the heat haze composite. Its depth mask reads the half-resolution opaque prepass, so like the
+        // flare it is made only where that prepass exists (SSAO, SSR, contact shadows or the edge outline on); without
+        // it the pass is never recorded. A driver that refuses the shader keeps the frame without the haze.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kHazeFS, "haze.frag"};
+        fs.debug_name = "heat_haze";
+        if (auto p = device_->create_pipeline(fs)) haze_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the heat haze shader failed, drawing frames without the haze");
+    }
+    if (!ao_prepass_.is_null()) {
+        // M-SUNSHAFTS 45c: the sun shafts' half-resolution accumulation and full-resolution composite. Both read the
+        // half-resolution opaque prepass (sky and occlusion, the veil), so like the flare and the haze they are made only
+        // where that prepass exists (SSAO, SSR, contact shadows or the edge outline on); without it the pass is never
+        // recorded (record_sun_shafts says so once). Made here at startup, not on first use: a refusal is per renderer (a
+        // null handle) and there is no compile hitch the first time the sun comes out. A driver that refuses either keeps
+        // the frame without the shafts rather than failing init.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {shaders3d::kShaftsFS, "sun_shafts.frag"};
+        fs.debug_name = "sun_shafts";
+        if (auto p = device_->create_pipeline(fs)) shafts_pipe_ = p.value();
+        fs.fragment_shader = {shaders3d::kShaftsCompFS, "sun_shafts_comp.frag"};
+        fs.debug_name = "sun_shafts.composite";
+        if (auto p = device_->create_pipeline(fs)) shafts_comp_pipe_ = p.value();
+        if (shafts_pipe_.is_null() || shafts_comp_pipe_.is_null()) {
+            MCE_LOG_WARN("render3d: the sun shafts shaders failed, drawing frames without the shafts");
+            for (rhi::PipelineHandle* p : {&shafts_pipe_, &shafts_comp_pipe_}) {
+                if (!p->is_null()) device_->destroy_pipeline(*p);
+                *p = {};
+            }
+        }
+    }
+    if (!ao_prepass_.is_null()) {
+        // M-CLOUDSHADOW 51c: the cloud shadow composite. It rebuilds each pixel's position from the half-resolution opaque
+        // prepass, so like the sun shafts it is made only where that prepass exists (SSAO, SSR, contact shadows or the
+        // edge outline on), at startup (a refusal is per renderer; no compile hitch when the weather turns cloudy, and a
+        // quality tier switched mid-run finds it made). A driver that refuses it keeps the frame without the shadows.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {shaders3d::kCloudShadowFS, "cloud_shadow.frag"};
+        fs.debug_name = "cloud_shadow";
+        if (auto p = device_->create_pipeline(fs)) cloud_shadow_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the cloud shadow shader failed, drawing frames without the cloud shadows");
+    }
+    if (!ao_prepass_.is_null()) {
+        // M-CAUSTICS 52b: the caustics composite. Like the cloud shadows it rebuilds each pixel's position from the
+        // half-resolution opaque prepass, so it is made only where that prepass exists, at startup. A driver that
+        // refuses it keeps the frame without the caustics.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {shaders3d::kCausticsFS, "caustics.frag"};
+        fs.debug_name = "caustics";
+        if (auto p = device_->create_pipeline(fs)) caustics_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the caustics shader failed, drawing frames without the caustics");
+    }
+    // M-LIGHTCOOKIE 40c: the cookie bake pipeline and the atlas are made on the first frame with a cookie
+    // (record_cookie_bake). -r.light_cookies 0 at startup makes none of them for the renderer's life (as -r.edge_outline
+    // 0); the cvar is also read every frame (cookies_allowed) and by the kit extract (apply_quality).
+    const ConVar* cv_light_cookies = ConVar::find(MCE_SID("r.light_cookies"));
+    if (cv_light_cookies && !cv_light_cookies->get_bool()) desc_.light_cookies = false;
     const bool taa = desc_.taa && cv_taa.get_bool(), post_fx = desc_.post_fx && cv_post_fx.get_bool();
     if (taa || post_fx) {  // the velocity prepass: TAA, motion blur and depth of field
         rhi::GraphicsPipelineDesc vp = sp;  // the shadow vertex streams, depth-tested, both faces
@@ -585,6 +1554,55 @@ ResultV Forward3D::create_pipelines() {
         MCE_TRY_ASSIGN(velocity_skinned_, device_->create_pipeline(vp));
     }
     MCE_TRY(create_scale_pipelines());
+    if (desc_.instancing && cv_instancing.get_bool()) {
+        // Automatic instancing (M-VISUAL3 5a): the twins of the pipelines above with the per-copy vertex
+        // stages. A driver that refuses one (no vertex-stage storage buffers) keeps the single draws.
+        bool ok_all = true;
+        auto twin = [&](rhi::GraphicsPipelineDesc d, const char* vs, const char* vs_name, const char* name,
+                        rhi::PipelineHandle& out) {
+            if (!ok_all) return;
+            d.vertex_shader = {vs, vs_name};
+            d.debug_name = name;
+            if (auto p = device_->create_pipeline(d))
+                out = p.value();
+            else
+                ok_all = false;
+        };
+        rhi::GraphicsPipelineDesc md;
+        md.vertex_shader = {kMeshVS, "pbr.vert"};
+        md.fragment_shader = {kMeshFS, "pbr.frag"};
+        md.vertex = layout;
+        md.state.depth = {true, true, rhi::CompareOp::LessEqual};
+        md.state.raster.cull = rhi::CullMode::Back;
+        twin(md, kDrawInstancedVS, "pbr_draw_instanced.vert", "pbr.opaque.instanced", mesh_cull_inst_);
+        md.state.raster.cull = rhi::CullMode::None;
+        twin(md, kDrawInstancedVS, "pbr_draw_instanced.vert", "pbr.two_sided.instanced", mesh_two_sided_inst_);
+        if (!ao_prepass_.is_null()) {
+            rhi::GraphicsPipelineDesc ap = md;
+            ap.fragment_shader = {kAoPrepassFS, "ssao_prepass.frag"};
+            ap.state = {};
+            ap.state.depth = {true, true, rhi::CompareOp::LessEqual};
+            ap.state.raster.cull = rhi::CullMode::None;
+            twin(ap, kDrawInstancedVS, "pbr_draw_instanced.vert", "ssao.prepass.draw_instanced", ao_prepass_inst_);
+        }
+        rhi::GraphicsPipelineDesc sd = sp;  // the rigid stream (sp ends on the skinned twin's)
+        sd.vertex = layout;
+        twin(sd, kShadowInstancedVS, "shadow_draw_instanced.vert", "mesh.shadow.draw_instanced", shadow_inst_);
+        if (!velocity_pipe_.is_null()) {
+            rhi::GraphicsPipelineDesc vp = sd;
+            vp.fragment_shader = {kVelocityFS, "velocity.frag"};
+            twin(vp, kVelocityInstancedVS, "velocity_draw_instanced.vert", "taa.velocity.draw_instanced",
+                 velocity_inst_);
+        }
+        if (!ok_all) {
+            MCE_LOG_WARN("render3d: automatic instancing unavailable (its pipelines failed), drawing single draws");
+            for (rhi::PipelineHandle* p : {&mesh_cull_inst_, &mesh_two_sided_inst_, &ao_prepass_inst_, &shadow_inst_,
+                                           &velocity_inst_}) {
+                if (!p->is_null()) device_->destroy_pipeline(*p);
+                *p = {};
+            }
+        }
+    }
     if (taa) {
         fs.state.blend.mode = rhi::BlendMode::Opaque;
         fs.fragment_shader = {kTaaFS, "taa.frag"};
@@ -631,6 +1649,19 @@ ResultV Forward3D::create_pipelines() {
         fs.fragment_shader = {kProbeDecodeFS, "probe_decode.frag"};
         fs.debug_name = "gi.decode";
         MCE_TRY_ASSIGN(gi_decode_, device_->create_pipeline(fs));
+        // M-GI2 50d: the record's vis pass (gi_capture), the mesh vertex stages, depth-tested, both faces.
+        if (!gi_probes_) gi_probes_ = new GiProbeState{};
+        rhi::GraphicsPipelineDesc vp = pd;
+        vp.fragment_shader = {kGiVisFS, "gi_vis.frag"};
+        vp.state = {};
+        vp.state.depth = {true, true, rhi::CompareOp::LessEqual};
+        vp.state.raster.cull = rhi::CullMode::None;
+        vp.debug_name = "gi.vis";
+        MCE_TRY_ASSIGN(gi_probes_->vis_pipes[0], device_->create_pipeline(vp));
+        vp.vertex_shader = kd.vertex_shader;
+        vp.vertex = skinned_layout;
+        vp.debug_name = "gi.vis.skinned";
+        MCE_TRY_ASSIGN(gi_probes_->vis_pipes[1], device_->create_pipeline(vp));
     }
     if (desc_.volumetrics && cv_volumetrics.get_bool()) {
         fs.fragment_shader = {kVolInjectFS, "vol_inject.frag"};
@@ -680,9 +1711,29 @@ void Forward3D::destroy_targets() {
     size_ = {};
 }
 
-void Forward3D::ensure_targets(rhi::Extent2D size) {
+void Forward3D::ensure_targets(rhi::Extent2D size, bool keep_history) {
     if (size == size_ && !hdr_.is_null()) return;
+    // M-DYNRES 46c: a render-size-only change (the output size, and with it the TAA history's, is unchanged) keeps the
+    // history: it is at the output size and the jitter is derived from the render size, so resolving a frame of the new
+    // size into it is exactly the temporal upsample. The handles are moved out before destroy_targets and back after
+    // it; nothing else of the history changes (history_index_ is not touched by destroy_targets).
+    rhi::TextureHandle kept[2] = {};
+    rhi::Extent2D kept_size{};
+    bool kept_valid = false;
+    if (keep_history) {
+        for (u32 i = 0; i < 2; ++i) {
+            kept[i] = history_[i];
+            history_[i] = {};
+        }
+        kept_size = history_size_;
+        kept_valid = history_valid_;
+    }
     destroy_targets();
+    if (keep_history) {
+        for (u32 i = 0; i < 2; ++i) history_[i] = kept[i];
+        history_size_ = kept_size;
+        history_valid_ = kept_valid;
+    }
     size_ = size;
     rhi::TextureDesc d;
     d.size = size;
@@ -728,24 +1779,39 @@ void Forward3D::ensure_targets(rhi::Extent2D size) {
 }
 
 void Forward3D::shutdown() {
+    delete static_cast<DynResDriver*>(dynres_);  // M-DYNRES 46c: always created as a DynResDriver (update_dynres)
+    dynres_ = nullptr;
     if (!device_) return;
     for (u32 slot = 1; slot < kMaxViews; ++slot) release_view(slot);
     destroy_targets();
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
-          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &cluster_build_,
+          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &flare_occ_pipe_, &flare_pipe_, &rain_pipe_, &haze_pipe_, &underwater_pipe_, &shafts_pipe_, &shafts_comp_pipe_, &cloud_shadow_pipe_, &caustics_pipe_, &outline_pipe_, &cookie_pipe_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &frame_copy_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
-          &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_}) {
+          &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_, &mesh_cull_inst_, &mesh_two_sided_inst_, &ao_prepass_inst_,
+          &shadow_inst_, &velocity_inst_, &water_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
+    if (gi_probes_) {  // M-GI2 50d
+        for (rhi::PipelineHandle& p : gi_probes_->vis_pipes) {
+            if (!p.is_null()) device_->destroy_pipeline(p);
+            p = {};
+        }
+        destroy(*device_, gi_probes_->vis_faces);
+        delete gi_probes_;
+        gi_probes_ = nullptr;
+    }
     for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_,
                                   &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_, &atmo_tex_, &vol_media_, &vol_light_,
-                                  &fx_[0], &fx_[1]})
+                                  &fx_[0], &fx_[1], &flare_occ_, &outline_dst_, &shafts_buf_, &cookie_atlas_})
         destroy(*device_, *t);
     atmo_key_ = 0;
+    for (u32& k : cookie_keys_) k = 0;  // the atlas is gone: every layer is empty
+    cookie_records_ = 0;
+    water_failed_ = false;
     gi_size_ = {};
     gi_face_layers_ = gi_shadow_layer_ = gi_cursor_ = gi_filled_ = 0;
     gi_key_ = 0;
@@ -794,6 +1860,96 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     t.fxaa = ts.ms(b + kTsTonemap, b + kTsFxaa);
     t.total = ts.ms(b + kTsBegin, b + kTsFxaa);
     return t;
+}
+
+// M-DYNRES 46c: the dynamic resolution controller, once a frame on the frame's first view, before record_view reads the
+// scale. Off (the setting, r.dynres 0, a non-finite input): the driver state is dropped, so the next enable starts at the
+// ceiling, no timestamp is read and record_view takes today's fixed scale. On: one sample (an injected cost of the frame
+// MCE_FRAMES_IN_FLIGHT back, or the newest completed GPU timestamps, each matched in the ring with the scale its frame
+// drew at; a frame not in the ring gives no sample), one dynres_step, and the scale for this frame's window views.
+void Forward3D::update_dynres(const Scene3D& scene) {
+    const DynamicResolution& setting = scene.post().dynres;
+    auto drop = [this] {
+        delete static_cast<DynResDriver*>(dynres_);
+        dynres_ = nullptr;
+    };
+    if (!setting.enabled) {  // the default: nothing read, nothing kept
+        drop();
+        return;
+    }
+    static const ConVar* cv_on = ConVar::find(MCE_SID("r.dynres"));
+    static const ConVar* cv_target = ConVar::find(MCE_SID("r.dynres.target_ms"));
+    static const ConVar* cv_inject = ConVar::find(MCE_SID("r.dynres.inject"));
+    DynResParams p;
+    if (!dynres_resolve(setting, !cv_on || cv_on->get_bool(), cv_target ? cv_target->get_float() : 0.0f,
+                        desc_.dynres_floor, desc_.render_scale, p)) {
+        drop();
+        return;
+    }
+    if (!dynres_) {
+        auto* fresh = new DynResDriver{};
+        fresh->scale = p.ceiling;  // starts at the ceiling: the tier's render_scale, bit for bit
+        dynres_ = fresh;
+    }
+    DynResDriver& d = dynres_driver(dynres_);
+    const u64 dev = device_->frame_index();
+    // One controller step per device frame: a second `first` view under the same frame index (an editor drawing two
+    // panels, a bake that re-begins the frame) reuses the scale chosen for it.
+    if (const DynResDriver::Frame* cur = d.current(); cur && cur->device_frame == dev) return;
+
+    // The sample, looked up before this frame's entry overwrites the oldest one.
+    bool has = false;
+    f32 ms = 0.0f, at_scale = 1.0f;
+    bool injected = false;
+    if (const StringView text = cv_inject ? cv_inject->get_string() : StringView{}; !text.empty()) {
+        const u64 key = fnv1a64(text) | 1u;
+        if (key != d.inject_key) {
+            d.inject_key = key;
+            d.inject_ok = dynres_parse_inject(text, d.inject);
+            if (!d.inject_ok)
+                MCE_LOG_WARN("dynres: r.dynres.inject '{}' is not a schedule 'ms@frame,...' (frames ascending, at most {} "
+                             "entries); using the measured GPU time",
+                             text, kDynResMaxInject);
+        }
+        injected = d.inject_ok;
+    }
+    if (injected) {
+        // The injected cost of frame k reaches the controller at frame k + MCE_FRAMES_IN_FLIGHT, as a timestamp would.
+        const u64 want = dev >= MCE_FRAMES_IN_FLIGHT ? dev - MCE_FRAMES_IN_FLIGHT : ~u64(0);
+        if (const DynResDriver::Frame* f = d.find(want); f && want != d.consumed) {
+            d.consumed = want;
+            at_scale = f->scale;
+            ms = dynres_ms_at(dynres_inject_ms(d.inject, f->frame), at_scale, p.variable_share);
+            has = true;
+        }
+    } else {
+        const rhi::GpuTimestamps& ts = device_->last_gpu_timestamps();
+        if (ts.frame_index != ~u64(0) && (d.consumed == ~u64(0) || ts.frame_index > d.consumed)) {
+            d.consumed = ts.frame_index;  // looked at once, used or not
+            const f64 total = gpu_times(ts).total;  // the first 3D view's span (-1 without stamps)
+            const DynResDriver::Frame* f = d.find(ts.frame_index);
+            if (f && f->stamped_window && total >= 0.0 && std::isfinite(total)) {
+                // N window views cost about N times the first (a split-screen cell costs its share of the area): an
+                // estimate, M-DYNRES risks. A frame whose stamps came from a render-texture view gives no sample.
+                at_scale = f->scale;
+                ms = f32(total * f64(max(f->window_views, 1u)));
+                has = true;
+            }
+        }
+    }
+
+    const f32 before = d.scale;
+    const u64 k = d.frames++;
+    DynResDriver::Frame& entry = d.ring[k % DynResDriver::kRing];
+    entry = DynResDriver::Frame{};
+    entry.device_frame = dev;
+    entry.frame = k;
+    const f32 now = dynres_step(p, d, has, ms, at_scale);
+    entry.scale = now;
+    d.cost_ms = d.cost > 0.0f ? dynres_ms_at(d.cost, now, p.variable_share) : 0.0f;
+    if (now != before)
+        MCE_LOG_INFO("dynres: scale {:.4f} -> {:.4f} (cost {:.1f} ms, target {:.1f} ms)", before, now,
+                     d.cost > 0.0f ? dynres_ms_at(d.cost, before, p.variable_share) : 0.0f, p.target_ms);
 }
 
 void Forward3D::swap_view(ViewState& v) {
@@ -858,14 +2014,43 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record inside a pass");
     stats_ = {};
     out_ = out;
+    if (out.first) shafts_buf_used_ = false;  // M-SUNSHAFTS: no view of this frame has recorded into shafts_buf_ yet
+    if (out.first) update_dynres(scene);  // M-DYNRES 46c: the frame's one controller step, before the scale is read
+    // M-LIGHTCOOKIE: no records until upload_cookie_records finds this view's cookies (bank 2 is the decals'); whether an
+    // earlier view of this frame used the atlas survives into the later views.
+    cookie_records_ = out.first ? 0u : (cookie_records_ & kCookieAtlasInUse);
+    for (u32& b : inst_budget_) b = 0;
+    if (out.first) {  // the frame's budget, shared by all its views (the device's ring is per frame slot)
+        const usize ring = desc_.geometry_ring_bytes / 4;
+        inst_frame_left_ = static_cast<u32>(min<usize>(desc_.instancing_budget, ring));
+    }
     const rhi::Extent2D view = scene.view().viewport;
     if (view.width == 0 || view.height == 0) return;
-    // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target.
-    const f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
+    reserve_instancing(scene);
+    count_draw_causes(scene);
+    // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target. M-DYNRES 46c: with
+    // the controller on, a window view draws at the frame's dynamic scale (its ceiling is render_scale itself, so a
+    // controller idle at the ceiling draws exactly today's size); a render-texture view keeps the tier's static scale.
+    // A dynamic size change with an unchanged output keeps the TAA history (ensure_targets).
+    f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
+    bool keep_history = false;
+    if (dynres_) {
+        DynResDriver& d = dynres_driver(dynres_);
+        stats_.dynres = true;
+        stats_.dynres_cost_ms = d.cost_ms;
+        if (!out.linear_output) {
+            scale = clamp(d.scale, 0.5f, 1.0f);
+            if (DynResDriver::Frame* cur = d.current()) ++cur->window_views;
+            keep_history = history_size_ == view;
+        }
+        if (DynResDriver::Frame* cur = d.current(); cur && out.first)
+            cur->stamped_window = !out.linear_output;  // timestamp() writes the stamps on `first` views (the last one wins)
+    }
     const rhi::Extent2D size = scale >= 1.0f ? view
                                               : rhi::Extent2D{max(1u, static_cast<u32>(std::lround(f32(view.width) * scale))),
                                                               max(1u, static_cast<u32>(std::lround(f32(view.height) * scale)))};
-    ensure_targets(size);
+    stats_.render_scale = scale >= 1.0f ? 1.0f : scale;
+    ensure_targets(size, keep_history);
     // TAA: a sub-pixel shift of this frame's projection, Halton(2, 3) over 8 frames.
     taa_on_ = scene.post().taa && !taa_pipe_.is_null();
     jitter_ = mat4::identity();
@@ -879,16 +2064,29 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     } else {
         history_valid_ = false;  // a frame without TAA breaks the history
     }
+    // Floating origin: the frame after a rebase is a camera cut for the temporal history (the previous matrices
+    // are in the old coordinates); the world-space state shared by the views moves once, on the first view.
+    if (const vec3 d = scene.origin_shift(); d.x != 0.0f || d.y != 0.0f || d.z != 0.0f) {
+        history_valid_ = false;
+        velocity_prev_valid_ = false;
+        ssr_prev_valid_ = false;
+        if (out.first) {
+            origin_[0] += f64(d.x);
+            origin_[1] += f64(d.y);
+            origin_[2] += f64(d.z);
+            for (EmitterGpu& e : emitters_gpu_) if (!e.particles.is_null()) device_->destroy_buffer(e.particles);  // world-space rings restart
+            emitters_gpu_.clear();
+        }
+    }
     post_source_ = hdr_;
     post_size_ = size;
     // The joint palette stays bound for the shadow and main passes (one copy per frame).
     const Span<const mat4> palette = scene.joint_palette();
     if (!palette.empty()) cmd.set_storage_data(rhi::bank::kJointPalette, std::as_bytes(palette));
     stats_.joints = static_cast<u32>(palette.size());
-    update_atmosphere(scene);   // CPU: re-bakes the sky texture when the sun or the air changed
-    record_ibl(cmd, scene);     // rare (sky changes), so outside the per-stage budget
-    record_probes(cmd, scene);  // rare too (probe placed, moved or version bumped)
-    // The volume's sun fit takes one more shadow-map layer, added once a scene has a volume.
+    // The volume's sun fit takes one more shadow-map layer, added once a scene has a volume. Before the probe
+    // captures, which bind the shadow map: a handle destroyed after they record is gone when they execute
+    // (texture 0 under a depth-compare sampler, undefined; NVIDIA warns).
     if (scene.gi_volume().enabled && !gi_project_.is_null() && gi_shadow_layer_ == 0) {
         destroy(*device_, shadow_map_);
         rhi::TextureDesc td;
@@ -901,6 +2099,9 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         td.debug_name = "mce.3d.shadow_cascades";
         shadow_map_ = device_->create_texture(td);
     }
+    update_atmosphere(scene);   // CPU: re-bakes the sky texture when the sun or the air changed
+    record_ibl(cmd, scene);     // rare (sky changes), so outside the per-stage budget
+    record_probes(cmd, scene);  // rare too (probe placed, moved or version bumped)
     timestamp(cmd, kTsBegin);
     record_clusters(cmd, scene);
     timestamp(cmd, kTsClusters);
@@ -908,10 +2109,22 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsScale);
     record_ssao(cmd, scene);
     timestamp(cmd, kTsSsao);
+    // M-REFLECT2 48e: with SSR and a velocity pass both on, the velocity pass records before the trace (it reads only
+    // the opaque draws and the matrices, so its pixels do not change; its time falls in the SSR bucket) and the trace
+    // reads where each hit surface was. stats_.ssr_motion carries the decision to record_ssr: only with last frame's
+    // matrices (the previous view-proj the velocity used is then last frame's, which gives its jitter).
+    velocity_on_ = scene.post().needs_velocity() && !velocity_pipe_.is_null();
+    const bool velocity_early =
+        velocity_on_ && cv_ssr_motion.get_bool() && scene.reflections().enabled && !ssr_pipe_.is_null();
+    if (velocity_early) {
+        stats_.ssr_motion = velocity_prev_valid_ && ssr_prev_valid_;
+        record_velocity(cmd, scene);
+    }
     record_ssr(cmd, scene);
     timestamp(cmd, kTsSsr);
     record_contact(cmd, scene);
     timestamp(cmd, kTsContact);
+    record_cookie_bake(cmd, scene);  // M-LIGHTCOOKIE 40c: before every pass that reads the atlas; in the shadow bucket
     record_shadows(cmd, scene);
     record_local_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
@@ -923,17 +2136,28 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsMain);
     if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
     timestamp(cmd, kTsResolve);
-    velocity_on_ = scene.post().needs_velocity() && !velocity_pipe_.is_null();
-    if (velocity_on_) record_velocity(cmd, scene);
-    else velocity_prev_valid_ = false;  // a frame without the prepass breaks the previous transforms
+    if (!velocity_on_) velocity_prev_valid_ = false;  // a frame without the prepass breaks the previous transforms
+    if (velocity_on_ && !velocity_early) record_velocity(cmd, scene);
+    record_outline(cmd, scene);  // M-OUTLINE 39c: post_source_ = the frame with lines; its time falls in the taa bucket
     if (taa_on_) record_taa(cmd, scene);
     timestamp(cmd, kTsTaa);
     record_post_fx(cmd, scene);
     timestamp(cmd, kTsPostFx);
+    record_cloud_shadow(cmd, scene);  // M-CLOUDSHADOW 51c: after the exposure histogram, before the shafts; the bloom bucket
+    record_caustics(cmd, scene);  // M-CAUSTICS 52b: after the cloud shadows, before the shafts; the bloom bucket
+    record_sun_shafts(cmd, scene);  // M-SUNSHAFTS 45c: after the exposure histogram, before the flare; the bloom bucket
+    record_flare(cmd, scene);  // its time falls in the bloom bucket (kTsPostFx..kTsBloom)
+    record_underwater(cmd, scene);  // M-UNDERWATER 44c: after the flare (attenuated too), before the lens rain; same bucket
+    record_lens_rain(cmd, scene);  // M-LENSRAIN 42c: after the flare (refracted too), before bloom; same bucket
+    record_heat_haze(cmd, scene);  // M-HEATHAZE 43c: after the lens rain (its drops bend too), before bloom; same bucket
     record_post(cmd, scene, target);
     // What the next frame's reflections read: this frame's HDR color and the projection it was drawn with.
     ssr_prev_vp_ = jitter_ * scene.view().view_proj;
     ssr_prev_valid_ = true;
+    for (u32& b : inst_budget_) {  // what this view did not use goes back to the frame's later views
+        inst_frame_left_ += b;
+        b = 0;
+    }
 }
 
 // ---- 0. Forward+ light assignment on the GPU (M-VISUAL 1): fills banks 4 and 6 for the main pass
@@ -1129,7 +2353,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
                              d.size.width, d.size.height, d.array_layers, kIblEnvWidth, kIblEnvWidth / 2, kProbeLayers);
         }
         // A bake depends on nothing but its texture.
-        keys[i] = baked[i].is_null() ? probe_key(probes[i], ibl_key_)
+        keys[i] = baked[i].is_null() ? probe_key(probes[i], ibl_key_, origin_)
                                      : ((u64(baked[i].index) << 32 | baked[i].generation) * 1099511628211ull) | 1u;
         any |= keys[i] != probe_keys_[i];
     }
@@ -1180,6 +2404,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     for (mat4& c : pu.cascade) c = mat4::identity();
     const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu, sky_texture_override());
     pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), ibl_own_source_ ? 1.0f : 0.0f};  // the sky's IBL, no probes
+    translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: a translucent surface draws as in the main pass
     static constexpr ClusterRange kNoRange{0, 0};
     static constexpr GpuPointLight kNoLight{};
     static constexpr u32 kNoIndex = 0;
@@ -1243,11 +2468,17 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);  // captures take no SSAO (PassU::ao.x = 0)
             cmd.bind_texture(rhi::bank::kSsr, ao_off_, linear_clamp_);  // nor reflections (PassU::ssr.x = 0)
             cmd.bind_texture(rhi::bank::kGiVolume, ao_off_, point_sampler_);  // nor the volume (PassU::gi.x = 0)
+            // Nor the fog (PassU::vol.x = 0), but kMeshFS and kSkyFS declare u_vol: Metal's validation wants every
+            // declared texture and sampler bound, and on a scene's first frame nothing has bound bank 4 yet (this runs
+            // before bind_main_state). M-METAL-HOSTED found it: "missing Sampler binding at index 4 for u_volSmplr[0]".
+            cmd.bind_texture(rhi::bank::kVolumetrics, ao_off_, linear_clamp_);
             cmd.set_storage_data(rhi::bank::kClusters, rhi::as_bytes(kNoRange));
             cmd.set_storage_data(rhi::bank::kLightIndices, rhi::as_bytes(kNoIndex));
             cmd.set_storage_data(rhi::bank::kLightPool, rhi::as_bytes(kNoLight));
             static constexpr LocalShadowRecord kNoShadow{};
             cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
+            static constexpr GpuCookieRecord kNoCookie{};  // captures draw no cookies (PassU::local.z = 0)
+            cmd.set_storage_data(rhi::bank::kLightCookies, rhi::as_bytes(kNoCookie));
             bind_decals(cmd, scene, false);
             DrawCache cache;
             draw_meshes(cmd, scene, draws, 0, static_cast<u32>(draws.size()), static_cast<u32>(draws.size()), cache, false);
@@ -1359,8 +2590,9 @@ void Forward3D::record_prepass(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
     DrawCache cache;
     const Span<const Scene3D::Draw> draws = scene.draws();
-    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, false, true);
-    stats_.ssao_draws = scene.opaque_count();
+    const bool instanced = !ao_prepass_inst_.is_null() && upload_runs(cmd, scene, kInstPrepass);
+    stats_.ssao_draws = draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, false,
+                                    true, false, instanced);
     draw_batches(cmd, scene, cache, true);
     cmd.end_pass();
     cmd.pop_debug_scope();
@@ -1434,10 +2666,18 @@ void Forward3D::record_ssr(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     u.params = {max(ssr.max_distance, 0.01f), max(ssr.thickness, 1e-3f), f32(clamp(ssr.steps, 4u, 128u)),
                 clamp(ssr.edge_fade, 0.0f, 0.5f)};
     u.misc = {ssr_prev_valid_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+    if (stats_.ssr_motion) {  // M-REFLECT2 48e: record_view ran record_velocity first, with last frame's matrices
+        // ssr_prev_vp_ = last frame's jitter * its view-proj, which the velocity pass used as `previous`.
+        const mat4 j = ssr_prev_vp_ * inverse(velocity_prev_vp_used_);
+        u.misc.y = 1.0f;
+        u.misc.z = j.c[3][0] * 0.5f;
+        u.misc.w = j.c[3][1] * 0.5f;
+    }
     cmd.bind_pipeline(ssr_pipe_);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
     cmd.bind_texture(rhi::bank::kFirstSampler, ao_gbuf_, point_sampler_);
     cmd.bind_texture(rhi::bank::kFirstSampler + 1, hdr_, linear_clamp_);
+    cmd.bind_texture(rhi::bank::kFirstSampler + 2, stats_.ssr_motion ? velocity_ : ao_off_, point_sampler_);
     cmd.draw_non_indexed(3);
     cmd.end_pass();
     cmd.pop_debug_scope();
@@ -1482,7 +2722,6 @@ void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const Span<const Cascade> cascades = scene.cascades();
     if (cascades.empty()) return;
     cmd.push_debug_scope("shadow");
-    const Span<const Scene3D::Draw> casters = scene.shadow_draws();
     const Span<const u32> lists = scene.cascade_casters();
     for (u32 ci = 0; ci < cascades.size(); ++ci) {
         const Cascade& c = cascades[ci];
@@ -1494,9 +2733,7 @@ void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         sp.depth = depth;
         sp.debug_name = "shadow.cascade";
         cmd.begin_pass(sp);
-        rhi::PipelineHandle bound_pipe;
-        const GpuMesh* bound = nullptr;
-        for (u32 k = 0; k < c.caster_count; ++k) shadow_draw(cmd, c.view_proj, casters[lists[c.first_caster + k]], bound_pipe, bound);
+        draw_casters(cmd, scene, c.view_proj, lists.subspan(c.first_caster, c.caster_count));
         draw_batches_depth(cmd, scene, 1 + ci, c.view_proj, false);
         cmd.end_pass();
     }
@@ -1539,7 +2776,6 @@ void Forward3D::record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& sce
         return;
     }
     cmd.push_debug_scope("shadow.local");
-    const Span<const Scene3D::Draw> casters = scene.shadow_draws();
     const Span<const u32> lists = scene.local_shadow_casters();
     u32 cleared = 0;  // layers cleared so far (tiles fill the layers in order)
     for (const LocalShadowTile& t : tiles) {
@@ -1554,9 +2790,7 @@ void Forward3D::record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& sce
         sp.viewport = t.rect;
         sp.debug_name = "shadow.local";
         cmd.begin_pass(sp);
-        rhi::PipelineHandle bound_pipe;
-        const GpuMesh* bound = nullptr;
-        for (u32 k = 0; k < t.caster_count; ++k) shadow_draw(cmd, t.view_proj, casters[lists[t.first_caster + k]], bound_pipe, bound);
+        draw_casters(cmd, scene, t.view_proj, lists.subspan(t.first_caster, t.caster_count));
         cmd.end_pass();
     }
     stats_.local_shadow_tiles = static_cast<u32>(tiles.size());
@@ -1674,6 +2908,7 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
         }
     }
     const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, true, stats_.gi, pu);
+    stats_.gi_visibility = stats_.gi && (u32(pu.gi_counts.w) & kGiFlagVisibility) != 0;  // M-GI2 50e
     // Volumetric fog: the integrated froxels (record_volumetrics() filled them), or a stand-in.
     if (stats_.volumetrics) {
         vol_params(scene, pu);
@@ -1689,12 +2924,38 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     if (stats_.ssr) {
         const ScreenSpaceReflections& ssr = scene.reflections();
         pu.ssr = {1.0f, clamp(ssr.max_roughness, 0.0f, 1.0f), max(ssr.roughness_fade, 1e-3f), max(ssr.intensity, 0.0f)};
+        // M-REFLECT2 48c: the roughness blur (kMeshFS ssr_gather); only pixels above kSsrBlurMinRough with a non-zero
+        // weight pay for it, the rest keep the single tap bit for bit.
+        stats_.ssr_blur = cv_ssr_blur.get_bool() && pu.ssr.y > kSsrBlurMinRough;
+        pu.ssr2 = {stats_.ssr_blur ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
     }
     cmd.bind_texture(rhi::bank::kSsr, stats_.ssr ? ssr_ : ao_off_, linear_clamp_);
     bind_local_shadows(cmd, scene, pu);
+    // Light cookies (M-LIGHTCOOKIE 40d to 40f): the records and the light pool with Light.shadow.z, and the sun's
+    // cookie, when this view has any; bank 2 then holds the atlas, in the main pass (bind_decals) and in the volumetric
+    // injection (apply_fog false: kVolInjectFS reads the same MCE_GLSL_COOKIE, and its bank 2 is free of decals).
+    pu.local.z = upload_cookie_records(cmd, scene) > 0 ? 1.0f : 0.0f;
+    if ((cookie_records_ & kCookieSunOn) != 0) sun_cookie_params(scene.light(), 0, origin_, view.position, pu);
     // Decals (M-VISUAL 9): the main pass only; the fog injection takes the stand-ins.
     pu.decals.x = f32(bind_decals(cmd, scene, apply_fog));
     if (apply_fog) stats_.decals = static_cast<u32>(pu.decals.x);
+    if (!apply_fog && pu.local.z > 0.0f) cmd.bind_texture(rhi::bank::kDecalTexture0 + 2, cookie_atlas_, linear_clamp_);
+    // Wet surfaces, snow and rain ripples: the main pass (and the fog injection, which does not read them). Probe
+    // and volume captures stay dry, snowless and still: they are cached across frames while the weather changes.
+    wet_params(scene.wet_surfaces(), origin_, pu);
+    snow_params(scene.snow_cover(), origin_, pu);
+    ripple_params(scene.ripples(), scene.time(), pu);
+    cloud_params(scene.clouds(), scene.time(), pu);  // the sky's cloud layer (M-CLOUDS 9b): main pass only too
+    cirrus_params(scene.cirrus(), scene.time(), pu);  // the high cirrus streaks (M-CIRRUS 53b): main pass only too
+    halo_params(scene.halo(), pu);                    // the ice halo through them (M-HALO 54b): main pass only too
+    night_sky_params(scene.night_sky(), pu);         // the moon and the stars (M-NIGHTSKY 14d): main pass only too
+    aurora_params(scene.aurora(), pu);               // the aurora curtains (M-AURORA 16c): main pass only too
+    rainbow_params(scene.rainbow(), pu);             // the rainbow (M-RAINBOW 17c): main pass only too
+    meteor_params(scene.meteor(), pu);               // the meteors (M-METEOR 18c): main pass only too
+    // The water plane (M-WATER 15c): the main pass only (M-WATER2: record_main set the two stats it reads).
+    if (apply_fog && water_on(scene.water()) && !water_.is_null())
+        water_params(scene.water(), origin_, water_depth_, stats_.water_reflect, stats_.water_refract, pu);
+    translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: the tier's switches (read only by a translucent draw)
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
@@ -1710,7 +2971,8 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
         cmd.set_storage_data(rhi::bank::kClusters, cl.ranges().empty() ? rhi::as_bytes(kNoRange) : std::as_bytes(cl.ranges()));
         cmd.set_storage_data(rhi::bank::kLightIndices, cl.indices().empty() ? rhi::as_bytes(kNoIndex) : std::as_bytes(cl.indices()));
     }
-    cmd.set_storage_data(rhi::bank::kLightPool, cl.lights().empty() ? rhi::as_bytes(kNoLight) : std::as_bytes(cl.lights()));
+    if (cookie_count(cookie_records_) == 0)  // else upload_cookie_records uploaded the pool with the cookie links
+        cmd.set_storage_data(rhi::bank::kLightPool, cl.lights().empty() ? rhi::as_bytes(kNoLight) : std::as_bytes(cl.lights()));
     stats_.point_lights = static_cast<u32>(cl.lights().size());
     stats_.light_indices = static_cast<u32>(cl.indices().size());
 
@@ -1735,30 +2997,55 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     depth.texture = depth_;
     depth.clear.depth = 1.0f;
     depth.store = transmissive ? rhi::StoreOp::Store : rhi::StoreOp::DontCare;
-    rhi::RenderPassDesc mp;
-    mp.colors = Span<const rhi::PassAttachment>(&color, 1);
-    mp.depth = depth;
-    mp.debug_name = "forward";
-    cmd.begin_pass(mp);
-
-    bind_main_state(cmd, scene, true);
-
-    DrawCache cache;
-    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true);
-    draw_batches(cmd, scene, cache, false);
-    if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
-        cmd.bind_pipeline(sky_);
-        cache.pipe = sky_;
-        ++stats_.pipeline_binds;
-        cmd.draw_non_indexed(3);
+    // The water plane (M-WATER 15c): its pipeline is made on the first frame that has one (a scene without water
+    // never compiles it). Its depth tint and shore foam read the opaques' view depth from the half-size prepass (the
+    // one SSAO, SSR and contact shadows share; drawn here when none of them ran it this frame). The main depth
+    // target is a multisampled, depth-only attachment on both backends, so it cannot be sampled while the pass
+    // writes it; the prepass is what can. Not read for the Low tier's look (amplitude and foam both 0, the
+    // distance tint) or without the prepass pipelines (Forward3DDesc ssao, ssr and contact_shadows all off).
+    const WaterSurface& water = scene.water();
+    bool water_drawn = water_on(water);
+    if (water_drawn && water_.is_null() && !water_failed_) {
+        rhi::GraphicsPipelineDesc wp;
+        wp.vertex_shader = {shaders3d::kWaterVS, "water.vert"};
+        wp.fragment_shader = {shaders3d::kWaterFS, "water.frag"};
+        wp.state.depth = {true, true, rhi::CompareOp::LessEqual};
+        wp.state.raster.cull = rhi::CullMode::None;  // seen from above or below
+        wp.debug_name = "water";
+        if (auto p = device_->create_pipeline(wp)) {
+            water_ = p.value();
+        } else {
+            water_failed_ = true;
+            MCE_LOG_WARN("render3d: the water shader failed, drawing scenes without their water plane");
+        }
     }
-    if (transmissive) {
-        cmd.end_pass();
+    water_drawn = water_drawn && !water_.is_null();
+    water_depth_ = false;
+    if (water_drawn && !ao_prepass_.is_null() && screen_space_prepass(ao_pipe_, ssr_pipe_, contact_pipe_) &&
+        (water.amplitude > 0.0f || water.foam_amount > 0.0f)) {
+        record_prepass(cmd, scene);  // once a frame: a no-op when SSAO, SSR or contact shadows drew it already
+        water_depth_ = true;
+    }
+    // M-WATER2 49c/49d: the refraction and the reflection trace read a copy of this frame's opaque picture, taken by
+    // breaking the pass before the water (the transmission copy's code, into the same trans_src_). Only with the depth
+    // read and the camera above the level (below it the underwater look covers the view); r.water.reflect and
+    // r.water.refract 0, the Low look and a renderer without the prepass pipelines keep the single pass and today's
+    // water. stats_ carries the decision to water_params (bind_main_state): forward3d.h gets no member.
+    const bool water_fx = water_depth_ && water_camera_above(water, origin_, scene.view().position);
+    stats_.water_refract = water_fx && cv_water_refract.get_bool();
+    stats_.water_reflect = water_fx && cv_water_reflect.get_bool();
+    const bool water_copy = stats_.water_refract || stats_.water_reflect;
+    if (water_copy) depth.store = rhi::StoreOp::Store;  // the water's pass reloads it
+    const auto make_copy_target = [&] {
         if (trans_src_.is_null()) {
             rhi::TextureDesc d = device_->texture_desc(hdr_);
             d.debug_name = "mce.3d.transmission_src";
             trans_src_ = device_->create_texture(d);
         }
+    };
+    // The opaque frame drawn so far into trans_src_ (outside a pass): the multisampled colour resolved, else copied.
+    const auto copy_frame = [&] {
+        make_copy_target();
         if (desc_.msaa > 1) {
             cmd.resolve(hdr_msaa_, trans_src_);
         } else {
@@ -1774,6 +3061,96 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.draw_non_indexed(3);
             cmd.end_pass();
         }
+    };
+    // M-CAUSTICS 52f: with the camera above the water the caustics go into the refraction copy (record_caustics' note):
+    // the caustics pass writes the opaque frame plus the web into trans_src_ in place of the plain copy, so the water
+    // shows the web as it shows the floor. Only with the refraction on (else the water hides the floor: no caustics).
+    CausticsU caustics_u;
+    f32 caustics_strength = 0.0f;
+    bool caustics_copy = false;
+    if (stats_.water_refract && !caustics_pipe_.is_null() && !ao_gbuf_.is_null() && !out_.linear_output) {
+        CausticsFrameIn in;
+        in.water_drawn = water_drawn;
+        in.render_texture = out_.linear_output;
+        in.post_source = post_size_.width > 0 && post_size_.height > 0 && !post_source_.is_null();
+        in.see_through = true;
+        in.origin = origin_;
+        in.volumetrics = stats_.volumetrics;
+        if (stats_.volumetrics && !vol_light_.is_null()) {
+            PassU vp{};
+            vol_params(scene, vp);
+            in.vol = vp.vol;
+            in.vol_grid = vp.vol_grid;
+        }
+        caustics_copy = caustics_frame(scene, in, caustics_u, caustics_strength);
+    }
+    // The opaque frame plus the web into trans_src_ (outside a pass), read from hdr_ (resolved into it first when
+    // multisampled: hdr_ is free until the end-of-frame resolve, and SSR read it before this pass).
+    const auto caustics_frame_copy = [&] {
+        make_copy_target();
+        if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
+        const bool vol = stats_.volumetrics && !vol_light_.is_null();
+        rhi::PassAttachment out;
+        out.texture = trans_src_;
+        out.load = rhi::LoadOp::DontCare;  // every pixel is written
+        rhi::RenderPassDesc cp;
+        cp.colors = Span<const rhi::PassAttachment>(&out, 1);
+        cp.debug_name = "caustics";
+        cmd.push_debug_scope("caustics");
+        cmd.begin_pass(cp);
+        cmd.bind_pipeline(caustics_pipe_);
+        cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(caustics_u));
+        cmd.bind_texture(rhi::bank::kAlbedo, hdr_, point_sampler_);    // texelFetch
+        cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);  // nearest: sky is exactly 0
+        cmd.bind_texture(rhi::bank::kVolumetrics, vol ? vol_light_ : ao_off_, linear_clamp_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+        cmd.pop_debug_scope();
+        stats_.caustics = true;
+        stats_.caustics_strength = caustics_strength;
+    };
+    rhi::RenderPassDesc mp;
+    mp.colors = Span<const rhi::PassAttachment>(&color, 1);
+    mp.depth = depth;
+    mp.debug_name = "forward";
+    cmd.begin_pass(mp);
+
+    bind_main_state(cmd, scene, true);
+
+    DrawCache cache;
+    const bool instanced = !mesh_cull_inst_.is_null() && upload_runs(cmd, scene, kInstMain);
+    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true, false, false, instanced);
+    draw_batches(cmd, scene, cache, false);
+    if (water_drawn) {  // after the opaques (it reads their depth and they occlude it), before the sky and the blends
+        if (water_copy) {  // M-WATER2: break the pass, copy the opaque frame, reopen with colour and depth loaded
+            cmd.end_pass();
+            if (caustics_copy) caustics_frame_copy();
+            else copy_frame();
+            color.load = rhi::LoadOp::Load;
+            depth.load = rhi::LoadOp::Load;
+            depth.store = transmissive ? rhi::StoreOp::Store : rhi::StoreOp::DontCare;
+            mp.depth = depth;
+            mp.debug_name = "forward.water";
+            cmd.begin_pass(mp);
+            bind_main_state(cmd, scene, true);
+        }
+        cmd.bind_pipeline(water_);
+        ++stats_.pipeline_binds;
+        cmd.bind_texture(rhi::bank::kAlbedo, water_depth_ ? ao_gbuf_ : ao_off_, point_sampler_);
+        cmd.bind_texture(rhi::bank::kNormal, water_copy ? trans_src_ : ao_off_, linear_clamp_);
+        cmd.draw_non_indexed(6 * kWaterGrid * kWaterGrid);
+        cache = DrawCache{};  // banks 6 and 7 hold the depth and the copy now: the blended draws bind their maps again
+        cache.pipe = water_;
+    }
+    if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
+        cmd.bind_pipeline(sky_);
+        cache.pipe = sky_;
+        ++stats_.pipeline_binds;
+        cmd.draw_non_indexed(3);
+    }
+    if (transmissive) {  // with the water's copy too, this one rewrites trans_src_ with the water and the sky in it
+        cmd.end_pass();
+        copy_frame();
         color.load = rhi::LoadOp::Load;
         depth.load = rhi::LoadOp::Load;
         depth.store = rhi::StoreOp::DontCare;
@@ -1798,13 +3175,18 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const GiVolume& gi = scene.gi_volume();
     if (!gi.enabled || gi_project_.is_null()) return;
     const rhi::Extent2D vs = gi_volume_size(gi);
+    const bool follow = gi_follow_on(gi);
     rhi::TextureHandle baked;
-    if (gi.baked != ~0u && textures_->contains(gi.baked)) {
+    // M-GI2: a following volume is always filled at runtime (its bake is of the authored box), and so is a relocating one
+    // that keeps updating: its rolling captures must stand where the bake's texel 8 says, which the CPU cannot read back,
+    // and offsets recomputed from today's scene may differ from the bake's. The Low tier (no updates) loads both bakes.
+    const bool runtime_only = follow || (gi_relocate_on(gi) && gi.updates);
+    if (!runtime_only && gi.baked != ~0u && textures_->contains(gi.baked)) {
         const rhi::TextureHandle t = textures_->get(gi.baked);
         const rhi::TextureDesc& d = device_->texture_desc(t);
         if (d.size == vs && d.array_layers == 1)
             baked = t;
-        else if (gi_key_ == 0)
+        else if (gi_key_ == 0 || !(gi_size_ == vs))  // once: a new volume, or one that changed its width (M-GI2 record)
             MCE_LOG_WARN("render3d: the GI volume bake is {}x{}x{}, not {}x{}x1: filled at runtime", d.size.width,
                          d.size.height, d.array_layers, vs.width, vs.height);
     }
@@ -1821,12 +3203,35 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         gi_key_ = 0;
     }
     const u32 total = gi.counts[0] * gi.counts[1] * gi.counts[2];
-    const u64 key = gi_key(gi, baked);
+    const u64 key = gi_key(gi, baked, origin_);
+    GiProbeState& ps = *gi_probes_;
+    // M-GI2 50g: the following volume's box snapped to whole cells around this view's camera, in f64 world coordinates
+    // (the floating origin added back), so a rebase moves nothing.
+    // A box already in place moves only once the camera strays kGiFollowHysteresis cells from its centre (gi_follow_step:
+    // a camera swaying across an edge does not scroll the same slab back and forth); a new one is centred (fc0).
+    GiFollowCell fc{}, fc0{};
+    if (follow) {
+        const vec3 cam = scene.view().position;
+        const f64 wx = f64(cam.x) + origin_[0], wz = f64(cam.z) + origin_[2];
+        const f64 sx = gi_follow_spacing(gi.bounds.min.x, gi.bounds.max.x, gi.counts[0]);
+        const f64 sz = gi_follow_spacing(gi.bounds.min.z, gi.bounds.max.z, gi.counts[2]);
+        fc0 = gi_follow_origin(wx, wz, sx, sz, gi.counts[0], gi.counts[2]);
+        fc = key == gi_key_ && ps.follow_valid ? gi_follow_step(ps.follow, wx, wz, sx, sz, gi.counts[0], gi.counts[2]) : fc0;
+    }
+    const bool jump = follow && key == gi_key_ && ps.follow_valid && gi_scroll(ps.follow, fc, gi.counts).refill;
     cmd.push_debug_scope("gi");
-    if (key != gi_key_) {
+    if (key != gi_key_ || jump) {
         gi_key_ = key;
         gi_cursor_ = 0;
         gi_filled_ = baked.is_null() ? 0 : total;
+        ps.follow = fc0;
+        ps.follow_valid = follow;
+        ps.offsets.clear();
+        if (gi_relocate_on(gi)) ps.offsets.resize(total, vec3{0.0f, 0.0f, 0.0f});
+        ps.relocated = 0;
+        ps.pending.clear();
+        ps.pending.resize(follow ? total : 0u, u8(0));
+        ps.scroll_queue.clear();
         rhi::PassAttachment out;
         out.texture = gi_volume_;
         out.load = baked.is_null() ? rhi::LoadOp::Clear : rhi::LoadOp::DontCare;  // the fill's captures read zeros
@@ -1844,29 +3249,135 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         }
         cmd.end_pass();
         if (!baked.is_null()) stats_.gi_loaded = true;
+    } else if (follow && !(fc == ps.follow)) {
+        // M-GI2 50g: a scroll by whole cells (less than the box: a larger jump refilled above). The slabs that left are
+        // the slots of the slabs that arrive (gi_scroll): one pass per contiguous run writes texel 9 r = kGiInvalidShare
+        // there (projection mode 3; every other texel alpha 0, bit for bit), so the lookup weighs those probes 0 at once;
+        // they go pending, and the queue serves them nearest the camera first, ahead of the rolling update (below).
+        const GiScroll sc = gi_scroll(ps.follow, fc, gi.counts);
+        ps.follow = fc;
+        const u32 cx = gi.counts[0], cy = gi.counts[1], cz = gi.counts[2], texels = gi_texels_per_probe(gi);
+        const auto invalidate = [&](u32 x, u32 w, u32 row, u32 rows) {  // texels x .. x + w of rows row .. row + rows
+            rhi::PassAttachment out;
+            out.texture = gi_volume_;
+            out.load = rhi::LoadOp::Load;
+            rhi::RenderPassDesc p;
+            p.colors = Span<const rhi::PassAttachment>(&out, 1);
+            p.viewport = rhi::Rect2D{i32(x), i32(gi_size_.height - row - rows), w, rows};  // top-left based
+            p.debug_name = "gi.invalidate";
+            cmd.begin_pass(p);
+            cmd.bind_pipeline(gi_project_);
+            const GiProjectU gu{{f32(w), f32(rows), f32(kGiFaceSize), f32(texels)}, {1.0f, 0.0f, 0.0f, 3.0f}, {}, {}};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(gu));
+            if (!gi_faces_.is_null()) {  // declared by the shader, unread in mode 3
+                cmd.bind_texture(rhi::bank::kFirstSampler, gi_faces_, point_sampler_);
+                cmd.bind_texture(rhi::bank::kFirstSampler + 1, gi_faces_, point_sampler_);
+            }
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+        };
+        for (u32 i = 0; i < sc.x_count;) {  // columns of slots over every row
+            const u32 s = (sc.x_first + i) % cx, n = min(sc.x_count - i, cx - s);
+            invalidate(s * texels, n * texels, 0, cy * cz);
+            for (u32 slot = 0; slot < total; ++slot)
+                if (slot % cx >= s && slot % cx < s + n) ps.pending[slot] = 1;
+            i += n;
+        }
+        for (u32 i = 0; i < sc.z_count;) {  // z slots: cy contiguous rows each
+            const u32 s = (sc.z_first + i) % cz, n = min(sc.z_count - i, cz - s);
+            invalidate(0, cx * texels, s * cy, n * cy);
+            for (u32 slot = s * cx * cy; slot < (s + n) * cx * cy; ++slot) ps.pending[slot] = 1;
+            i += n;
+        }
+        stats_.gi_scrolled = sc.probes;
+        if (gi_filled_ >= total) ps.relocated = 0;  // a scroll during the fill keeps counting the fill's
+        // The queue: every pending slot, nearest the camera first (ties by slot), where the slot's probe is now.
+        const aabb3 box = gi_box(gi, &ps, origin_);
+        u32 so[3];
+        gi_slot_offset_of(ps.follow, gi.counts, so);
+        const vec3 cam = scene.view().position;
+        struct Near {
+            f32 d2;
+            u32 slot;
+        };
+        Array<Near> order(mem::heap());
+        for (u32 slot = 0; slot < total; ++slot) {
+            if (!ps.pending[slot]) continue;
+            const u32 lx = gi_local_of(slot % cx, so[0], cx), ly = (slot / cx) % cy;
+            const u32 lz = gi_local_of(slot / (cx * cy), so[2], cz);
+            order.push_back({length_sq(gi_probe_position(box, gi.counts, lx, ly, lz) - cam), slot});
+        }
+        std::sort(order.begin(), order.end(),
+                  [](const Near& a, const Near& b) { return a.d2 < b.d2 || (a.d2 == b.d2 && a.slot < b.slot); });
+        ps.scroll_queue.clear();
+        for (const Near& q : order) ps.scroll_queue.push_back(q.slot);
     }
+    ps.list.clear();
     if (gi_filled_ < total) {
         // The fill: kGiMaxBatchProbes a frame (or what the uniform budget allows); the volume lights
         // the frame once every probe has been captured.
+        ps.fill = true;  // M-GI2 50d: a fill writes the record (texels 4..9 of a 10-texel volume)
+        const u32 from = gi_filled_;
         gi_filled_ += gi_capture(cmd, scene, gi_filled_, min(kGiMaxBatchProbes, total - gi_filled_), 1.0f);
+        for (u32 s = from; s < gi_filled_ && !ps.pending.empty(); ++s) ps.pending[s] = 0;  // captured where they are now
         stats_.gi_filled = gi_filled_ == total;
-    } else if (!stats_.gi_loaded && gi.updates && gi.probes_per_frame > 0) {
-        const u32 n = min(min(gi.probes_per_frame, kGiMaxBatchProbes), total);
-        gi_cursor_ %= total;
-        gi_cursor_ = (gi_cursor_ + gi_capture(cmd, scene, gi_cursor_, n, clamp(1.0f - gi.hysteresis, 0.0f, 1.0f))) % total;
+    } else {
+        const bool rolling = !stats_.gi_loaded && gi.updates && gi.probes_per_frame > 0;
+        const bool queued = !ps.scroll_queue.empty();
+        if (queued) {
+            // M-GI2 50g: the probes that scrolled in, nearest the camera first, before the rolling update: the next
+            // kGiMaxBatchProbes still pending, captured in slot order (runs of neighbours project in one pass) as a
+            // fill (full weight, the record, relocation). With rolling updates on, the queue and the rolling update get
+            // half the frame's capture budget each, so a camera that keeps moving does not starve the rolling updates
+            // (a moving sun or lamp keeps reaching the probes); without them the queue gets all of it.
+            ps.budget = rolling ? kGiCaptureBudget / 2 : 0u;
+            usize head = 0;
+            while (ps.list.size() < kGiMaxBatchProbes && head < ps.scroll_queue.size()) {
+                const u32 s = ps.scroll_queue[head++];
+                if (ps.pending[s]) ps.list.push_back(s);
+            }
+            std::sort(ps.list.begin(), ps.list.end());
+            ps.fill = true;
+            const u32 done = ps.list.empty() ? 0u : gi_capture(cmd, scene, 0, static_cast<u32>(ps.list.size()), 1.0f);
+            for (u32 i = 0; i < done; ++i) ps.pending[ps.list[i]] = 0;
+            usize kept = 0;  // drop what is no longer pending, keep the order
+            for (usize i = 0; i < ps.scroll_queue.size(); ++i)
+                if (ps.pending[ps.scroll_queue[i]]) ps.scroll_queue[kept++] = ps.scroll_queue[i];
+            ps.scroll_queue.resize(kept);
+            ps.list.clear();
+        }
+        if (rolling) {
+            ps.budget = queued ? kGiCaptureBudget / 2 : 0u;
+            const u32 n = min(min(gi.probes_per_frame, kGiMaxBatchProbes), total);
+            gi_cursor_ %= total;
+            ps.fill = false;  // a rolling update leaves the record as it is
+            gi_cursor_ =
+                (gi_cursor_ + gi_capture(cmd, scene, gi_cursor_, n, clamp(1.0f - gi.hysteresis, 0.0f, 1.0f))) % total;
+        }
+        ps.budget = 0;
     }
     stats_.gi = gi_filled_ == total;
+    stats_.gi_relocated = ps.relocated;
     cmd.pop_debug_scope();
 }
 
 // Probes first, first + 1, ... (x-major, wrapping past the last) of the volume, up to `count`: six
-// faces each, then their projection, a pass per volume row touched. Stops early at the probe that
-// spends kGiCaptureBudget uniform uploads; returns the probes captured.
+// faces each, then their projection, a pass per run of neighbours along a volume row. Stops early at the
+// probe that spends kGiCaptureBudget uniform uploads; returns the probes captured.
+// M-GI2 50g: the indices are texture slots; GiProbeState::list, when not empty, names them (list[first ..]) in place of
+// first, first + 1, ...; a following volume's slot holds the probe at local index gi_local_of(slot, offset) of the
+// snapped box. 50f: a relocating volume captures each probe at its grid position plus its offset, computed here
+// (gi_relocate against the large rigid draws) when the call fills, and reused by the rolling updates.
 u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight) {
     const GiVolume& gi = scene.gi_volume();
     const u32 cx = gi.counts[0], cy = gi.counts[1], total = cx * cy * gi.counts[2];
+    GiProbeState& ps = *gi_probes_;
+    const auto slot_at = [&](u32 j) { return ps.list.empty() ? (first + j) % total : ps.list[first + j]; };
+    const aabb3 box = gi_box(gi, &ps, origin_);
+    u32 so[3] = {0, 0, 0};
+    if (ps.follow_valid && gi_follow_on(gi)) gi_slot_offset_of(ps.follow, gi.counts, so);
     const u32 layers = 6 * kGiMaxBatchProbes;
-    u32 budget = kGiCaptureBudget;
+    u32 budget = ps.budget ? ps.budget : kGiCaptureBudget;  // M-GI2 50g: a share while the scroll queue drains
     if (gi_faces_.is_null() || gi_face_layers_ != layers) {
         destroy(*device_, gi_faces_);
         destroy(*device_, gi_faces_depth_);
@@ -1884,6 +3395,31 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
         gi_faces_depth_ = device_->create_texture(d);
         gi_face_layers_ = layers;
     }
+    // M-GI2 50d: a volume with the 10-texel record writes texels 4..9 on a fill (or refill): from a vis pass per face
+    // when it asks for visibility, else the record of a probe that sees nothing. Rolling updates leave them as they are
+    // (record mode 0: alpha 0) and run no vis pass.
+    const u32 texels = gi_texels_per_probe(gi);
+    const bool record = texels == kGiTexelsRecord && gi_probes_->fill;
+    const bool vis = record && gi_visibility_on(gi) && !gi_probes_->vis_pipes[0].is_null();
+    const vec3 cell = gi_cell(box, gi.counts);
+    const f32 vis_min_radius = kGiVisMinRadius * gi_spacing(cell);
+    // M-GI2 50f: a filled probe is pushed out of the large rigid draws (gi_relocation_solids).
+    const bool relocate = gi_relocate_on(gi) && ps.offsets.size() == total;
+    Array<GiSolid> solids(mem::heap());
+    if (relocate && ps.fill) gi_relocation_solids(scene, vis_min_radius, solids);
+    static_assert(6 * kGiMaxBatchProbes <= 256, "the vis faces' layers: at most 256 (Vulkan's and WebGPU's guarantee)");
+    if (vis && (gi_probes_->vis_faces.is_null() || gi_probes_->vis_layers != layers)) {
+        destroy(*device_, gi_probes_->vis_faces);
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = {kGiFaceSize, kGiFaceSize};
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.array_layers = static_cast<u16>(layers);
+        d.debug_name = "mce.3d.gi_vis_faces";
+        gi_probes_->vis_faces = device_->create_texture(d);
+        gi_probes_->vis_layers = layers;
+    }
     const DirectionalLight& light = scene.light();
     vec3 dir = normalize(light.direction);
     if (!(length_sq(dir) > 0.0f)) dir = {0, -1, 0};
@@ -1891,8 +3427,8 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // bounding sphere, stretched toward the light over every caster.
     const Span<const Scene3D::Draw> casters = scene.shadow_draws();
     if (!gi_shadowed_ && light.shadows && !casters.empty() && gi_shadow_layer_ > 0) {
-        const vec3 c = gi.bounds.center();
-        const f32 r = max(length(gi.bounds.extents()), 0.01f);
+        const vec3 c = box.center();
+        const f32 r = max(length(box.extents()), 0.01f);
         const aabb3& sb = scene.scene_bounds();
         const f32 reach = r + length(sb.center() - c) + length(sb.extents());
         const vec3 up = std::fabs(dir.y) > 0.99f ? vec3{1, 0, 0} : vec3{0, 1, 0};
@@ -1932,7 +3468,11 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // The captures read the volume as it stands (zeros while it fills): each update adds a bounce.
     const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, false, true, pu);
     bind_local_shadows(cmd, scene, pu);
+    // No decals in the captures, but the lit shader declares their three textures and records: on a scene's first frame
+    // (record_gi runs before bind_main_state) banks 0 to 2 are otherwise unbound, which Metal's validation rejects.
+    bind_decals(cmd, scene, false);
     pu.local.y = f32(gi_shadow_layer_);  // cascade 0 is the volume's fit
+    translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: as the main pass
     cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);
     cmd.bind_texture(rhi::bank::kSsr, ao_off_, linear_clamp_);
     // Every light in the pool; each probe's single cluster lists the kGiMaxCaptureLights that matter
@@ -1951,6 +3491,8 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     const Span<const Scene3D::Draw> draws = scene.probe_draws();
     Array<Scene3D::Draw> visible(mem::heap());
     visible.reserve(draws.size());
+    Array<Scene3D::Draw> occluders(mem::heap());  // the vis pass's share of `visible` (kGiVisMinRadius, rigid)
+    if (vis) occluders.reserve(draws.size());
 
     // A draw narrower than a face texel (2r / d below 90° / kGiFaceSize) adds nothing a 16² face can hold.
     constexpr f32 kGiMinTexelAngle = 0.5f * 1.5707963f / f32(kGiFaceSize);
@@ -1963,12 +3505,19 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // A probe goes in when the budget still holds one as costly as the last (the first always does).
     u32 done = 0, probe_cost = 0;
     for (; done < count && (done == 0 || (budget > 0 && budget >= probe_cost)); ++done) {
-        const u32 probe = (first + done) % total, ix = probe % cx, vrow = probe / cx, iy = vrow % cy, iz = vrow / cy;
+        const u32 probe = slot_at(done), vrow = probe / cx, iy = vrow % cy;
+        const u32 ix = gi_local_of(probe % cx, so[0], cx), iz = gi_local_of(vrow / cy, so[2], gi.counts[2]);
         const u32 before = budget;
         {
-            const vec3 t{cx > 1 ? f32(ix) / f32(cx - 1) : 0.5f, f32(iy) / f32(max(cy - 1, 1u)),
-                         f32(iz) / f32(max(gi.counts[2] - 1, 1u))};
-            const vec3 pos = gi.bounds.min + (gi.bounds.max - gi.bounds.min) * t;
+            vec3 pos = gi_probe_position(box, gi.counts, ix, iy, iz);
+            if (relocate) {  // M-GI2 50f
+                if (ps.fill) {
+                    ps.offsets[probe] = gi_relocate(pos, cell, gi.max_offset, solids.span());
+                    const vec3 o = ps.offsets[probe];
+                    ps.relocated += (o.x != 0.0f || o.y != 0.0f || o.z != 0.0f) ? 1u : 0u;
+                }
+                pos = pos + ps.offsets[probe];
+            }
             mat4 face_view[6], face_vp[6];
             probe_face_views(pos, view.near_z, view.far_z, face_view, face_vp);
             ranked.clear();
@@ -2046,6 +3595,29 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
                     cmd.draw_non_indexed(3);
                 }
                 cmd.end_pass();
+                if (vis) {  // the same face's signed distances, the face's depth layer cleared again
+                    rhi::PassAttachment vc;
+                    vc.texture = gi_probes_->vis_faces;
+                    vc.layer = static_cast<u16>(layer);
+                    vc.clear.color[0] = vc.clear.color[1] = vc.clear.color[2] = kGiVisFar;
+                    vc.clear.color[3] = 1.0f;
+                    rhi::RenderPassDesc vpd;
+                    vpd.colors = Span<const rhi::PassAttachment>(&vc, 1);
+                    vpd.depth = depth;
+                    vpd.debug_name = "gi.vis";
+                    cmd.begin_pass(vpd);
+                    cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+                    occluders.clear();
+                    for (const Scene3D::Draw& d : visible)
+                        if (!d.mesh->skinned() && d.radius >= vis_min_radius) occluders.push_back(d);
+                    DrawCache vcache;
+                    const u32 no = static_cast<u32>(occluders.size());
+                    draw_meshes(cmd, scene, occluders.span(), 0, no, no, vcache, false, true, false, false,
+                                gi_probes_->vis_pipes);
+                    stats_.gi_vis_draws += no;
+                    budget -= min(budget, no + 1);
+                    cmd.end_pass();
+                }
             }
         }
         probe_cost = before - budget;
@@ -2053,20 +3625,30 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // The faces into the volume, a pass per run of probes along one row (the pass's viewport;
     // Rect2D is top-left based, row 0 the volume's v 0).
     for (u32 j = 0; j < done;) {
-        const u32 probe = (first + j) % total, ix = probe % cx, vrow = probe / cx;
-        const u32 n = min(done - j, cx - ix);
+        const u32 probe = slot_at(j), ix = probe % cx, vrow = probe / cx;
+        u32 n = 1;  // the run: neighbouring slots along the row (first, first + 1, ...: to the row's end)
+        while (j + n < done && ix + n < cx && slot_at(j + n) == probe + n) ++n;
         rhi::PassAttachment out;
         out.texture = gi_volume_;
         out.load = rhi::LoadOp::Load;
         rhi::RenderPassDesc p;
         p.colors = Span<const rhi::PassAttachment>(&out, 1);
-        p.viewport = rhi::Rect2D{i32(ix * 4), i32(gi_size_.height - vrow - 1), n * 4, 1};
+        p.viewport = rhi::Rect2D{i32(ix * texels), i32(gi_size_.height - vrow - 1), n * texels, 1};
         p.debug_name = "gi.project";
         cmd.begin_pass(p);
         cmd.bind_pipeline(gi_project_);
-        const GiProjectU gu{{f32(n * 4), 1.0f, f32(kGiFaceSize), 0.0f}, {f32(n), weight, f32(j), 0.0f}};
+        const f32 mode = !record ? 0.0f : vis ? 1.0f : 2.0f;  // kGiProjectFS's record mode
+        GiProjectU gu{{f32(n * texels), 1.0f, f32(kGiFaceSize), f32(texels)},
+                      {f32(n), weight, f32(j), mode},
+                      {gi_dmax(cell), 0.0f, 0.0f, 0.0f},
+                      {}};
+        if (relocate)  // M-GI2 50f: texel 8, 0.5 + 0.5 * this (gi_offset_encode)
+            for (u32 i = 0; i < n; ++i)
+                gu.offsets[i] = vec4(gi_offset_encode(ps.offsets[probe + i], cell) * 2.0f - vec3{1.0f, 1.0f, 1.0f}, 0.0f);
         cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(gu));
         cmd.bind_texture(rhi::bank::kFirstSampler, gi_faces_, point_sampler_);
+        // u_vis: the vis faces, or the lit faces as a stand-in the shader does not read (mode 0 and 2).
+        cmd.bind_texture(rhi::bank::kFirstSampler + 1, vis ? gi_probes_->vis_faces : gi_faces_, point_sampler_);
         cmd.draw_non_indexed(3);
         cmd.end_pass();
         j += n;
@@ -2146,9 +3728,24 @@ rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3
     if (gi_on) {
         const GiVolume& gi = scene.gi_volume();
         pu.gi = {1.0f, gi.intensity, max(gi.normal_bias, 0.0f), max(gi.fade_distance, 1e-3f)};
-        pu.gi_min = vec4(gi.bounds.min, 0.0f);
-        pu.gi_max = vec4(gi.bounds.max, 0.0f);
-        pu.gi_counts = {f32(gi.counts[0]), f32(gi.counts[1]), f32(gi.counts[2]), 0.0f};
+        // M-GI2: kGiFlagRecord (gi_probes.h) when the volume stores the 10-texel record (50d), plus kGiFlagVisibility
+        // and dmax in gi_max.w when it asks for visibility (50e: the Chebyshev weight and the classification),
+        // kGiFlagRelocate when it relocates (50f: texel 8 moves each probe), kGiFlagFollow and the slot offset in
+        // gi_min.w when it follows the camera (50g: the snapped box, toroidal slots, scrolled-in probes weigh 0). 0, 0
+        // and 0 otherwise: today's lookup. The captures read the volume through here too, so the next bounce sees the
+        // same weights.
+        const bool record = gi_texels_per_probe(gi) == kGiTexelsRecord;
+        const bool visibility = record && gi_visibility_on(gi);
+        const bool relocate = record && gi_relocate_on(gi);
+        const bool follow = record && gi_probes_ && gi_probes_->follow_valid && gi_follow_on(gi);
+        const aabb3 box = gi_box(gi, gi_probes_, origin_);
+        u32 so[3] = {0, 0, 0};
+        if (follow) gi_slot_offset_of(gi_probes_->follow, gi.counts, so);
+        pu.gi_min = vec4(box.min, follow ? gi_slot_offset_pack(so[0], so[1], so[2]) : 0.0f);
+        pu.gi_max = vec4(box.max, visibility ? gi_dmax(gi_cell(box, gi.counts)) : 0.0f);
+        const u32 flags = (record ? kGiFlagRecord : 0u) | (visibility ? kGiFlagVisibility : 0u) |
+                          (relocate ? kGiFlagRelocate : 0u) | (follow ? kGiFlagFollow : 0u);
+        pu.gi_counts = {f32(gi.counts[0]), f32(gi.counts[1]), f32(gi.counts[2]), f32(flags)};
         cmd.bind_texture(rhi::bank::kGiVolume, gi_volume_, point_sampler_);
     } else {
         cmd.bind_texture(rhi::bank::kGiVolume, ao_off_, point_sampler_);
@@ -2159,6 +3756,10 @@ rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3
 void Forward3D::bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene, PassU& pu) {
     // Local-light shadow records, one per atlas tile (GpuPointLight::shadow points into them).
     static constexpr LocalShadowRecord kNoShadow{};
+    // M-LIGHTCOOKIE 40d: the lit shaders declare LightCookies; a one-record stand-in unless the main pass's
+    // upload_cookie_records replaces it (an unbound SSBO is undefined even when unread).
+    static constexpr GpuCookieRecord kNoCookie{};
+    cmd.set_storage_data(rhi::bank::kLightCookies, rhi::as_bytes(kNoCookie));
     if (!local_shadows_) {
         cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
         return;
@@ -2178,10 +3779,13 @@ void Forward3D::bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene
     pu.local.x = 1.0f;
 }
 
-void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
-                            u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass, bool frame) {
+u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
+                           u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass, bool frame,
+                           bool instanced, const rhi::PipelineHandle* prepass_pipes) {
+    u32 issued = 0;
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
+    const QualitySettings tier = quality_settings(quality_tier());  // M-TRANSLUCENT 41d: the draws' o_skin.w
     auto bind_map = [&](DrawCache& c, u32 i, u32 key) {
         if (key == c.tex[i]) return;
         const rhi::TextureHandle tex = key == ~0u ? white : textures_->get(key);
@@ -2191,7 +3795,13 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
     };
     for (u32 i = begin; i < end; ++i) {
         const Scene3D::Draw& d = draws[i];
-        if (d.mesh->vertices.is_null()) continue;
+        // An instanced run (M-VISUAL3 5a): draws [i, i + count) share the mesh, the material and the tint.
+        const InstSlot run = instanced && i < inst_slots_.size() ? inst_slots_[i] : InstSlot{};
+        const bool inst_run = run.count > 1;
+        if (d.mesh->vertices.is_null()) {
+            if (inst_run) i += run.count - 1;
+            continue;
+        }
         const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
         const MeshInstance& inst = scene.instances()[d.instance];
         const asset::MaterialChunk& mat = material_of(inst, sm);
@@ -2199,11 +3809,16 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
                   emissive = emissive_key_of(inst, sm);
         const bool skinned = d.mesh->skinned();
         const TerrainShading* terrain = !prepass && i < opaque_end ? inst.terrain : nullptr;
-        const rhi::PipelineHandle pipe = prepass                                   ? (skinned ? ao_prepass_skinned_ : ao_prepass_)
+        const bool two_sided = (mat.flags & asset::MaterialFlags::DoubleSided) != 0;
+        const rhi::PipelineHandle pipe = inst_run                                 ? (prepass     ? ao_prepass_inst_
+                                                                                     : two_sided ? mesh_two_sided_inst_
+                                                                                                 : mesh_cull_inst_)
+                                         : prepass && prepass_pipes                ? prepass_pipes[skinned ? 1 : 0]
+                                         : prepass                                 ? (skinned ? ao_prepass_skinned_ : ao_prepass_)
                                          : terrain                                 ? terrain_pipe_
                                          : i >= opaque_end                         ? (skinned ? skinned_blend_ : mesh_blend_)
-                                         : (mat.flags & asset::MaterialFlags::DoubleSided) ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
-                                                                                           : (skinned ? skinned_cull_ : mesh_cull_);
+                                         : two_sided                               ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
+                                                                                   : (skinned ? skinned_cull_ : mesh_cull_);
         if (!(pipe == cache.pipe)) {
             cmd.bind_pipeline(pipe);
             cache.pipe = pipe;
@@ -2237,11 +3852,17 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
                        mat.emissive[2] * inst.emissive_tint.z, emissive != ~0u ? 1.0f : 0.0f};
         ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
                      (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
-        ou.maps = {normal != ~0u ? 1.0f : 0.0f, orm != ~0u ? 1.0f : 0.0f,
+        ou.maps = {normal_map_of(inst, sm) ? 1.0f : 0.0f, orm != ~0u ? 1.0f : 0.0f,
                    (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                    (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
+        parallax_uniforms(terrain ? nullptr : inst.material, scene.parallax(), ou);
         ou.dequant = d.dequant;
         ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
+        // M-TRANSLUCENT 41d: the material's translucency and wrap, or exactly 0 (off, unlit, the tier, r.translucency,
+        // Forward3DDesc::translucency; a terrain's layers carry none). The SSAO prepass and the captures get the same value.
+        if (!terrain)
+            ou.skin.w = translucency_object(mat.flags, (mat.flags & asset::MaterialFlags::Unlit) != 0, tier, desc_.translucency);
+        if (main && ou.skin.w != 0.0f) ++stats_.translucent_draws;
         material_ext_uniforms(material_ext_of(inst, sm), ou);
         const bool refracts = frame && ou.ext.z > 0.0f && !prepass && !terrain;
         if (refracts != cache.frame_at_ao) {  // the opaque frame in the SSAO's slot for this draw only
@@ -2259,9 +3880,174 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
             ou.maps = {0.0f, 0.0f, 0.0f, 0.0f};
             material_ext_uniforms(asset::MaterialExt{}, ou);
         }
+        if (inst_run) ou.skin.y = f32(run.slot);  // model and normal come from the run's slots
         cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
-        cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
+        cmd.draw(d.index_count, inst_run ? run.count : 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
+        ++issued;
         if (main) ++stats_.main_draws;
+        if (inst_run) {
+            if (main) {
+                ++stats_.runs_instanced;
+                stats_.draws_instanced += run.count;
+            }
+            i += run.count - 1;
+        }
+    }
+    return issued;
+}
+
+// ---- automatic instancing (M-VISUAL3 5a) -------------------------------------------------------------
+namespace {
+// What one set_storage_data of `bytes` takes from the ring: the device aligns each range.
+u32 ring_bytes(u32 bytes, u32 align) { return bytes == 0 ? 0 : (bytes + align - 1) / align * align; }
+// How many of a run's `want` copies of `copy_bytes` each still fit after `used` bytes: the most n with
+// ring_bytes(used + n * copy_bytes) <= budget. A run longer than the budget then draws its first n copies
+// instanced and the rest singly, instead of all of them singly (M-OPENWORLD A3: one 22k-copy run of a city).
+u32 copies_that_fit(u32 used, u32 want, u32 copy_bytes, u32 align, u32 budget) {
+    const u32 room = budget / align * align;
+    return room <= used ? 0u : min(want, (room - used) / copy_bytes);
+}
+}  // namespace
+
+// M-CONTENT 2: Scene3D's reasons, plus the two this renderer adds: no instanced pipelines (the whole run list
+// then draws singly) and, in upload_runs, a main-pass run past the frame's budget.
+void Forward3D::count_draw_causes(const Scene3D& scene) {
+    if (!scene.collect_draw_causes()) return;  // Scene3D::set_collect_draw_causes: off, the causes stay zero
+    const Scene3D::Stats& ss = scene.stats();
+    u32* c = stats_.draw_causes;
+    const auto at = [&](DrawCause k) -> u32& { return c[static_cast<u32>(k)]; };
+    at(DrawCause::UniqueMesh) = ss.not_instanced_unique_mesh;
+    at(DrawCause::Other) = ss.not_instanced_short;
+    at(DrawCause::Material) = ss.not_instanced_single - ss.not_instanced_unique_mesh - ss.not_instanced_short;
+    at(DrawCause::Skinned) = ss.not_instanced_skinned;
+    at(DrawCause::Terrain) = ss.not_instanced_terrain;
+    at(DrawCause::Moving) = ss.not_instanced_moving;
+    at(DrawCause::Blended) = ss.not_instanced_blended;
+    at(DrawCause::Disabled) = ss.not_instanced_disabled;
+    if (mesh_cull_inst_.is_null()) at(DrawCause::Disabled) += ss.draws_instanced;  // -r.instancing 0 or no pipelines
+}
+
+void Forward3D::reserve_instancing(const Scene3D& scene) {
+    // The opaque runs' copies (the main and prepass blocks carry model and normal, the velocity one the model).
+    u32 copies = 0;
+    for (const DrawRun& r : scene.opaque_runs()) copies += r.count >= 2 ? r.count : 0u;
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
+    const u32 lit = ring_bytes(copies * 2u * u32(sizeof(mat4)), align);
+    const u32 vel = ring_bytes(copies * u32(sizeof(mat4)), align);
+    const WaterSurface& water = scene.water();  // the water's depth read runs the prepass too (record_main)
+    // The outline's decision as record_outline takes it (record_volumetrics records exactly on this condition).
+    const bool outline_prepass =
+        scene.post().outline.enabled && !outline_pipe_.is_null() && !ao_prepass_.is_null() &&
+        outline_frame(scene, scene.volumetrics().enabled && !vol_inject_.is_null()).strength > 0.0f;
+    const bool prepass = scene.ambient_occlusion().enabled || scene.reflections().enabled ||
+                         scene.contact_shadows().enabled || scene.post().flare.enabled ||  // the flare's depth (38c)
+                         outline_prepass ||                                                // the outline's (39c)
+                         (water_on(water) && (water.amplitude > 0.0f || water.foam_amount > 0.0f) &&
+                          screen_space_prepass(ao_pipe_, ssr_pipe_, contact_pipe_));
+    const u32 want[kInstShadow] = {mesh_cull_inst_.is_null() ? 0u : lit,
+                                   ao_prepass_inst_.is_null() || !prepass ? 0u : lit,
+                                   velocity_inst_.is_null() || !scene.post().needs_velocity() ? 0u : vel};
+    for (u32 p = 0; p < kInstShadow; ++p) {  // main first, then the prepasses
+        inst_budget_[p] = min(want[p], inst_frame_left_);
+        inst_frame_left_ -= inst_budget_[p];
+    }
+    inst_budget_[kInstShadow] = inst_frame_left_;  // the cascades and tiles share the rest
+    inst_frame_left_ = 0;
+}
+
+bool Forward3D::upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstPass pass) {
+    const Span<const DrawRun> runs = scene.opaque_runs();
+    const Span<const Scene3D::Draw> draws = scene.draws();
+    inst_slots_.clear();
+    inst_slots_.resize(scene.opaque_count());
+    inst_data_.clear();
+    const bool velocity = pass == kInstVelocity;
+    const u32 per_copy = velocity ? 1u : 2u;  // mat4s
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
+    for (const DrawRun& r : runs) {
+        if (r.count < 2) continue;
+        const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        u32 n = copies_that_fit(used, r.count, per_copy * u32(sizeof(mat4)), align, inst_budget_[pass]);
+        if (n < 2) n = 0;
+        if (n < r.count) {  // the tail draws singly
+            ++stats_.instancing_overflow;
+            if (pass == kInstMain && scene.collect_draw_causes())
+                stats_.draw_causes[static_cast<u32>(DrawCause::Budget)] += r.count - n;
+            if (n == 0) continue;
+        }
+        inst_slots_[r.first] = {n, static_cast<u32>(inst_data_.size() / per_copy)};
+        for (u32 k = 0; k < n; ++k) {
+            inst_data_.push_back(draws[r.first + k].model);
+            if (!velocity) inst_data_.push_back(draws[r.first + k].normal);
+        }
+    }
+    if (inst_data_.empty()) return false;
+    const u32 bytes = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+    inst_budget_[pass] -= ring_bytes(bytes, align);
+    cmd.set_storage_data(rhi::bank::kInstances, std::as_bytes(inst_data_.span()));
+    stats_.instancing_bytes += bytes;
+    return true;
+}
+
+void Forward3D::draw_casters(rhi::CommandBuffer& cmd, const Scene3D& scene, const mat4& view_proj,
+                             Span<const u32> list) {
+    const Span<const Scene3D::Draw> casters = scene.shadow_draws();
+    rhi::PipelineHandle bound_pipe;
+    const GpuMesh* bound = nullptr;
+    if (shadow_inst_.is_null()) {
+        for (u32 c : list) shadow_draw(cmd, view_proj, casters[c], bound_pipe, bound);
+        return;
+    }
+    scene.caster_runs(list, caster_sorted_, caster_runs_);
+    // Per copy the MVP shadow_draw() computes, for the runs within the budget (slot ~0u: drawn singly).
+    inst_data_.clear();
+    inst_slots_.clear();
+    inst_slots_.resize(caster_runs_.size());
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
+    for (u32 ri = 0; ri < caster_runs_.size(); ++ri) {
+        const DrawRun& r = caster_runs_[ri];
+        if (r.count < 2) continue;
+        const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        u32 n = copies_that_fit(used, r.count, u32(sizeof(mat4)), align, inst_budget_[kInstShadow]);
+        if (n < 2) n = 0;
+        if (n < r.count) ++stats_.instancing_overflow;  // the tail draws singly
+        if (n == 0) continue;
+        inst_slots_[ri] = {n, static_cast<u32>(inst_data_.size())};
+        for (u32 k = 0; k < n; ++k) inst_data_.push_back(view_proj * casters[caster_sorted_[r.first + k]].model);
+    }
+    if (!inst_data_.empty()) {
+        const u32 bytes = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        inst_budget_[kInstShadow] -= ring_bytes(bytes, align);
+        cmd.set_storage_data(rhi::bank::kInstances, std::as_bytes(inst_data_.span()));
+        stats_.instancing_bytes += bytes;
+    }
+    for (u32 ri = 0; ri < caster_runs_.size(); ++ri) {
+        const DrawRun& r = caster_runs_[ri];
+        const InstSlot run = inst_slots_[ri];
+        if (run.count < 2) {
+            for (u32 k = 0; k < r.count; ++k)
+                shadow_draw(cmd, view_proj, casters[caster_sorted_[r.first + k]], bound_pipe, bound);
+            continue;
+        }
+        const Scene3D::Draw& d = casters[caster_sorted_[r.first]];
+        if (d.mesh->vertices.is_null()) continue;
+        if (!(shadow_inst_ == bound_pipe)) {
+            cmd.bind_pipeline(shadow_inst_);
+            bound_pipe = shadow_inst_;
+        }
+        if (d.mesh != bound) {
+            cmd.bind_vertex_buffer(d.mesh->vertices);
+            cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
+            bound = d.mesh;
+        }
+        const ShadowU su{mat4::identity(), mat4::identity(), {-1.0f, f32(run.slot), 0.0f, 0.0f}};
+        cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(su));
+        cmd.draw(d.index_count, run.count, d.first_index, 0, static_cast<i32>(d.base_vertex));
+        ++stats_.shadow_draws;
+        ++stats_.shadow_runs_instanced;
+        stats_.shadow_draws_instanced += run.count;
+        for (u32 k = run.count; k < r.count; ++k)  // past the budget: the run's tail, singly
+            shadow_draw(cmd, view_proj, casters[caster_sorted_[r.first + k]], bound_pipe, bound);
     }
 }
 
@@ -2272,6 +4058,7 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
     const Span<const InstanceBatch> batches = scene.batches();
+    const QualitySettings tier = quality_settings(quality_tier());
     for (u32 bi = 0; bi < batch_count_; ++bi) {
         if (!batch_views_[bi].culled) continue;
         const InstanceBatch& b = batches[bi];
@@ -2309,16 +4096,27 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
             ou.emissive = {mat.emissive[0], mat.emissive[1], mat.emissive[2], keys[3] != ~0u ? 1.0f : 0.0f};
             ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
                          (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
-            ou.maps = {keys[1] != ~0u ? 1.0f : 0.0f, keys[2] != ~0u ? 1.0f : 0.0f,
+            ou.maps = {normal_map_of(b.material, keys[1]) ? 1.0f : 0.0f,
+                       keys[2] != ~0u ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
             ou.dequant = mat4::identity();
+            // The shader reads a batch's colour variation (column 0) and wind extension (column 1) from the unused dequant.
+            const f32 extra[8] = {b.tint_variation.x, b.tint_variation.y, b.tint_variation.z, b.tint_variation.w,
+                                  b.wind_ext.x,       b.wind_ext.y,       b.wind_ext.z,       b.wind_ext.w};
+            for (u32 i = 0; i < 8; ++i) ou.dequant.c[i / 4][i % 4] = extra[i];
             ou.inst = batch_wind(b);
+            parallax_uniforms(b.material, scene.parallax(), ou);
             material_ext_uniforms(b.material ? b.material->ext : sm.material_ext, ou);
+            // M-TRANSLUCENT 41d: as draw_meshes (a translucent leaf batch glows as its single draws do).
+            const f32 thin = translucency_object(mat.flags, (mat.flags & asset::MaterialFlags::Unlit) != 0, tier, desc_.translucency);
             for (u32 l = 0; l < levels; ++l) {
-                ou.skin = {-1.0f, f32(bv.slot[l]), scene.time(), 0.0f};
+                ou.skin = {-1.0f, f32(bv.slot[l]), scene.time(), thin};
                 cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
-                if (batch_draw(cmd, mesh, 0, bi, l, s) && !prepass) ++stats_.main_draws;
+                if (batch_draw(cmd, mesh, 0, bi, l, s) && !prepass) {
+                    ++stats_.main_draws;
+                    if (thin != 0.0f) ++stats_.translucent_draws;
+                }
             }
         }
     }
@@ -2362,8 +4160,28 @@ void Forward3D::record_velocity(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     rhi::PipelineHandle bound_pipe;
     const GpuMesh* bound = nullptr;
     const Span<const Scene3D::Draw> draws = scene.draws();
+    const bool instanced = !velocity_inst_.is_null() && upload_runs(cmd, scene, kInstVelocity);
     for (u32 i = 0; i < scene.opaque_count(); ++i) {
         const Scene3D::Draw& d = draws[i];
+        const InstSlot run = instanced ? inst_slots_[i] : InstSlot{};
+        if (run.count > 1) {  // an instanced run (M-VISUAL3 5a): never moving, so previous = current
+            i += run.count - 1;
+            if (d.mesh->vertices.is_null()) continue;
+            if (!(velocity_inst_ == bound_pipe)) {
+                cmd.bind_pipeline(velocity_inst_);
+                bound_pipe = velocity_inst_;
+            }
+            if (d.mesh != bound) {
+                cmd.bind_vertex_buffer(d.mesh->vertices);
+                cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
+                bound = d.mesh;
+            }
+            const VelObjU ou{d.model, d.prev_model, d.dequant, {-1.0f, -1.0f, f32(run.slot), 0.0f}};
+            cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
+            cmd.draw(d.index_count, run.count, d.first_index, 0, static_cast<i32>(d.base_vertex));
+            ++stats_.velocity_draws;
+            continue;
+        }
         if (d.mesh->vertices.is_null()) continue;
         const rhi::PipelineHandle pipe = d.mesh->skinned() ? velocity_skinned_ : velocity_pipe_;
         if (!(pipe == bound_pipe)) {
@@ -2424,7 +4242,8 @@ void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     tu.out = {1.0f / f32(out.width), 1.0f / f32(out.height), f32(out.width), f32(out.height)};
     tu.jitter = {jitter_uv_.x, jitter_uv_.y, history_valid_ ? 1.0f : 0.0f, clamp(scene.post().taa_blend, 0.01f, 1.0f)};
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(tu));
-    cmd.bind_texture(rhi::bank::kAlbedo, hdr_, point_sampler_);
+    // The current frame: post_source_ is hdr_ itself unless the edge outline drew (M-OUTLINE 39c, its own target).
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);
     cmd.bind_texture(rhi::bank::kNormal, history_[history_index_], linear_clamp_);
     cmd.bind_texture(rhi::bank::kOrm, velocity_, point_sampler_);
     cmd.draw_non_indexed(3);
@@ -2537,6 +4356,722 @@ void Forward3D::record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     }
 }
 
+// ---- M-LENSFLARE 38c: the sun lens flare, after the post effects and the exposure histogram (the flare does not pump
+// the exposure), before bloom (bloom, lens dirt and the tonemapper act on it like on any bright light). A 1x1 pass
+// measures how much of a disk around the sun sees sky in the half-resolution opaque prepass; the composite adds halo,
+// ghosts and starburst times that share into the post-fx ping-pong target. Never into post_source_ in place: with TAA
+// it is the history the next frame reprojects. strength 0 (off, below the horizon, behind the camera, off screen)
+// records nothing, so the frame is the one without the pass bit for bit.
+void Forward3D::record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const LensFlare& setting = scene.post().flare;
+    if (!setting.enabled || flare_pipe_.is_null() || flare_occ_pipe_.is_null() || ao_prepass_.is_null()) return;
+    // The direction the sky pass draws its disk with (kSkyFS: -p_light_dir, the light's direction whether or not the
+    // atmosphere is on; Atmosphere::sky_sun_direction moves the baked sky's glow, not the disk), so the flare sits on it.
+    const DirectionalLight& light = scene.light();
+    vec3 dir = normalize(light.direction);
+    if (!(length_sq(dir) > 0.0f)) dir = {0, -1, 0};
+    const View3D& view = scene.view();
+    const rhi::Extent2D out = post_size_;
+    const f32 aspect = f32(out.width) / f32(out.height);
+    // The jittered projection: the one the prepass drew the depth the occlusion pass reads with.
+    const LensFlareFrame fr = lens_flare_frame(setting, jitter_ * view.view_proj, -dir, aspect,
+                                               quality_settings(quality_tier()).lens_flare_starburst);
+    if (!(fr.strength > 0.0f)) return;
+    const vec3 sun = light.color * (max(light.intensity, 0.0f) * fr.strength);
+    if (!(sun.x + sun.y + sun.z > 0.0f) || !std::isfinite(sun.x + sun.y + sun.z)) return;
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when SSAO, SSR, contact shadows or the water drew it already
+    if (flare_occ_.is_null()) {
+        rhi::TextureDesc d;
+        d.size = {1, 1};
+        d.format = rhi::TextureFormat::RGBA8_UNorm;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = "mce.3d.lens_flare_occ";
+        flare_occ_ = device_->create_texture(d);
+    }
+    FlareU fu{};
+    fu.sun = {fr.sun_uv.x, fr.sun_uv.y, fr.aspect, fr.occlusion_radius};
+    fu.color = vec4(sun, fr.halo);
+    fu.shape = {fr.halo_radius, fr.starburst, f32(fr.rays), f32(fr.ghost_count)};
+    for (u32 k = 0; k < fr.ghost_count && k < kLensFlareMaxGhosts; ++k) {
+        const LensFlareGhost& g = fr.ghosts[k];
+        fu.ghost[2 * k] = {g.center.x, g.center.y, g.radius, g.intensity};
+        fu.ghost[2 * k + 1] = vec4(g.tint, 0.0f);
+    }
+    auto fullscreen = [&](rhi::TextureHandle dst, const char* name) {
+        rhi::PassAttachment o;
+        o.texture = dst;
+        o.load = rhi::LoadOp::DontCare;
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&o, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+    };
+    cmd.push_debug_scope("lens_flare");
+    fullscreen(flare_occ_, "lens_flare.occlusion");
+    cmd.bind_pipeline(flare_occ_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(fu));
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);  // nearest: a tap sees sky (0) or not
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    fullscreen(dst, "lens_flare");
+    cmd.bind_pipeline(flare_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(fu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);
+    cmd.bind_texture(rhi::bank::kOrm, flare_occ_, point_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.lens_flare = true;
+    stats_.lens_flare_strength = fr.strength;
+}
+
+// ---- M-SUNSHAFTS 45c: sun light shafts, right after record_post_fx (depth of field, motion blur, the exposure histogram)
+// and before the flare: after TAA (the rays never enter the history the next frame reprojects, and TAA does not smear
+// them), after the histogram (the rays do not pump the exposure), before the flare (its halo and ghosts are bright and
+// radial about the same point: in the source mask they would be smeared a second time along every ray), and before the
+// underwater look, the lens rain, the haze, bloom, lens dirt, the tonemapper and the grade, which then act on the rays
+// like on any bright light.
+// Two passes. kShaftsFS walks from every half-resolution pixel toward the sun over the HDR frame (post_source_) and the
+// half-resolution opaque prepass (ao_gbuf_: sky counts, opaque geometry occludes) into shafts_buf_; kShaftsCompFS adds
+// the bilinear upsample times the pixel's veil to post_source_ into the post-fx ping-pong target, then post_source_ =
+// that target. Never in place (with TAA post_source_ is the history slot; post_fx_target alternates its two textures, so
+// the target is never the texture an earlier post pass of this frame left in post_source_).
+// Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.sun_shafts false) when
+// the setting is off (checked first), the view renders to a texture (out_.linear_output: a monitor in the scene does not
+// get the player's rays, as the lens rain), the tier has no shafts (Low) or r.sun_shafts is 0 (read again here although
+// apply_quality already cleared `enabled`, so a caller that skips apply_quality still gets them), or sun_shafts_frame
+// says no: intensity or visibility 0, the sun behind the camera or below the horizon, a zero strength (the elevation,
+// the view fade, the medium, the visibility and the submersion multiplied), non-finite input.
+// The submersion is the M-UNDERWATER crossing blend of the camera's depth below the mean water level (render-relative, as
+// underwater_frame takes it: (level_y - origin_[1]) - view.position.y) through the same band, whether or not the
+// underwater look is on, so the shafts fade out over the band the look fades in over. The medium backs off to
+// kSunShaftsVolumeShare where this view drew the volumetric fog (stats_.volumetrics, set by record_volumetrics earlier).
+// The sun uv comes from the unjittered view.view_proj (the pass runs on the resolved frame); the prepass is drawn with
+// the jittered one, under one half-resolution texel off, not corrected (the rays are soft).
+// The pipelines are made at startup (create_pipelines) only where the prepass exists; when they do not (no prepass
+// pipeline, a refused shader) a frame that would draw says so once per process and records nothing.
+// shafts_buf_ is shared by the views (not per-view state), half of post_size_, R11G11B10F. A size change never frees a
+// handle that commands recorded earlier in the same frame still reference: shafts_buf_ is recreated only by a view
+// that finds it unused this frame (shafts_buf_used_, cleared on the frame's first view and set when a view records into
+// it: render-texture views record first and draw no shafts, so "first" is not the window view), or when it does not
+// exist yet; a later view of another size the same frame accumulates into its own
+// per-view render-size target of the same format instead, trans_src_ (free from the resolve on, as record_outline uses
+// it), unless trans_src_ is this view's post_source_ (the outline wrote it and nothing after it moved post_source_), in
+// which case that view draws no shafts. Nothing is written back to the scene.
+void Forward3D::record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const SunShafts& setting = scene.post().shafts;
+    if (!setting.enabled || out_.linear_output) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.sun_shafts"));
+    if (!q.sun_shafts || (cv && !cv->get_bool())) return;
+    const u32 tier_detail = q.sun_shafts_samples == 0 ? 0u : (q.sun_shafts_samples <= 16 ? 1u : 2u);
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    const View3D& view = scene.view();
+    f32 submersion = 0.0f;
+    const WaterSurface& water = scene.water();
+    if (water.enabled && std::isfinite(water.level_y)) {
+        const f32 level = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
+        const f32 cam_depth = f32(f64(level) - origin_[1]) - view.position.y;
+        submersion = underwater_submersion(cam_depth, underwater_band(water.amplitude, scene.post().underwater.band));
+    }
+    SunShaftsFrame fr;
+    if (!sun_shafts_frame(setting, scene.light(), scene.fog(), scene.volumetrics(), stats_.volumetrics, view.view_proj,
+                          f32(out.width) / f32(out.height), tier_detail, submersion, fr))
+        return;
+    if (shafts_pipe_.is_null() || shafts_comp_pipe_.is_null()) {
+        // The shafts would draw but the pipelines do not exist (no prepass pipeline: ssao, ssr, contact shadows and the edge
+        // outline all off at startup; or a refused shader): said once per process, not per frame.
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true))
+            MCE_LOG_WARN("render3d: sun shafts are on but the sun shafts pass is unavailable (it needs the prepass: turn on "
+                         "ssao, ssr, contact shadows or the edge outline at startup); drawing frames without the shafts");
+        return;
+    }
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+    if (ao_gbuf_.is_null()) return;
+    const rhi::Extent2D half{max(out.width / 2u, 1u), max(out.height / 2u, 1u)};
+    rhi::TextureHandle buf = shafts_buf_;
+    if (buf.is_null() || !(device_->texture_size(buf) == half)) {
+        if (!shafts_buf_used_ || shafts_buf_.is_null()) {
+            destroy(*device_, shafts_buf_);
+            rhi::TextureDesc d;
+            d.size = half;
+            d.format = rhi::TextureFormat::R11G11B10F;
+            d.usage = rhi::TextureUsage::SampledColorTarget;
+            d.debug_name = "mce.3d.sun_shafts";
+            shafts_buf_ = device_->create_texture(d);
+            buf = shafts_buf_;
+        } else {
+            if (trans_src_.is_null()) {
+                rhi::TextureDesc d = device_->texture_desc(hdr_);
+                d.debug_name = "mce.3d.transmission_src";  // as record_main names it: it may reuse this one
+                trans_src_ = device_->create_texture(d);
+            }
+            if (trans_src_ == post_source_) return;
+            buf = trans_src_;
+        }
+        if (buf.is_null()) return;
+    }
+
+    if (buf == shafts_buf_) shafts_buf_used_ = true;
+
+    // The per-sample weight factor: decay per 1/32 of the walk, so 16 samples (decay^2 per step) weigh the walk as 32 do.
+    f32 per = fr.decay;
+    for (u32 n = fr.samples; n < u32(shaders3d::kShaftsMaxSamples); n *= 2u) per *= per;
+    ShaftsU su;
+    su.sun = {fr.sun_uv.x, fr.sun_uv.y, fr.aspect, fr.length};
+    su.shape = {per, fr.threshold, fr.cap, f32(fr.samples)};
+    su.color = vec4(fr.color, f32(shaders3d::kShaftsSeed));
+    su.comp = {fr.scatter_m, 0.0f, 0.0f, 0.0f};
+    auto fullscreen = [&](rhi::TextureHandle dst, const char* name) {
+        rhi::PassAttachment o;
+        o.texture = dst;
+        o.load = rhi::LoadOp::DontCare;  // every pixel is written
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&o, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+    };
+    cmd.push_debug_scope("sun_shafts");
+    fullscreen(buf, "sun_shafts.accumulate");
+    cmd.bind_pipeline(shafts_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(su));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);  // the bright-sun mask, bilinear, clamped
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);    // nearest: sky is exactly 0
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) {
+        cmd.pop_debug_scope();
+        return;
+    }
+    fullscreen(dst, "sun_shafts.composite");
+    cmd.bind_pipeline(shafts_comp_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(su));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // texelFetch
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // the pixel's own prepass texel (the veil)
+    cmd.bind_texture(rhi::bank::kOrm, buf, linear_clamp_);              // the bilinear upsample of the rays
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.sun_shafts = true;
+    stats_.sun_shafts_strength = fr.strength;
+}
+
+// ---- M-CLOUDSHADOW 51c: cloud shadows on the ground, right after record_post_fx (depth of field, motion blur, the exposure
+// histogram) and before the sun shafts: after TAA (the shade never enters the history the next frame reprojects, so a
+// drifting patch leaves no trail), after the histogram (a passing cloud does not pump the exposure: the eye adapts to the
+// frame's light, the shade reads as shade), before the shafts, the flare, the underwater look, the lens rain, the haze,
+// bloom, the tonemapper and the grade (a shaded wall blooms and grades as a darker wall; the shafts' bright-sun mask reads
+// the sky, which the pass leaves alone).
+// One fullscreen pass (kCloudShadowFS) reads post_source_ and the half-resolution opaque prepass (ao_gbuf_: view depth, 0
+// = sky) and writes the frame times the per-pixel factor into the post-fx ping-pong target, then post_source_ = that
+// target. Never in place (post_fx_target alternates its two textures). The prepass is half resolution, so a pixel on a
+// silhouette takes its 2 x 2 block's sample: at most one full-resolution pixel of sky beside shaded geometry is shaded
+// with it (and the other way), the same footprint as the shafts' veil.
+// The cloud values are the sky's own: cloud_params fills p_cloud / p_cloud2 exactly as the main pass does (coverage,
+// density, 1 / cell, the plane height, the drift wrapped in f64), so the patches sit under the clouds the sky draws and
+// move with them. The octave count is the tier's (QualitySettings::cloud_shadow_octaves: Medium 2, High 3), the sun's
+// share of the light cloud_shadow_sun_share of the scene's sun and sky ambient, only the surface part of a pixel the exp²
+// fog mixed into shaded (cloud_shadow_shade; the volumetric fog is not modelled), the strength the setting's times
+// (1 - submersion): the M-UNDERWATER crossing blend as the shafts take it, so the shadows fade out over the band the
+// underwater look fades in over and are gone under water. Camera-relative throughout (the view's rotation and the prepass
+// depth only): neither the camera's position nor the floating origin enters, as in the sky layer.
+// Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.cloud_shadow false)
+// when the setting is off (checked first), the sky pass is off (Sky::enabled false: no clouds are drawn), the view renders
+// to a texture (out_.linear_output: GI captures, probes and
+// monitors stay cloudless, as with the sky layer's reflections), the tier has no cloud shadows (Low, octaves 0) or
+// r.cloud_shadows is 0 (read again here, as the shafts do), the cloud layer is off or has no coverage, the view is
+// orthographic, the sun is below kCloudShadowMinSunY (its fade is 0 there) or its direction is not finite or zero, the
+// sun's share, the strength or the submersion leaves nothing to draw, or there is no post source. The pipeline is made at
+// startup only where the prepass exists; a frame that would draw without it says so once per process and records nothing.
+void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const CloudShadow& setting = scene.post().cloud_shadow;
+    if (!setting.enabled || out_.linear_output) return;
+    if (!scene.sky().enabled) return;  // no sky pass, no cloud layer drawn (record_main's sky gate): no shade either
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.cloud_shadows"));
+    if (!q.cloud_shadows || q.cloud_shadow_octaves == 0 || (cv && !cv->get_bool())) return;
+    PassU cloud{};  // only its cloud members: cloud_params leaves them zero for a layer that is off or has no coverage
+    cloud_params(scene.clouds(), scene.time(), cloud);
+    if (!(cloud.cloud.x > 0.0f)) return;
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    const View3D& view = scene.view();
+    const mat4& pr = view.proj;
+    if (!cloud_shadow_perspective(pr)) return;  // orthographic or degenerate: the reconstruction assumes a perspective
+    const DirectionalLight& light = scene.light();
+    const vec3 toward{-light.direction.x, -light.direction.y, -light.direction.z};
+    const f32 len2 = toward.x * toward.x + toward.y * toward.y + toward.z * toward.z;
+    if (!std::isfinite(len2) || !(len2 >= 1.0e-12f)) return;
+    const f32 inv = 1.0f / std::sqrt(len2);
+    const vec3 sun{toward.x * inv, toward.y * inv, toward.z * inv};
+    if (!(sun.y >= kCloudShadowMinSunY)) return;  // the factor's fade is 0 there; the shader divides by sun.y
+    const f32 share = cloud_shadow_sun_share(light.color, light.intensity, light.ambient_sky);
+    f32 submersion = 0.0f;
+    const WaterSurface& water = scene.water();
+    if (water.enabled && std::isfinite(water.level_y)) {
+        const f32 level = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
+        const f32 cam_depth = f32(f64(level) - origin_[1]) - view.position.y;
+        submersion = underwater_submersion(cam_depth, underwater_band(water.amplitude, scene.post().underwater.band));
+        if (!std::isfinite(submersion)) submersion = 1.0f;
+    }
+    const f32 strength = detail::ranged(setting.strength, 0.0f, 1.0f, 0.6f) * (1.0f - unit01(submersion));
+    // The darkest a thick cloud can make a pixel: nothing to draw when the factor stays exactly 1.
+    if (cloud_shadow_factor(1.0f, strength, share, sun.y) >= 1.0f) return;
+    if (cloud_shadow_pipe_.is_null()) {
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true))
+            MCE_LOG_WARN("render3d: cloud shadows are on but the cloud shadow pass is unavailable (it needs the prepass: "
+                         "turn on ssao, ssr, contact shadows or the edge outline at startup); drawing frames without them");
+        return;
+    }
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+    if (ao_gbuf_.is_null()) return;
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) return;
+
+    const mat4& v = view.view;
+    CloudShadowU cu;
+    cu.proj = {pr.c[0][0], pr.c[1][1], pr.c[2][0], pr.c[2][1]};
+    cu.right = {v.c[0][0], v.c[1][0], v.c[2][0], cloud.cloud.z};
+    cu.up = {v.c[0][1], v.c[1][1], v.c[2][1], cloud.cloud.w};
+    cu.back = {v.c[0][2], v.c[1][2], v.c[2][2], cloud.cloud.x};
+    cu.sun = {sun.x, sun.y, sun.z, cloud.cloud.y};
+    cu.shade = {strength, share, detail::ranged(setting.softness, 0.0f, 1.0f, 0.3f),
+                f32(q.cloud_shadow_octaves < 3u ? q.cloud_shadow_octaves : 3u)};
+    // The exp² fog the main pass mixed in (none where this view drew the volumetric fog in its place): the shade scales
+    // with the surface's share of the pixel, so fogged distance does not darken under a cloud.
+    const f32 fog = scene.fog().density;
+    // The main pass squares the density, so any finite non-zero density (a negative one too) fogs there.
+    const f32 fog_density = !stats_.volumetrics && std::isfinite(fog) && fog != 0.0f ? fog : 0.0f;
+    cu.drift = {cloud.cloud2.x, cloud.cloud2.y, fog_density, 0.0f};
+    cu.fog = vec4(scene.fog().color, 0.0f);
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "cloud_shadow";
+    cmd.push_debug_scope("cloud_shadow");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(cloud_shadow_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(cu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // texelFetch
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // nearest: sky is exactly 0
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.cloud_shadow = true;
+    stats_.cloud_shadow_strength = strength;
+}
+
+// ---- M-CAUSTICS 52b / 52f: caustics under water. One fullscreen pass (kCausticsFS) reads a source frame and the
+// half-resolution opaque prepass (ao_gbuf_) and writes the source plus colour * term into another target; additive, so a
+// term of 0 leaves a pixel's bits as they are. It draws in one of two places, never both in a view:
+// - The camera above the water (52f): inside record_main, in place of the plain copy of the opaque frame the M-WATER2
+//   refraction reads (trans_src_), so kWaterFS shows the web exactly as it shows the floor: through its refraction offset,
+//   weighted by its own (1 - Fresnel) on the wave normal, its per-channel extinction along the path, its foam and its
+//   reflection of the walls. A pixel whose water shows a reflection gets none of it (the r12 fringe and the rock streaks
+//   came from a post pass weighting the light by a flat plane's Fresnel at the pixel's own floor point). Before TAA, so the
+//   web refracted through the moving waves is resolved by TAA with the rest of the water.
+// - The camera under the water: here, after the cloud shadows and before the sun shafts: after TAA (the moving web never
+//   enters the history), after the exposure histogram, before the shafts, the flare, the underwater composite (its
+//   absorption and fog act on the added light like on everything else), the lens rain, the haze, bloom, the tonemapper and
+//   the grade; into the post-fx ping-pong target, then post_source_ = that target.
+// The water plane is the drawn one: WaterSurface::level_y (the wave-free plane) and the camera-following square kWaterVS
+// draws (caustics_water_centre, half_extent). The pattern is anchored to the world: the camera's world xz (floating origin
+// + local, f64) is folded into the pattern's period on the CPU (caustics_offset), and the shader works camera-relative, so
+// a rebase is bit for bit. The clock is the scene time times the setting's speed, turned into whole ticks and wrapped to
+// the period on the CPU (caustics_phase). From above only when the water shows what lies under it at all (the M-WATER2
+// refraction on this frame; calm, foamless water is an opaque tint: caustics_gate's see_through).
+// Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.caustics false) unless
+// caustics_gate passes (caustics_frame): the setting on (checked first), not a render-to-texture view, the tier's caustics
+// and octaves, r.caustics (read again here), a drawn water plane, a post source, a perspective view, a sun at or above
+// kCausticsMinSunY with a finite non-zero direction, and some light to add (strength, sun share, intensity). The pipeline
+// is made at startup only where the prepass exists; a frame that would draw without it says so once and records nothing.
+// The fog: the exp² fog's share at the point's own distance (kMeshFS fogged the surface there; seen from above kWaterFS
+// then fogs the water pixel at the surface's distance itself); with the volumetric fog on in its place, the volume's
+// transmittance at the point read from vol_light_ the same way (bank kVolumetrics).
+void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const Caustics& setting = scene.post().caustics;
+    if (!setting.enabled || out_.linear_output) return;
+    const WaterSurface& water = scene.water();
+    const View3D& view = scene.view();
+    // Seen from above, record_main drew the light into the water's refraction copy (M-CAUSTICS 52f), and the water showed
+    // it as it shows the floor; nothing is added over the water afterwards.
+    const bool above = water_camera_above(water, origin_, view.position);
+    CausticsFrameIn in;
+    in.water_drawn = water_on(water) && !water_.is_null();
+    in.render_texture = out_.linear_output;
+    in.post_source = post_size_.width > 0 && post_size_.height > 0 && !post_source_.is_null();
+    in.see_through = !above || stats_.water_refract;
+    in.origin = origin_;
+    // The volumetric fog this view drew in place of the exp² one (record_main composited color * f.a + f.rgb): the pass
+    // reads its transmittance at the pixel from the same integrated volume, so the web dims in the mist as the floor did.
+    in.volumetrics = stats_.volumetrics;
+    const bool vol = stats_.volumetrics && !vol_light_.is_null();
+    if (vol) {
+        PassU vp{};
+        vol_params(scene, vp);
+        in.vol = vp.vol;
+        in.vol_grid = vp.vol_grid;
+    }
+    CausticsU cu;
+    f32 strength = 0.0f;
+    if (!caustics_frame(scene, in, cu, strength)) return;
+    if (caustics_pipe_.is_null()) {
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true))
+            MCE_LOG_WARN("render3d: caustics are on but the caustics pass is unavailable (it needs the prepass: turn on "
+                         "ssao, ssr, contact shadows or the edge outline at startup); drawing frames without them");
+        return;
+    }
+    if (above) return;  // record_main drew them into the refraction copy (stats_.caustics says whether it did)
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+    if (ao_gbuf_.is_null()) return;
+    const rhi::TextureHandle dst = post_fx_target(post_size_);
+    if (dst.is_null()) return;
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "caustics";
+    cmd.push_debug_scope("caustics");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(caustics_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(cu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // texelFetch
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // nearest: sky is exactly 0
+    cmd.bind_texture(rhi::bank::kVolumetrics, vol ? vol_light_ : ao_off_, linear_clamp_);  // as the main pass binds it
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.caustics = true;
+    stats_.caustics_strength = strength;
+}
+
+// ---- M-OUTLINE 39c: edge outlines, after the MSAA resolve and the velocity prepass and before TAA (so TAA resolves
+// the lines under its jitter, and depth of field, motion blur, the exposure, the flare, bloom, the tonemapper and the
+// grade act on them like on any scene pixel). One fullscreen pass reads the HDR frame and the half-resolution opaque
+// prepass (view normal and view depth) and writes the frame with lines into its own render-size target, which
+// becomes post_source_: never in place into hdr_ (the next frame's SSR reads hdr_, the frame without lines) and never
+// into the TAA history. strength 0 (edge_outline_frame: disabled, opacity 0, both weights 0, NaN, ...), no pipeline
+// (Forward3DDesc::edge_outline false, a refused shader) or no prepass pipeline records nothing, so the frame and
+// post_source_ (hdr_) are the ones without the pass bit for bit.
+//
+// The target. outline_dst_ is shared by the views (not per-view state) and has hdr_'s description (R11G11B10F, the
+// frame's own format, so a pixel without a line is copied exactly) at the render size. A size change never frees a
+// handle that commands recorded earlier in the same frame still reference: outline_dst_ is recreated only on the
+// frame's first view (ViewOutput::first; earlier frames' command buffers are submitted by then, as for every other
+// target this renderer recreates on a resize). A later view of another size the same frame writes its own per-view
+// render-size target of the same description instead, trans_src_ (the opaque frame transmissive draws refract, read
+// only inside record_main, which writes it before every read, so it is free from the resolve on), and leaves
+// outline_dst_ to the views that recorded it. Views of two sizes in one command buffer therefore recreate nothing
+// frame after frame, whatever their order stays.
+void Forward3D::record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const EdgeOutline& setting = scene.post().outline;
+    if (!setting.enabled || outline_pipe_.is_null() || ao_prepass_.is_null()) return;
+    // record_volumetrics ran earlier in this view: stats_.volumetrics says whether the volume replaced the exp^2 Fog.
+    const EdgeOutlineFrame fr = outline_frame(scene, stats_.volumetrics);
+    if (!(fr.strength > 0.0f)) return;
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when SSAO, SSR, contact shadows or the water drew it already
+    if (ao_gbuf_.is_null()) return;
+    rhi::TextureHandle dst = outline_dst_;
+    if (dst.is_null() || !(device_->texture_size(dst) == size_)) {
+        rhi::TextureDesc d = device_->texture_desc(hdr_);
+        if (out_.first || dst.is_null()) {
+            destroy(*device_, outline_dst_);
+            d.debug_name = "mce.3d.edge_outline";
+            outline_dst_ = device_->create_texture(d);
+            dst = outline_dst_;
+        } else {
+            if (trans_src_.is_null()) {
+                d.debug_name = "mce.3d.transmission_src";  // as record_main names it: it may reuse this one
+                trans_src_ = device_->create_texture(d);
+            }
+            dst = trans_src_;
+        }
+        if (dst.is_null()) return;
+    }
+
+    OutlineU u{};
+    u.line = fr.color_opacity;
+    u.tap = {fr.tap_uv.x, fr.tap_uv.y, 1.0f / f32(size_.width), 1.0f / f32(size_.height)};
+    u.edge = {fr.depth_threshold, fr.normal_threshold, fr.depth_weight, fr.normal_weight};
+    u.fade = {fr.fade_start, fr.fade_end, fr.fog_density, f32(fr.taps)};
+    u.misc = {fr.sky_silhouette ? 1.0f : 0.0f, fr.strength, 0.0f, 0.0f};
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "edge_outline";
+    cmd.push_debug_scope("edge_outline");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(outline_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // hdr_: nothing before TAA changes it
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // nearest: a tap reads one prepass texel
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.edge_outline = true;
+    stats_.edge_outline_taps = fr.taps;
+}
+
+// ---- M-LENSRAIN 42c: rain on the camera lens, right after the flare and before bloom: after TAA, depth of field,
+// motion blur and the exposure histogram, so the drops do not pump the exposure and TAA neither smears them nor keeps
+// them in its history; bloom, lens dirt, the tonemapper and the grade then act on them like on the rest of the frame.
+// One fullscreen pass (kLensRainFS) from post_source_ into the post-fx ping-pong target, then post_source_ = that
+// target; never in place, because with TAA post_source_ is the history slot the next frame reprojects (post_fx_target
+// alternates its two textures, so the target is never the texture an earlier post pass of this frame left in
+// post_source_).
+// Records nothing (the frame is the one without the pass bit for bit, stats_.lens_rain false) when the setting is off,
+// its amount is 0 or NaN (lens_rain_frame), the tier has no drop grids (Low), r.lens_rain is 0 or the pipeline failed.
+// apply_quality already clears `enabled` for the tier and the cvar; both are read again here, as cookies_allowed does,
+// so a caller that skips apply_quality (a test, a tool) still gets the tier's behaviour and the tier's grid count.
+// The drops' clock is the scene's (Scene3D::set_time: the clock the ripples, clouds and film grain read), never the
+// simulation tick. Scene3D::time() is an f32, so its resolution is f32's (as for the ripples: it coarsens as the clock
+// grows); it is only widened to f64 for the wrap to kLensRainPeriod, which adds no error of its own. The shader
+// rounds each drop to whole fall cycles per period, so the wrap does not show, and the field repeats every 600 s
+// (kLensRainFS). Nothing is written back to the scene: the pass is render-side only.
+// Views: post_fx_target's pair (fx_, fx_size_, fx_next_) is per view slot (MCE_FORWARD3D_VIEW_STATE), so views of
+// different sizes in one frame never recreate each other's targets (test_render3d_lens_rain_gl's two-view case). A
+// linear_output view (a render-to-texture camera that materials sample) records no drops: rain on the lens of a camera
+// other than the player's is out of the milestone's scope, and a monitor in the scene should not wear the player's
+// drops. Split-screen views into the window keep them.
+namespace {
+constexpr f64 kLensRainPeriod = 600.0;  // seconds; long enough that the rounding to whole cycles barely moves a speed
+}  // namespace
+
+void Forward3D::record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const LensRain& setting = scene.post().rain;
+    if (!setting.enabled || rain_pipe_.is_null() || out_.linear_output) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.lens_rain"));
+    const u32 layers = q.lens_rain_layers < u32(shaders3d::kLensRainMaxLayers) ? q.lens_rain_layers
+                                                                               : u32(shaders3d::kLensRainMaxLayers);
+    if (!q.lens_rain || layers == 0 || (cv && !cv->get_bool())) return;
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    const LensRainFrame fr = lens_rain_frame(setting, scene.time(), f32(out.width) / f32(out.height));
+    if (!(fr.amount > 0.0f)) return;
+
+    const f64 t = f64(fr.time);  // finite (lens_rain_frame); an f32 clock widened for the wrap only
+    f32 share = f32((t - kLensRainPeriod * std::floor(t / kLensRainPeriod)) / kLensRainPeriod);
+    if (!(share >= 0.0f && share < 1.0f)) share = 0.0f;  // f32 rounding of a share just below 1
+    LensRainU ru;
+    ru.drop = {fr.amount, fr.density, fr.size, fr.refraction};
+    ru.look = {fr.blur, fr.trail, f32(f64(fr.fall_speed) * kLensRainPeriod / 60.0), share};
+    // The seed as two 16-bit halves: each is an exact float, so the shader rebuilds the u32 bit for bit (a bit cast of
+    // the whole u32 could land on a NaN pattern a backend is free to canonicalize).
+    ru.frame = {fr.aspect, f32(fr.seed & 0xffffu), f32(fr.seed >> 16), f32(layers)};
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) return;
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "lens_rain";
+    cmd.push_debug_scope("lens_rain");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(rain_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(ru));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);  // bilinear lookups, clamped at the border
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.lens_rain = true;
+    stats_.lens_rain_amount = fr.amount;
+}
+
+// ---- M-HEATHAZE 43c: heat haze, right after the lens rain and before bloom: after TAA, depth of field, motion blur,
+// the exposure histogram, the flare and the lens rain (so the haze bends the flare and the drops too and neither pumps
+// the exposure nor enters the TAA history); bloom, lens dirt, the tonemapper and the grade then act on the bent picture.
+// One fullscreen pass (kHazeFS) from post_source_ into the post-fx ping-pong target, then post_source_ = that target;
+// never in place (with TAA post_source_ is the history slot the next frame reprojects; post_fx_target alternates its
+// two textures, so the target is never the texture an earlier post pass of this frame left in post_source_).
+// The depth mask reads the half-resolution opaque prepass (ao_gbuf_), drawn by record_prepass: a no-op when SSAO, SSR,
+// contact shadows, the water, the outline or the flare drew it already this frame, otherwise the one cost the haze adds
+// besides its own pass.
+// Records nothing (the frame is the one without the pass bit for bit, stats_.heat_haze_volumes 0) when PostFx::haze has
+// no volume (checked first: nothing at all is touched), the pipeline does not exist (no prepass pipeline, a refused
+// shader), the view renders to a texture (out_.linear_output, as the lens rain: a monitor in the scene does not wear
+// the player's haze), the tier has no haze (Low) or r.heat_haze is 0, or no volume is on screen (heat_haze_frame).
+// The tier and the cvar are read again here although apply_quality already trimmed the count, so a caller that skips
+// apply_quality (a test, a tool) still gets the tier's cap.
+// The projection is the unjittered one: the pass runs on the resolved frame. The noise's clock is the scene's
+// (Scene3D::set_time), widened to f64 for the per-volume rise phase, which is wrapped to the lattice's 256-row period
+// here, so the rising field never pops and its coordinates stay small. Nothing is written back to the scene.
+void Forward3D::record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const HeatHaze& setting = scene.post().haze;
+    if (setting.count == 0) return;
+    if (haze_pipe_.is_null()) {
+        // Volumes were asked for but the pipeline does not exist (no prepass pipeline: ssao, ssr, contact shadows and the
+        // edge outline all off at startup; or a refused shader): said once per process, not per frame.
+        static std::atomic<bool> warned{false};
+        if (!out_.linear_output && !warned.exchange(true))
+            MCE_LOG_WARN("render3d: heat haze volumes are set but the heat haze pass is unavailable (it needs the prepass: turn on "
+                         "ssao, ssr, contact shadows or the edge outline at startup); drawing frames without the haze");
+        return;
+    }
+    if (out_.linear_output) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.heat_haze"));
+    if (!q.heat_haze || (cv && !cv->get_bool())) return;
+    const u32 cap = q.heat_haze_volumes < kHeatHazeMaxVolumes ? q.heat_haze_volumes : kHeatHazeMaxVolumes;
+    if (cap == 0) return;
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    HeatHaze capped = setting;
+    if (capped.count > cap) capped.count = cap;
+    const View3D& view = scene.view();
+    HeatHazeFrame fr;
+    if (heat_haze_frame(capped, view.view_proj, view.view, f32(out.width) / f32(out.height), scene.time(), fr) == 0)
+        return;
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+    if (ao_gbuf_.is_null()) return;
+    HazeU hu{};
+    // A perspective projection (proj[2][3] = -1) gives the ray slopes; an orthographic one leaves them 0 (ray length 1) so the
+    // shader never divides, but an orthographic view is unsupported: heat_haze_project assumes a perspective camera.
+    const bool persp = view.proj.c[2][3] != 0.0f && view.proj.c[0][0] != 0.0f && view.proj.c[1][1] != 0.0f;
+    hu.frame = {f32(fr.count), fr.aspect, persp ? 1.0f / view.proj.c[0][0] : 0.0f, persp ? 1.0f / view.proj.c[1][1] : 0.0f};
+    const f64 period = f64(shaders3d::kHazePeriodCells);
+    for (u32 i = 0; i < fr.count; ++i) {
+        const HeatHazeVolumeFrame& v = fr.volumes[i];
+        const f64 cells = f64(fr.time) * f64(v.rise) * f64(shaders3d::kHazeCells) * f64(v.scale);
+        f32 phase = f32(cells - period * std::floor(cells / period));
+        if (!(phase >= 0.0f && phase < shaders3d::kHazePeriodCells)) phase = 0.0f;  // f32 rounding just below 256
+        hu.vol[2 * i] = {v.center.x, v.center.y, v.near_depth, v.screen_radius};
+        hu.vol[2 * i + 1] = {v.strength, phase, v.scale, v.softness};
+    }
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) return;
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "heat_haze";
+    cmd.push_debug_scope("heat_haze");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(haze_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(hu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);  // bilinear displaced lookups, clamped
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);    // nearest: a tap reads one prepass texel
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.heat_haze_volumes = fr.count;
+}
+
+// ---- M-UNDERWATER 44c: the camera under water, right after the flare and before the lens rain, the heat haze and bloom:
+// after TAA, depth of field, motion blur and the exposure histogram (so the look neither enters the TAA history nor
+// pumps the exposure) and after the flare (the sun is above the water, so its flare is attenuated like the rest); the
+// lens drops, the haze, bloom, lens dirt, the tonemapper and the grade then act on the underwater picture. One fullscreen
+// pass (kUnderwaterFS) from post_source_ into the post-fx ping-pong target, then post_source_ = that target; never in
+// place (with TAA post_source_ is the history slot the next frame reprojects; post_fx_target alternates its two
+// textures, so the target is never the texture an earlier post pass of this frame left in post_source_).
+// Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.underwater false) when
+// the tier has no underwater look or r.underwater is 0 (read again here although apply_quality already cleared
+// `enabled`, so a caller that skips apply_quality still gets them), the view renders to a texture (out_.linear_output: a
+// monitor in the scene does not wear the player's diving mask), or underwater_frame says no: the water is not on, the
+// setting is off or its strength 0, an orthographic view, non-finite input, or the camera above the crossing band (the
+// wave-free test against the mean level, render-relative: (level_y - origin_[1]) - view.position.y).
+// The pipeline is made at startup in create_pipelines (as the lens rain: per renderer, no first-dive compile hitch); a
+// driver that refuses the shader keeps the frame without the look, said once per process (the null handle is the
+// per-renderer state) and nothing is created at draw time.
+// Detail 1 and 2 read the half-resolution opaque prepass (ao_gbuf_) through record_prepass: a no-op when SSAO, SSR,
+// contact shadows, the water, the outline or the flare drew it already this frame. Without the prepass pipeline (SSAO,
+// SSR, contact shadows and the edge outline all off at startup) the pass takes the detail-0 path, the flat tint, with
+// ao_off_ bound, and says so once per process: a camera under the surface that shows the unchanged picture is worse
+// than a flat one. Detail 0 never records the prepass. Nothing is written back to the scene.
+void Forward3D::record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.underwater"));
+    if (!q.underwater || (cv && !cv->get_bool())) return;
+    if (out_.linear_output) return;
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    const bool depth = !ao_prepass_.is_null();
+    const u32 detail = depth ? q.underwater_detail : 0u;
+    UnderwaterFrame fr;
+    if (!underwater_frame(scene.water(), scene.post().underwater, scene.view(), origin_, scene.light(), scene.time(),
+                          f32(out.width) / f32(out.height), detail, fr))
+        return;
+    if (!depth && q.underwater_detail > 0) {
+        static std::atomic<bool> warned_flat{false};
+        if (!warned_flat.exchange(true))
+            MCE_LOG_WARN("render3d: the camera is under water but the renderer has no opaque prepass (ssao, ssr, contact "
+                         "shadows and the edge outline all off at startup); drawing the flat underwater tint");
+    }
+    if (underwater_pipe_.is_null()) {
+        // This renderer's driver refused the shader at startup (create_pipelines): no look, nothing recorded. The retry
+        // decision is the null handle, per renderer; only the log line is process-wide, once.
+        static std::atomic<bool> warned_refused{false};
+        if (!warned_refused.exchange(true))
+            MCE_LOG_WARN("render3d: the camera is under water but the underwater shader is missing or failed; drawing "
+                         "frames without the underwater look");
+        return;
+    }
+    if (fr.detail > 0) {
+        record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+        if (ao_gbuf_.is_null()) return;
+    }
+    UnderwaterU uu;
+    uu.frame = {fr.submersion, fr.aspect, fr.slope_x, fr.slope_y};
+    uu.right = vec4(fr.right, fr.cam_depth);
+    uu.up = vec4(fr.up, kUnderwaterWindowCos);
+    uu.fwd = vec4(fr.forward, kUnderwaterFarCap);
+    uu.sigma = vec4(fr.sigma, fr.wobble_amp);
+    uu.scatter = vec4(fr.scatter, f32(fr.detail));
+    uu.lid = vec4(fr.lid, fr.window_softness);
+    uu.phase = {fr.phase[0], fr.phase[1], fr.phase[2], fr.phase[3]};
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) return;
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "underwater";
+    cmd.push_debug_scope("underwater");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(underwater_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(uu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);  // bilinear wobbled lookups, clamped
+    cmd.bind_texture(rhi::bank::kNormal, fr.detail > 0 ? ao_gbuf_ : ao_off_, point_sampler_);  // nearest: one texel
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.underwater = true;
+    stats_.underwater_submersion = fr.submersion;
+}
+
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {
     const PostFx& post = scene.post();
     // The passes that write `target` write the view's rect of it (M-VIEWS), keeping the rest.
@@ -2625,9 +5160,20 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         have = want;
     };
     if (finish) ensure(fin_src_, fin_src_size_, post_size_, "mce.3d.fin_src");
+    // M-VISUAL3 3: the camera's look. Dirt needs the bloom it lights and a texture the store holds.
+    const PostFx::Lens& lens = post.lens;
+    const rhi::TextureHandle dirt = lens.dirt_key != 0 && textures_->contains(lens.dirt_key) ? textures_->get(lens.dirt_key) : rhi::TextureHandle{};
+    const bool dirt_on = !dirt.is_null() && bloom && lens.dirt_intensity > 0.0f;
+    FilmU film;
+    film.lens = {clamp(lens.vignette, 0.0f, 1.0f), clamp(lens.vignette_smoothness, 0.05f, 1.0f), clamp(lens.grain, 0.0f, 1.0f),
+                 clamp(lens.grain_size, 1.0f, 4.0f)};
+    film.lens2 = {clamp(lens.chromatic_aberration, 0.0f, 1.0f), dirt_on ? clamp(lens.dirt_intensity, 0.0f, 4.0f) : 0.0f,
+                  f32(static_cast<u32>(post.tonemapper)), f32(((static_cast<i64>(std::floor(scene.time() * 24.0f)) % 65536) + 65536) % 65536)};
     fullscreen(fxaa ? ldr_ : finish ? fin_src_ : target, rhi::LoadOp::DontCare, "tonemap", !fxaa && !finish);
     cmd.bind_pipeline(tonemap_);
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(film));
+    cmd.bind_texture(rhi::bank::kShadowMap, dirt_on ? dirt : textures_->white(), linear_clamp_);
     // 1:1 reads texel-exact; a scaled frame is upsampled bilinearly (TAA upsamples it itself).
     cmd.bind_texture(rhi::bank::kAlbedo, post_source_, post_size_ == out || finish ? point_sampler_ : linear_clamp_);
     cmd.bind_texture(rhi::bank::kNormal, bloom ? bloom_[0] : post_source_, linear_clamp_);
@@ -2678,6 +5224,164 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         }
     }
     timestamp(cmd, kTsFxaa);
+}
+
+
+// ---- M-LIGHTCOOKIE 40c: the cookie atlas, before the shadow passes (its time falls in the shadow bucket). One layer per
+// distinct cookie texture of the frame's plan (plan_cookies: first-seen order, so an unchanged scene keeps its layers),
+// each holding its texture at the tier's size S and its mip chain packed beside it (shaders3d.h MCE_GLSL_COOKIE): the RHI
+// renders into a layer and a viewport of an array but not into a mip, and has no texture copy, so every level is one
+// fullscreen draw of kCookieBakeFS from the source texture itself. A layer is baked only when what it holds changed
+// (cookie_tag: key, TextureStore generation, residency), so a static scene bakes once and a second view of the same
+// scene in the frame bakes nothing. Nothing with no cookie, Forward3DDesc::light_cookies false, -r.light_cookies 0 or a
+// tier without cookies: no pipeline, no atlas, no pass.
+//
+// The atlas and the pipeline are shared by the views (not per-view state) and destroyed in shutdown only. The atlas is
+// recreated for a new tier size or layer count only while no earlier view of the frame has baked or bound it
+// (kCookieAtlasInUse): such a view's commands in the same command buffer still reference the handle, so a later view then
+// keeps the atlas as it is (upload_cookie_records draws it plain if its layers do not hold that view's plan).
+void Forward3D::record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    if (!desc_.light_cookies || !cookies_allowed()) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    const CookiePlan plan = view_cookie_plan(scene, q, {});
+    if (plan.count == 0) return;
+    if (cookie_pipe_.is_null()) {
+        rhi::GraphicsPipelineDesc fs;
+        fs.vertex_shader = {shaders3d::kFullscreenVS, "fullscreen.vert"};
+        fs.fragment_shader = {shaders3d::kCookieBakeFS, "light_cookie_bake.frag"};
+        fs.state.depth = {};
+        fs.debug_name = "light_cookie.bake";
+        if (auto p = device_->create_pipeline(fs)) {
+            cookie_pipe_ = p.value();
+        } else {
+            MCE_LOG_WARN("render3d: the light cookie bake shader failed, drawing lights without their cookies");
+            desc_.light_cookies = false;
+            return;
+        }
+    }
+    const u32 size = cookie_atlas_size(q), layers = cookie_atlas_layers(q);
+    const rhi::Extent2D extent{size + size / 2, size};
+    if (!cookie_atlas_.is_null() && (cookie_records_ & kCookieAtlasInUse) == 0) {
+        const rhi::TextureDesc have = device_->texture_desc(cookie_atlas_);
+        if (!(have.size == extent) || have.array_layers != layers) destroy(*device_, cookie_atlas_);
+    }
+    if (cookie_atlas_.is_null()) {
+        rhi::TextureDesc d;
+        d.size = extent;
+        d.format = rhi::TextureFormat::RGBA8_UNorm;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.array_layers = static_cast<u16>(layers);
+        d.debug_name = "mce.3d.light_cookies";
+        cookie_atlas_ = device_->create_texture(d);
+        for (u32& k : cookie_keys_) k = 0;
+        if (cookie_atlas_.is_null()) return;
+    }
+    cookie_records_ |= kCookieAtlasInUse;
+    // A later view of the frame bakes into the atlas the first one left (its own size and layers).
+    const rhi::TextureDesc atlas = device_->texture_desc(cookie_atlas_);
+    const u32 s0 = atlas.size.height, n = min<u32>(plan.count, atlas.array_layers);
+    const u32 levels = static_cast<u32>(std::lround(std::log2(f32(s0)))) + 1;
+    bool scoped = false;
+    for (u32 layer = 0; layer < n; ++layer) {
+        const u32 key = plan.key[layer];
+        const u32 tag = layer_tag(*textures_, plan, layer);
+        if (cookie_keys_[layer] == tag) continue;
+        const bool tiled = layer == plan.sun_layer;  // M-LIGHTCOOKIE 40e: the sun's layer repeats
+        if (!scoped) {
+            cmd.push_debug_scope("light_cookies");
+            scoped = true;
+        }
+        // A texture not loaded yet (or not a 2D array: an adopted render texture) bakes white, the plain light.
+        rhi::TextureHandle src = textures_->contains(key) ? textures_->get(key) : textures_->white();
+        if (device_->texture_desc(src).dimension != rhi::TextureDimension::Tex2DArray) src = textures_->white();
+        const rhi::TextureDesc sd = device_->texture_desc(src);
+        const f32 src_size = f32(max(sd.size.width, sd.size.height));
+        const u32 src_mips = max<u32>(sd.mip_levels, 1u);
+        cmd.bind_texture(rhi::bank::kFirstSampler, src, material_sampler_);
+        for (u32 k = 0; k < levels; ++k) {
+            const u32 s = max(s0 >> k, 1u);
+            const u32 ox = k == 0 ? 0u : s0, oy = k == 0 ? 0u : s0 - 2u * s;  // rows from v = 0 (GL's layout)
+            rhi::PassAttachment out;
+            out.texture = cookie_atlas_;
+            out.layer = static_cast<u16>(layer);
+            out.load = k == 0 ? rhi::LoadOp::Clear : rhi::LoadOp::Load;  // the first level's pass clears the whole layer
+            out.clear.color[0] = out.clear.color[1] = out.clear.color[2] = out.clear.color[3] = 1.0f;
+            rhi::RenderPassDesc p;
+            p.colors = Span<const rhi::PassAttachment>(&out, 1);
+            // Rect2D is top-left based; the layer holds GL's layout, whose row 0 is the bottom.
+            p.viewport = rhi::Rect2D{i32(ox), i32(s0 - oy - s), s, s};
+            p.debug_name = "light_cookie.bake";
+            cmd.begin_pass(p);
+            cmd.bind_pipeline(cookie_pipe_);
+            CookieBakeU u{};
+            const f32 ratio = src_size / f32(s);
+            if (ratio > 1.0f) {  // minified: four taps at the source mip one finer than this level
+                const f32 lod = min(std::log2(ratio * 0.5f), f32(src_mips - 1));
+                u.tap = {lod, 1.0f, 0.25f / f32(s), 0.0f};
+            } else {
+                u.tap = {0.0f, 0.0f, 0.0f, 0.0f};
+            }
+            // The clamp comes from the coarser of the two source mips a fractional lod mixes: half a texel of the finer
+            // one lets the coarser's bilinear tap wrap the opposite edge in through the repeat sampler (a non power of
+            // two source, whose levels do not halve evenly, shows it at the border).
+            const u32 read = min(static_cast<u32>(std::ceil(max(u.tap.x, 0.0f))), src_mips - 1);
+            const f32 rw = f32(max(sd.size.width >> read, 1u)), rh = f32(max(sd.size.height >> read, 1u));
+            u.clamp = {0.5f / rw, 0.5f / rh, 1.0f - 0.5f / rw, 1.0f - 0.5f / rh};
+            // The sun's layer tiles, so its levels are baked with the sampler's repeat and no clamp: a level's border
+            // texels then blend the opposite edge as the tiling does (a seamless source stays seamless at every level).
+            if (tiled) u.clamp = {-1.0e6f, -1.0e6f, 1.0e6f, 1.0e6f};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+        }
+        cookie_keys_[layer] = tag;
+    }
+    if (scoped) cmd.pop_debug_scope();
+}
+
+// ---- M-LIGHTCOOKIE 40d / 40e: this view's cookie records (bank kLightCookies) and the light pool with each cookied
+// spot's Light.shadow.z = record + 1, when the atlas holds every layer of the view's plan; 0 (and nothing uploaded: the
+// stand-in of bind_local_shadows stays) otherwise. The result is the record count, with kCookieSunOn when the sun's
+// cookie is in the atlas too (a sun cookie alone uploads no record). cookie_records_ is then what bind_decals and
+// bind_main_state read. Called by both passes that read the cookies: the volumetric injection and the main pass.
+u32 Forward3D::upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    cookie_records_ &= kCookieAtlasInUse;
+    if (!desc_.light_cookies || cookie_atlas_.is_null() || cookie_pipe_.is_null() || !cookies_allowed()) return 0;
+    const Span<const PointLight> lights = scene.point_lights();
+    const QualitySettings q = quality_settings(quality_tier());
+    Array<u32> record_of(mem::heap());
+    record_of.resize(lights.size());
+    const CookiePlan plan = view_cookie_plan(scene, q, record_of.span());
+    const bool sun = plan.sun_layer != ~0u;  // layer 0 (plan_cookies takes the sun's first)
+    if (plan.lights == 0 && !sun) return 0;
+    if (plan.count > device_->texture_desc(cookie_atlas_).array_layers) return 0;
+    for (u32 layer = 0; layer < plan.count; ++layer)
+        if (cookie_keys_[layer] != layer_tag(*textures_, plan, layer)) return 0;  // not baked for this view
+    if (plan.lights > 0) {  // else the stand-in record and the plain pool (bind_main_state) stay: a sun cookie only
+        const ClusterLights& cl = stats_.gpu_clusters ? scene.cluster_setup() : scene.clusters();
+        const Span<const GpuPointLight> pool = cl.lights();
+        Array<GpuPointLight> linked(mem::heap());
+        linked.resize(pool.size());
+        for (u32 i = 0; i < pool.size(); ++i) linked[i] = pool[i];
+        GpuCookieRecord records[kMaxCookieLights] = {};
+        for (u32 i = 0; i < lights.size() && i < linked.size(); ++i) {
+            const u32 r = record_of[i];
+            if (r == ~0u) continue;
+            records[r] = cookie_record(lights[i], plan.layer_of[r]);
+            // params.w: the frustum's width per metre along the axis (2 tan of spot_cookie_matrix's clamped half-angle),
+            // the term cookie_lod takes as 2 * distance * tan(outer).
+            records[r].params.w = 2.0f * std::tan(detail::ranged(lights[i].spot_outer, 0.01f, 1.45f, 0.5f));
+            linked[i].shadow.z = f32(r + 1);
+        }
+        cmd.set_storage_data(rhi::bank::kLightCookies, std::as_bytes(Span<const GpuCookieRecord>(records, plan.lights)));
+        cmd.set_storage_data(rhi::bank::kLightPool, std::as_bytes(linked.span()));
+    }
+    stats_.cookie_lights = plan.lights;
+    stats_.cookie_layers = plan.count;
+    stats_.sun_cookie = sun;
+    cookie_records_ = plan.lights | (sun ? kCookieSunOn : 0u) | kCookieAtlasInUse;
+    return plan.lights | (sun ? kCookieSunOn : 0u);
 }
 
 }  // namespace mce::render

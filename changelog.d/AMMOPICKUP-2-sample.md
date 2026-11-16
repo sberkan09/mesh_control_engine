@@ -1,0 +1,1 @@
+- 09_openworld: five ammo crates on the avenue (30 rounds, one with a grenade, back after 60 s) with an "Ammo" map marker (M-AMMOPICKUP 2).

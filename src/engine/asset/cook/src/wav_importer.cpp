@@ -1,8 +1,8 @@
-// WAV / Ogg Vorbis -> CHNK_SFX: 48 kHz, peak-normalized to -1 dBFS (assets.md §5.2), stored as float32
+// WAV / Ogg Vorbis / MP3 / FLAC -> CHNK_SFX: 48 kHz, peak-normalized to -1 dBFS (assets.md §5.2), stored as float32
 // interleaved ("compress": "pcm") or re-encoded as Ogg Vorbis ("compress": "vorbis", M-AUDIO2 1).
 //
 // sidecar settings: { "normalize": true, "loop": false, "loop_start": 0, "loop_end": 0,
-//                     "compress": "pcm" (.wav) | "vorbis" (.ogg), "quality": 0.4 }
+//                     "compress": "pcm" (.wav, .flac) | "vorbis" (.ogg, .mp3), "quality": 0.4 }
 //   loop_start / loop_end  source-rate frames, [start, end); default to the file's 'smpl' loop (WAV).
 //   Loop points are validated at cook (end > start, inside the clip) so gapless music is a data
 //   guarantee rather than a mixer hope (FR-AST-100).
@@ -10,6 +10,7 @@
 //             the runtime decodes it at load, or page by page when the clip streams.
 //   quality   Vorbis VBR quality, -0.1 .. 1 (0.4 is about 128 kbit/s stereo).
 
+#include "audio_decode.h"
 #include "importer_common.h"
 #include "mce/asset/formats.h"
 #include "mce/asset/vorbis.h"
@@ -34,15 +35,34 @@ bool decode_ogg(Span<const byte> bytes, PcmClip& out, FixedString<128>& why) {
     return true;
 }
 
-// One class for both source formats: `ogg` picks the decoder and the default compression.
+enum class Codec { Wav, Ogg, Mp3, Flac };
+
+// One class for the four source formats: `codec` picks the decoder and the default compression (a lossy source, Ogg
+// and MP3, is stored as Vorbis; WAV and FLAC are stored as PCM, since the size of a lossless file is the author's call).
 class ClipImporter final : public IImporter {
 public:
-    explicit ClipImporter(bool ogg) : ogg_(ogg) {}
-    StringView id() const override { return ogg_ ? "ogg" : "wav"; }
+    explicit ClipImporter(Codec codec) : codec_(codec) {}
+    StringView id() const override {
+        switch (codec_) {
+            case Codec::Ogg: return "ogg";
+            case Codec::Mp3: return "mp3";
+            case Codec::Flac: return "flac";
+            case Codec::Wav: break;
+        }
+        return "wav";
+    }
     u32 version() const override { return 2; }  // 2: "compress" / "quality" (M-AUDIO2 1)
     ChunkType type() const override { return ChunkType::Sfx; }
     bool native() const override { return false; }
-    bool handles_extension(StringView ext) const override { return ext == (ogg_ ? ".ogg" : ".wav"); }
+    bool handles_extension(StringView ext) const override {
+        switch (codec_) {
+            case Codec::Ogg: return ext == ".ogg";
+            case Codec::Mp3: return ext == ".mp3";
+            case Codec::Flac: return ext == ".flac";
+            case Codec::Wav: break;
+        }
+        return ext == ".wav";
+    }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
         const JsonValue s = in.settings;
@@ -50,7 +70,7 @@ public:
         if (!detail::check_keys(s, {"normalize", "loop", "loop_start", "loop_end", "compress", "quality"}, file, kStage, diags))
             return false;
 
-        bool vorbis = ogg_;
+        bool vorbis = codec_ == Codec::Ogg || codec_ == Codec::Mp3;
         if (const JsonValue c = s.get("compress"); c.valid()) {
             const StringView v = c.is_string() ? c.as_string() : StringView();
             if (v != "pcm" && v != "vorbis") {
@@ -68,7 +88,14 @@ public:
 
         PcmClip clip;
         FixedString<128> why;
-        if (!(ogg_ ? decode_ogg(in.source, clip, why) : decode_wav(in.source, clip, why))) {
+        bool decoded = false;
+        switch (codec_) {
+            case Codec::Ogg: decoded = decode_ogg(in.source, clip, why); break;
+            case Codec::Mp3: decoded = decode_mp3(in.source, clip, why); break;
+            case Codec::Flac: decoded = decode_flac(in.source, clip, why); break;
+            case Codec::Wav: decoded = decode_wav(in.source, clip, why); break;
+        }
+        if (!decoded) {
             diags.error(Errc::ImportFailed, file, 0, 0, kStage, why.view());
             return false;
         }
@@ -130,12 +157,14 @@ public:
     }
 
 private:
-    bool ogg_;
+    Codec codec_;
 };
 
 }  // namespace
 
-mem::UniquePtr<IImporter> make_wav_importer() { return mem::make_unique<ClipImporter>(mem::heap(), false); }
-mem::UniquePtr<IImporter> make_ogg_importer() { return mem::make_unique<ClipImporter>(mem::heap(), true); }
+mem::UniquePtr<IImporter> make_wav_importer() { return mem::make_unique<ClipImporter>(mem::heap(), Codec::Wav); }
+mem::UniquePtr<IImporter> make_ogg_importer() { return mem::make_unique<ClipImporter>(mem::heap(), Codec::Ogg); }
+mem::UniquePtr<IImporter> make_mp3_importer() { return mem::make_unique<ClipImporter>(mem::heap(), Codec::Mp3); }
+mem::UniquePtr<IImporter> make_flac_importer() { return mem::make_unique<ClipImporter>(mem::heap(), Codec::Flac); }
 
 }  // namespace mce::cook

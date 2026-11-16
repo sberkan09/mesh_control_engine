@@ -4,9 +4,12 @@
 #include <doctest/doctest.h>
 
 #include <cstdio>
+#include <cstring>
+#include <utility>
 
 #include "mce/core.h"
 #include "shader_spirv.h"
+#include "shaders3d.h"  // render's 3D shaders (M-LENSFLARE 38c case)
 
 using namespace mce;
 using namespace mce::rhi::sdlgpu;
@@ -209,4 +212,327 @@ TEST_CASE("shader_spirv: storage images outside compute are compile errors") {
     REQUIRE_FALSE(r.has_value());
     if (r) return;
     CHECK(r.error().code == Errc::ShaderCompile);
+}
+
+// M-LENSFLARE 38c: the flare's two fragment stages (render's shaders3d.h, the real sources) compile for SDL GPU with
+// their resources where Forward3D::record_flare binds them: FlareU at bank kPass (1), the prepass depth at sampler 7
+// (occlusion), the source at 6 and the 1x1 occlusion at 8 (composite); no storage buffers.
+TEST_CASE("shader_spirv: the lens flare's occlusion and composite stages") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto occ = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kFlareOccFS, "lens_flare_occ.frag", spv, res, log);
+    if (!occ) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(occ.has_value());
+    if (!occ) return;
+    REQUIRE(res.sampler_count == 1);
+    CHECK(res.sampler_slot[0] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+
+    Array<u32> spv2;
+    StageResources res2;
+    auto comp = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kFlareFS, "lens_flare.frag", spv2, res2, log);
+    if (!comp) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(comp.has_value());
+    if (!comp) return;
+    REQUIRE(res2.sampler_count == 2);
+    CHECK(res2.sampler_slot[0] == 6);
+    CHECK(res2.sampler_slot[1] == 8);
+    CHECK(res2.storage_count == 0);
+    CHECK(res2.uniform_count == 2);
+}
+
+// M-OUTLINE 39c: the edge outline's fragment stage (render's shaders3d.h, the real source) compiles for SDL GPU with its
+// resources where Forward3D::record_outline binds them: OutlineU at bank kPass (1), the HDR frame at sampler 6 and the
+// half-resolution prepass at 7; no storage buffers.
+TEST_CASE("shader_spirv: the edge outline stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kOutlineFS, "edge_outline.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}
+
+// M-LIGHTCOOKIE 40c / 40d: the cookie bake stage and the lit stages (render's shaders3d.h, the real sources) compile for
+// SDL GPU. The bake: CookieBakeU at bank kPass (1), the source at sampler 6 (a 2D array), no storage buffers. The lit
+// mesh and terrain stages: all 16 sampler banks, the shared bank 2 (decal texture 2 or the cookie atlas) a 2D array, and
+// six storage buffers (clusters 4, light pool 5, light indices 6, local shadows 11, decals 15 and the cookie records at
+// storage bank 2), under SDL GPU's eight per stage. The lit stages carry the sun's cookie (40e) in PassU and the same
+// atlas (texelFetch at sampler 2); the volumetric injection (40f) is checked below.
+TEST_CASE("shader_spirv: the light cookie bake stage and the lit stages with the cookie records") {
+    FixedString<1024> log;
+    {
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCookieBakeFS, "light_cookie_bake.frag", spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        REQUIRE(res.sampler_count == 1);
+        CHECK(res.sampler_slot[0] == 6);
+        CHECK(res.sampler_kind[0] == SamplerKind::Tex2DArray);
+        CHECK(res.storage_count == 0);
+        CHECK(res.uniform_count == 2);
+    }
+    for (const char* src : {mce::render::shaders3d::kMeshFS, mce::render::shaders3d::kTerrainFS}) {
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, src, "pbr.frag", spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        CHECK(res.sampler_count == 16);
+        bool slot2 = false;
+        for (u32 i = 0; i < res.sampler_count; ++i)
+            if (res.sampler_slot[i] == 2) slot2 = res.sampler_kind[i] == SamplerKind::Tex2DArray;
+        CHECK(slot2);
+        CHECK(res.storage_count == 6);
+        bool cookies = false;
+        for (u32 i = 0; i < res.storage_count; ++i) cookies = cookies || res.storage_binding[i] == 2;
+        CHECK(cookies);
+    }
+    // M-LIGHTCOOKIE 40f: the volumetric injection reads the same cookies (the spot records, the sun's PassU members and
+    // the atlas at the bank the pass has free of decals, 2): the clusters' three lists, the local shadows and the
+    // records (five storage buffers), the atlas a 2D array at sampler 2 beside the shadow maps at 9.
+    {
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kVolInjectFS, "vol_inject.frag", spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        bool slot2 = false, shadow = false;
+        for (u32 i = 0; i < res.sampler_count; ++i) {
+            if (res.sampler_slot[i] == 2) slot2 = res.sampler_kind[i] == SamplerKind::Tex2DArray;
+            shadow = shadow || res.sampler_slot[i] == 9;
+        }
+        CHECK(slot2);
+        CHECK(shadow);
+        CHECK(res.storage_count == 5);
+        bool cookies = false;
+        for (u32 i = 0; i < res.storage_count; ++i) cookies = cookies || res.storage_binding[i] == 2;
+        CHECK(cookies);
+    }
+}
+
+// M-TRANSLUCENT 41d / 41e: the lit mesh and terrain stages with the thin-surface terms (the o_skin.w decode, PassU's
+// p_translucency, the back shadow, the wrap, the two-sided SH9 and irradiance-volume reads) compile for SDL GPU with the
+// resources they had: all 16 sampler banks, the SH9 irradiance (15) and the irradiance volume (5) 2D textures, the same
+// six storage buffers and the uniform banks up to ObjectU (3). No new binding.
+TEST_CASE("shader_spirv: the lit stages with thin-surface translucency and wrap keep their resources") {
+    FixedString<1024> log;
+    const char* srcs[2] = {mce::render::shaders3d::kMeshFS, mce::render::shaders3d::kTerrainFS};
+    for (u32 k = 0; k < 2; ++k) {
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, srcs[k], "pbr.frag", spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        CHECK(res.sampler_count == 16);
+        bool sh9 = false, gi = false;
+        for (u32 i = 0; i < res.sampler_count; ++i) {
+            if (res.sampler_slot[i] == 15) sh9 = res.sampler_kind[i] == SamplerKind::Tex2D;
+            if (res.sampler_slot[i] == 5) gi = res.sampler_kind[i] == SamplerKind::Tex2D;
+        }
+        CHECK(sh9);
+        CHECK(gi);
+        CHECK(res.storage_count == 6);
+        CHECK(res.uniform_count == 4);  // banks up to 3 (ObjectU) declared
+    }
+}
+
+// M-LENSRAIN 42c: the lens rain's fragment stage (render's shaders3d.h, the real source) compiles for SDL GPU with its
+// resources where Forward3D::record_lens_rain binds them: LensRainU at bank kPass (1), the HDR frame at sampler 6; no
+// storage buffers (its u32 hash, constant-bound loops and explicit textureLod / texelFetch go through glslang as is).
+TEST_CASE("shader_spirv: the lens rain stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kLensRainFS, "lens_rain.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 1);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}
+
+// M-HEATHAZE 43c: the heat haze's fragment stage (render's shaders3d.h, the real source) compiles for SDL GPU with its
+// resources where Forward3D::record_heat_haze binds them: HazeU at bank kPass (1), the HDR frame at sampler 6 and the
+// opaque prepass at sampler 7; no storage buffers (its u32 hash, the int -> uint lattice indices, the constant-bound
+// loop and explicit textureLod / texelFetch go through glslang as is).
+TEST_CASE("shader_spirv: the heat haze stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kHazeFS, "haze.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}
+
+// M-UNDERWATER 44c: the underwater fragment stage (render's shaders3d.h, the real source) compiles for SDL GPU with its
+// resources where Forward3D::record_underwater binds them: UnderwaterU at bank kPass (1), the HDR frame at sampler 6 and
+// the opaque prepass (or ao_off_ at detail 0) at sampler 7; no storage buffers (no loop, explicit textureLod /
+// texelFetch, sin and exp go through glslang as is).
+TEST_CASE("shader_spirv: the underwater stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kUnderwaterFS, "underwater.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}
+
+// M-SUNSHAFTS 45c: the sun shafts' two fragment stages (render's shaders3d.h, the real sources) compile for SDL GPU with
+// their resources where Forward3D::record_sun_shafts binds them: ShaftsU at bank kPass (1); the accumulation reads the HDR
+// frame at sampler 6 and the opaque prepass at 7, the composite adds the ray buffer at 8; no storage buffers (a constant
+// loop bound with a uniform break, explicit textureLod / texelFetch, exp of non-positive numbers only).
+TEST_CASE("shader_spirv: the sun shafts' accumulation and composite stages") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kShaftsFS, "sun_shafts.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+    Array<u32> spv2;
+    StageResources res2;
+    auto comp = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kShaftsCompFS, "sun_shafts_comp.frag", spv2, res2, log);
+    if (!comp) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(comp.has_value());
+    if (!comp) return;
+    REQUIRE(res2.sampler_count == 3);
+    CHECK(res2.sampler_slot[0] == 6);
+    CHECK(res2.sampler_slot[1] == 7);
+    CHECK(res2.sampler_slot[2] == 8);
+    CHECK(res2.storage_count == 0);
+    CHECK(res2.uniform_count == 2);
+}
+
+// M-CLOUDSHADOW 51c: the cloud shadow fragment stage (render's shaders3d.h, the real source: the sky's cloud noise through
+// MCE_GLSL_CLOUD_NOISE and CloudShadowU) compiles for SDL GPU with its resources where Forward3D::record_cloud_shadow binds
+// them: CloudShadowU at bank kPass (1), post_source_ at sampler 6 and the opaque prepass at 7; no storage buffers.
+TEST_CASE("shader_spirv: the cloud shadow stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCloudShadowFS, "cloud_shadow.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}
+
+// M-CIRRUS 53b: the sky pass and the water, whose fragment stages carry the cirrus layer (apply_cirrus through
+// MCE_GLSL_SKY_LAYERS, p_cirrus / p_cirrus2 in PassU), compile for SDL GPU (render's shaders3d.h, the real sources); the
+// layer's text alone (kCirrusLayerGLSL, the GL twin test's) is in both. PassU stays at bank kPass (1).
+TEST_CASE("shader_spirv: the sky and water stages with the cirrus layer") {
+    CHECK(std::strstr(mce::render::shaders3d::kSkyFS, mce::render::shaders3d::kCirrusLayerGLSL) != nullptr);
+    CHECK(std::strstr(mce::render::shaders3d::kWaterFS, mce::render::shaders3d::kCirrusLayerGLSL) != nullptr);
+    CHECK(std::strstr(mce::render::shaders3d::kSkyFS, "c = apply_cirrus(c, d, sun, cs);") != nullptr);
+    CHECK(std::strstr(mce::render::shaders3d::kWaterFS, "c = cirrus_layer(c, r, sun, dot(r, sun), pix);") != nullptr);
+    CHECK(std::strlen(mce::render::shaders3d::kSkyFS) < 65535);
+    for (const auto& [src, name] : {std::pair{mce::render::shaders3d::kSkyFS, "sky.frag"},
+                                    std::pair{mce::render::shaders3d::kWaterFS, "water.frag"}}) {
+        FixedString<1024> log;
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, src, name, spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        CHECK(res.uniform_count >= 2);  // FrameU (0) and PassU (1)
+        CHECK(res.storage_count == 0);
+    }
+}
+
+// M-HALO 54b: the sky pass and the water, whose cirrus layer now carries the ice halo (halo_term through
+// MCE_GLSL_HALO, p_halo the last vec4 of PassU), compile for SDL GPU; the halo's text alone (kHaloGLSL, the GL twin
+// test's) is in both, cirrus_layer calls it behind p_halo.x > 0, and the sky stage stays under the 64 KiB budget.
+TEST_CASE("shader_spirv: the sky and water stages with the ice halo") {
+    using mce::render::shaders3d::kHaloGLSL;
+    using mce::render::shaders3d::kSkyFS;
+    using mce::render::shaders3d::kWaterFS;
+    CHECK(std::strstr(kSkyFS, kHaloGLSL) != nullptr);
+    CHECK(std::strstr(kWaterFS, kHaloGLSL) != nullptr);
+    CHECK(std::strstr(kSkyFS, "if (p_halo.x > 0.0) c += halo_term(d, sun, cs, a, pix);") != nullptr);
+    CHECK(std::strstr(kSkyFS, "vec4 p_halo;") != nullptr);
+    CHECK(std::strstr(kSkyFS, "p_free") == nullptr);  // PassU has no free vec4 left
+    std::printf("shader_spirv: kSkyFS %zu bytes, kWaterFS %zu bytes\n", std::strlen(kSkyFS), std::strlen(kWaterFS));
+    CHECK(std::strlen(kSkyFS) < 65536);
+    CHECK(std::strlen(kWaterFS) < 65536);
+    for (const auto& [src, name] : {std::pair{kSkyFS, "sky.frag"}, std::pair{kWaterFS, "water.frag"}}) {
+        FixedString<1024> log;
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, src, name, spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        CHECK(res.uniform_count >= 2);  // FrameU (0) and PassU (1)
+        CHECK(res.storage_count == 0);
+    }
+}
+
+// M-CAUSTICS 52b: the caustics fragment stage (render's shaders3d.h, the real source: MCE_GLSL_CAUSTICS_NOISE and
+// CausticsU) compiles for SDL GPU with its resources where Forward3D::record_caustics binds them: CausticsU at bank kPass
+// (1), the volumetric fog at sampler 4, post_source_ at 6 and the opaque prepass at 7; no storage buffers.
+TEST_CASE("shader_spirv: the caustics stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCausticsFS, "caustics.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 3);
+    CHECK(res.sampler_slot[0] == 4);
+    CHECK(res.sampler_slot[1] == 6);
+    CHECK(res.sampler_slot[2] == 7);
+    for (u32 i = 0; i < 3; ++i) CHECK(res.sampler_kind[i] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
 }

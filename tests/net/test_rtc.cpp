@@ -250,3 +250,10 @@ TEST_CASE("net rtc: snapshot replication runs unchanged over direct links") {
     }));
     CHECK(lobby.relay.stats().forwarded == relayed);
 }
+
+TEST_CASE("rtc: rtc_path_name names every path") {
+    CHECK(rtc_path_name(RtcPath::Relay) == StringView("relay"));
+    CHECK(rtc_path_name(RtcPath::Connecting) == StringView("connecting"));
+    CHECK(rtc_path_name(RtcPath::Direct) == StringView("direct"));
+    CHECK(rtc_path_name(static_cast<RtcPath>(9)) == StringView("?"));
+}

@@ -1,0 +1,1 @@
+- Kit (M-WASTED 2): the respawn wait shows "WASTED" or "BUSTED" as a caption (`Respawn3D::caption`). Record: `docs/milestones/M-WASTED.md`.

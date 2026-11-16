@@ -1,0 +1,1 @@
+- Tests: `source_editable` and the tilemap editor's `tile_rect` and `unbind` now have cases.

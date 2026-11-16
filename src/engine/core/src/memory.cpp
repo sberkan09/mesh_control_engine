@@ -1,4 +1,5 @@
 #include <atomic>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -117,6 +118,14 @@ Allocation LinearArena::allocate(usize size, usize align) {
     MCE_ASSERT_MSG(is_pow2(align), "alignment must be a power of two");
     const usize start = align_up(reinterpret_cast<usize>(base_) + offset_, align) - reinterpret_cast<usize>(base_);
     if (start + size > capacity_) {
+        // Said once, in every build: without asserts the caller gets null and crashes a little later.
+        static std::atomic<bool> reported{false};
+        if (!reported.exchange(true, std::memory_order_relaxed)) {
+            std::fprintf(stderr,
+                         "mce: LinearArena '%s' overflow: %zu bytes asked with %zu of %zu in use (the frame arena's "
+                         "size is AppDesc::frame_arena_size)\n",
+                         name_, size, offset_, capacity_);
+        }
         MCE_ASSERT_MSG(false, "LinearArena overflow");
         return {};
     }

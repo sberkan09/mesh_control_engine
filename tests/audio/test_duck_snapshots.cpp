@@ -169,3 +169,25 @@ TEST_CASE("audio_bridge: AudioDuck drives the ducker; removing it switches it of
     w.tick(1.0 / 60.0, 2);
     CHECK_FALSE(dev->bus_duck(Bus_Music).enabled);
 }
+
+TEST_CASE("AudioSnapshot: kMaxSnapshots count, the one past the limit is left out of the blend") {
+    auto dev = test::offline_device();
+    World w;
+    install(w, *dev);
+    AudioSnapshot snap;
+    snap.bus = AudioBus::Master;
+    snap.active = true;
+    snap.fade_s = 0.f;
+    snap.gain_db = -1.f;
+    for (u32 i = 0; i < AudioRef::kMaxSnapshots - 1; ++i) w.spawn_with(snap);
+    update_mix(w, 0.1f, false);
+    CHECK(dev->bus_trim_db(Bus_Master) == doctest::Approx(-15.f));  // N-1 snapshots, all counted
+
+    w.spawn_with(snap);
+    update_mix(w, 0.1f, false);
+    CHECK(dev->bus_trim_db(Bus_Master) == doctest::Approx(-16.f));  // exactly N
+
+    w.spawn_with(snap);  // N+1
+    update_mix(w, 0.1f, false);
+    CHECK(dev->bus_trim_db(Bus_Master) == doctest::Approx(-16.f));  // the 17th is skipped, not blended
+}

@@ -1,0 +1,1 @@
+- Kit (M-TRAFFICAVOID): test for several cars passing a wreck in a row; the milestone is closed. Record: `docs/milestones/M-TRAFFICAVOID.md`.

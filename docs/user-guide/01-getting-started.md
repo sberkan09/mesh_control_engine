@@ -190,7 +190,8 @@ The first stage, `walls`, is quick and also checks the documents against the rep
   `scripts/ci/sample_coverage.allow` lists it with a reason;
 - `scripts/ci/check_docs.py` fails for a relative link or `#anchor` in any Markdown file that points nowhere, an
   `#include` line of an `mce/` header that names no header, a `-flag` after `mce_player` that no source declares
-  as a console variable, and a `samples/` or `projects/` directory that no test runs. Its accepted misses are in
+  as a console variable, a `samples/` or `projects/` directory that no test runs, and a member of the Luau API tables
+  (`mce.*`, `mission.*`, `clock.*`, ...) that neither the scripting guide nor `docs/engine/script.md` names as `table.member`. Its accepted misses are in
   `scripts/ci/docs.allow` as `kind | file | target | reason`; a line whose miss has gone is itself an error, so the
   lists only shrink. `python3 scripts/ci/check_docs.py --list` prints the current misses in that format.
 

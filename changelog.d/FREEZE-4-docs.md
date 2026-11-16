@@ -1,0 +1,1 @@
+- M-FREEZE step 20d (docs and close): guide section 9.19r completed and the 08-3d Water freezes paragraph, the milestone record and its follow-ups; docs only.

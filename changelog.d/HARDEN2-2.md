@@ -1,0 +1,1 @@
+- Editor, M-HARDEN2: a tilemap whose `tile_size` does not fit a float (such as 1e300) keeps the default instead of saving as `inf`; mutation tests now cover the tilemap and terrain document readers.

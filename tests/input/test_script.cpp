@@ -133,3 +133,78 @@ TEST_CASE("input script: Touch puts a finger down and lifts it, Mouse moves the 
     CHECK(s.evaluate(6).touch_points().size() == 0);
     CHECK(!s.state().pressed(MCE_SID("Point")));
 }
+
+TEST_CASE("input script: clear_segments drops the segments and the script takes new ones") {
+    InputScript s;
+    REQUIRE(s.add("Jump", 1, 5));
+    REQUIRE(s.add("Fire", 2, 3));
+    CHECK_FALSE(s.empty());
+    CHECK(s.segments().size() == 2);
+    s.clear_segments();
+    CHECK(s.empty());
+    CHECK(s.segments().size() == 0);
+    REQUIRE(s.add("Jump", 9, 9));
+    CHECK(s.segments().size() == 1);
+    CHECK(s.segments()[0].from == 9);
+}
+
+namespace {
+std::string actions_line(const char* ticks, u32 first, u32 count) {
+    std::string line = ticks;
+    for (u32 i = first; i < first + count; ++i) line += " a" + std::to_string(i);
+    return line;
+}
+}  // namespace
+
+TEST_CASE("input script: a line holds kMaxActions actions, one more is a parse error") {
+    InputScript at;
+    REQUIRE(at.parse(actions_line("5", 0, kMaxActions) + "\n").has_value());
+    CHECK(at.segments().size() == kMaxActions);
+
+    InputScript over;
+    const Result<void> r = over.parse("1 keep\n" + actions_line("5", 0, kMaxActions + 1) + "\n");
+    REQUIRE_FALSE(r.has_value());
+    CHECK(r.error().code == Errc::ParseError);
+    CHECK(r.error().detail == 2);
+    CHECK(r.error().path.view().find("too many actions") != StringView::npos);
+}
+
+TEST_CASE("input script: more than kMaxActions distinct actions on one tick drop the extra one") {
+    InputScript s;
+    REQUIRE(s.parse(actions_line("5", 0, kMaxActions) + "\n" + actions_line("5", kMaxActions, 1) + "\n").has_value());
+    REQUIRE(s.segments().size() == kMaxActions + 1);
+    const StringId last = s.segments()[kMaxActions].action;
+    const StringId first = s.segments()[0].action;
+
+    const InputState& st = s.evaluate(5);
+    CHECK(st.action_count == kMaxActions);
+    CHECK(st.held(first));
+    CHECK_FALSE(st.held(last));  // the 65th is dropped (and logged), not written past the array
+}
+
+TEST_CASE("input script: an action name of 31 bytes is kept whole, 32 is refused and adds nothing") {
+    const std::string s31(31, 'a'), s32(32, 'a');
+    InputScript s;
+    REQUIRE(s.add(s31, 1, 2));
+    REQUIRE(s.segments().size() == 1);
+    CHECK(s.segments()[0].name.size() == 31);
+    CHECK(StringView(s.segments()[0].name) == StringView(s31));
+
+    CHECK_FALSE(s.add(s32, 1, 2));
+    CHECK(s.segments().size() == 1);  // not cut to the 31-byte action that exists
+
+    // The same through a script line.
+    InputScript line;
+    CHECK_FALSE(line.parse("1 " + s32 + "\n").has_value());
+    CHECK(line.segments().empty());
+}
+
+TEST_CASE("input script: a value that is not a finite number (nan, inf, 1e999) is a parse error") {
+    InputScript s;
+    CHECK(s.parse("5 Move=1e30,-1e30\n").has_value());  // large but finite
+    for (const char* text : {"5 Move=nan\n", "5 Move=inf\n", "5 Move=-inf\n", "5 Move=1e999\n", "5 Move=0.5,nan\n",
+                             "5 Move=infinity,0\n"}) {
+        InputScript bad;
+        CHECK_FALSE(bad.parse(text).has_value());
+    }
+}

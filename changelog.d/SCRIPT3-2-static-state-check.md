@@ -1,0 +1,1 @@
+- The cook rejects more hidden state, M-SCRIPT3 step 2c: writes through a local that points into a top-level table, and writes into global tables, now fail at `file:line:col` instead of at run time.

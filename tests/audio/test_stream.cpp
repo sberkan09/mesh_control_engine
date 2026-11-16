@@ -107,3 +107,23 @@ TEST_CASE("stream slots are limited and recycled on release") {
     test::render(*dev, out, 480);
     CHECK(dev->register_stream(test::payload(clip, 2)).has_value());
 }
+
+TEST_CASE("stream_busy is true while a voice plays the streamed clip and false once it is gone") {
+    auto dev = test::offline_device();
+    Array<f32> clip = ramp_clip(48000);
+    auto s = dev->register_stream(test::payload(clip, 2, 0));
+    REQUIRE(s.has_value());
+    CHECK_FALSE(dev->stream_busy(s.value()));  // nobody plays it yet
+    PlayParams p;
+    p.loop = true;
+    p.bus = Bus_Music;
+    const AudioHandle v = dev->play(s.value(), p);
+    REQUIRE_FALSE(v.is_null());
+    Array<f32> out;
+    test::render(*dev, out, 960);
+    CHECK(dev->stream_busy(s.value()));
+    dev->stop(v, 0.f);
+    test::render(*dev, out, 4800);  // the stop ramp ends, the voice frees the reader
+    CHECK_FALSE(dev->is_playing(v));
+    CHECK_FALSE(dev->stream_busy(s.value()));
+}

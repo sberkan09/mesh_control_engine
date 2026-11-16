@@ -1,0 +1,1 @@
+- Editor, M-SCENELINT step 1: `lint_scene` / `format_lint` find empty and duplicate sibling names, zero scale, non-finite transforms and missing parents in a scene document.

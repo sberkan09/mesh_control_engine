@@ -13,8 +13,13 @@ mce_add_test(test_kit UMBRELLA
         test_ai_budget.cpp
         test_audio_occlusion.cpp
         test_bodies3d.cpp
+        test_contacts3d.cpp
+        test_debug_lines.cpp
+        test_origin3d.cpp
+        test_chunk_lod3d.cpp
         test_coop.cpp
         test_move3d.cpp
+        test_move3d_budget.cpp
         test_captions.cpp
         test_presence.cpp
         test_proclevel.cpp
@@ -22,12 +27,133 @@ mce_add_test(test_kit UMBRELLA
         test_ui_flow.cpp
         test_fsm.cpp
         test_kit3d.cpp
+        test_static_merge3d.cpp
         test_anim3d.cpp
         test_sensors3d.cpp
         test_nav3d.cpp
         test_joints3d.cpp
         test_ragdolls3d.cpp
+        test_roadblock.cpp
+        test_roads.cpp
+        test_traffic.cpp
+        test_crowd.cpp
         test_vehicles3d.cpp
+        test_seats3d.cpp
+        test_combat3d.cpp
+        test_missions.cpp
+        test_inventory.cpp
+        test_loot.cpp
+        test_craft.cpp
+        test_status.cpp
+        test_padding.cpp
+        test_world_clock.cpp
+        test_day_cycle.cpp
+        test_timed_light.cpp
+        test_drive_readout.cpp
+        test_face_velocity.cpp
+        test_hit_marker.cpp
+        test_impact_fx.cpp
+        test_fall_death.cpp
+        test_loadout3d.cpp
+        test_melee3d.cpp
+        test_grenade3d.cpp
+        test_ammopickup3d.cpp
+        test_event_sfx3d.cpp
+        test_weapon_events3d.cpp
+        test_bullet_hole3d.cpp
+        test_tracer3d.cpp
+        test_progress3d.cpp
+        test_vehicle_extras.cpp
+        test_weather.cpp
+        test_weather_env.cpp
+        test_wet_surfaces.cpp
+        test_snow_cover.cpp
+        test_wind_direction.cpp
+        test_wind_direction_extract.cpp
+        test_rain_ripples.cpp
+        test_cloud_layer.cpp
+        test_wind_sway.cpp
+        test_precipitation.cpp
+        test_precipitation_wind.cpp
+        test_thunder_delay.cpp
+        test_lightning_bolt.cpp
+        test_weather_audio.cpp
+        test_world_audio.cpp
+        test_wind_gust.cpp
+        test_ground_mist.cpp
+        test_moon.cpp
+        test_moon_extract.cpp
+        test_atmosphere_extract.cpp
+        test_aurora.cpp
+        test_rainbow.cpp
+        test_meteor.cpp
+        test_season.cpp
+        test_water_ice.cpp
+        test_floater.cpp
+        test_leaf_fall.cpp
+        test_firefly.cpp
+        test_pollen.cpp
+        test_dust.cpp
+        test_flock.cpp
+        test_butterfly.cpp
+        test_dusk_bat.cpp
+        test_snow_sparkle.cpp
+        test_midge.cpp
+        test_cold_breath.cpp
+        test_decal_scatter.cpp
+        test_decal_scatter_extract.cpp
+        test_edge_outline.cpp
+        test_edge_outline_extract.cpp
+        test_heat_haze.cpp
+        test_heat_haze_extract.cpp
+        test_sun_shafts.cpp
+        test_sun_shafts_extract.cpp
+        test_cloud_shadow_extract.cpp
+        test_caustics_extract.cpp
+        test_cirrus.cpp
+        test_halo.cpp
+        test_dynamic_resolution.cpp
+        test_dynamic_resolution_extract.cpp
+        test_underwater_extract.cpp
+        test_lens_flare.cpp
+        test_lens_flare_extract.cpp
+        test_lens_rain.cpp
+        test_lens_rain_extract.cpp
+        test_light_cookie.cpp
+        test_light_cookie_extract.cpp
+        test_light_flicker.cpp
+        test_light_flicker_extract.cpp
+        test_particle_floor.cpp
+        test_firefly_extract.cpp
+        test_pollen_extract.cpp
+        test_dust_extract.cpp
+        test_flock_extract.cpp
+        test_butterfly_extract.cpp
+        test_dusk_bat_extract.cpp
+        test_snow_sparkle_extract.cpp
+        test_midge_extract.cpp
+        test_cold_breath_extract.cpp
+        test_precipitation_extract.cpp
+        test_leaf_fall_extract.cpp
+        test_season_extract.cpp
+        test_water.cpp
+        test_water_flow.cpp
+        test_water_extract.cpp
+        test_gi_visibility_extract.cpp
+        test_water_ice_extract.cpp
+        test_aurora_extract.cpp
+        test_rainbow_extract.cpp
+        test_meteor_extract.cpp
+        test_night_sky_extract.cpp
+        test_ground_mist_extract.cpp
+        test_wind_gust_extract.cpp
+        test_wind_gust_systems.cpp
+        test_rain_splash.cpp
+        test_map_markers.cpp
+        test_wanted3d.cpp
+        test_vehicle_ram.cpp
+        test_impact_damage.cpp
+        test_gta_slice.cpp
         test_particles.cpp
         test_pathfinding.cpp
         test_procgen.cpp
@@ -55,7 +181,7 @@ target_compile_definitions(test_kit PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BI
 # with MCE_GPU_TESTS.
 mce_add_test(test_kit_gl UMBRELLA NO_CTEST SOURCES test_kit_gl.cpp
              DEPS mce::mce_gameplay_kit mce::mce_asset_cook mce::mce_rhi_default)
-target_include_directories(test_kit_gl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_include_directories(test_kit_gl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset ${CMAKE_CURRENT_SOURCE_DIR}/../render)
 target_compile_definitions(test_kit_gl PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp"
                            MCE_TEST_FONT="${PROJECT_SOURCE_DIR}/projects/Kindle/assets/fonts/ProggyClean.ttf")
 if(MCE_GPU_TESTS)

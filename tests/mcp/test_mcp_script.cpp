@@ -16,6 +16,7 @@ using namespace cook_test;
 namespace {
 
 constexpr const char* kFailGuid = "5c000000-0000-4000-8000-0000000000c1";
+constexpr const char* kWorkGuid = "5c000000-0000-4000-8000-0000000000c2";
 
 std::string script_project(const char* name) {
     const std::string root = fresh_dir(name);
@@ -75,4 +76,34 @@ TEST_CASE("run_headless: a scene script that fails is reported with its file and
     c.ok("scene_undo");
     c.ok("scene_save");
     CHECK_FALSE(c.ok("run_headless", R"({"ticks":5,"log_lines":0})").v().get("script_errors").valid());
+}
+
+TEST_CASE("test_run: a script check pins a scene script's step profile") {
+    const std::string root = script_project("mcp_script_steps");
+    write_file(root + "/assets/scripts/work.luau", "function update()\n    local n = 0\n    for i = 1, 20 do n = n + i end\nend\n");
+    write_file(root + "/assets/scripts/work.luau.mceasset", sidecar(kWorkGuid, "script"));
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("entity_create", std::string(R"({"name":"Script: work","transform":false,"components":{"ScriptSystem":{"script":"guid:)") + kWorkGuid +
+                              R"("}}})");
+    c.ok("scene_save");
+    auto r = c.ok("test_run", R"({"test":{"name":"steps","scene":"scenes/demo.mcscene","ticks":5,"assert":[)"
+                              R"({"script":"work.luau","metric":"updates",">=":3},)"
+                              R"({"script":"scripts/work.luau","metric":"peak_steps","<=":500},)"
+                              R"({"script":"work.luau","metric":"peak_steps","<=":5},)"
+                              R"({"script":"work.luau","metric":"avg_steps",">":0},)"
+                              R"({"script":"nope.luau","metric":"updates",">=":0}]}})");
+    const cook::JsonValue checks = r.v().get("results").at(0).get("checks");
+    CHECK(checks.at(0).get("ok").as_bool());
+    CHECK(checks.at(1).get("ok").as_bool());
+    CHECK_FALSE(checks.at(2).get("ok").as_bool());  // 20 loop steps are more than 5
+    CHECK(checks.at(3).get("ok").as_bool());
+    CHECK_FALSE(checks.at(4).get("ok").as_bool());
+    CHECK(str(checks.at(4).get("note")).find("scripts/work.luau") != std::string::npos);
+    CHECK(str(checks.at(0).get("check")) == "script work.luau updates");
+    CHECK(c.fails("test_run", R"({"test":{"name":"x","scene":"scenes/demo.mcscene","assert":[{"script":"work.luau","metric":"steps","<=":1}]}})")
+              .find("peak_steps | avg_steps") != std::string::npos);
+    CHECK(c.fails("test_run", R"({"test":{"name":"x","scene":"scenes/demo.mcscene","assert":[{"script":"work.luau","metric":"updates"}]}})")
+              .find("needs a comparison") != std::string::npos);
 }

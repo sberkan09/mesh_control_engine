@@ -1,0 +1,1 @@
+- Tests: ui `find_child`, `first_child`, `next_sibling`, `set_font_role` and `set_blocks_pointer`.

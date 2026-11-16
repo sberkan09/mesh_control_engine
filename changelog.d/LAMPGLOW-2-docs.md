@@ -1,0 +1,1 @@
+- M-LAMPGLOW step 37c: the milestone and the ROADMAP row are closed (the user guide already describes `emissive_follow`).

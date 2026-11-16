@@ -77,6 +77,18 @@ i32 Process::wait(Array<char>* output) {
     return exit_code_;
 }
 
+usize Process::read_some(char* buf, usize cap) {
+    if (!handle_ || !captured_ || cap == 0) return 0;
+    SDL_IOStream* out = SDL_GetProcessOutput(sdl(handle_));  // non-blocking: 0 bytes and NOT_READY while the child is quiet
+    if (!out) return 0;
+    for (;;) {
+        const size_t n = SDL_ReadIO(out, buf, cap);
+        if (n > 0) return n;
+        if (SDL_GetIOStatus(out) != SDL_IO_STATUS_NOT_READY) return 0;  // EOF or error
+        SDL_Delay(5);
+    }
+}
+
 void Process::kill() {
     if (handle_) SDL_KillProcess(sdl(handle_), true);
 }

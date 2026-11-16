@@ -83,9 +83,11 @@ TEST_CASE("fuzz: Luau source survives mutation in the checks and the compiler") 
     CHECK(compiled > 0);
 }
 
-// KNOWN GAP (M-FUZZ 3 finding): Luau's bytecode loader trusts its input. A mutated chunk trips
-// LUAU_ASSERT in debug builds (lvmload.cpp: constant index >= sizek) and reads out of bounds in release,
-// so it is off by default; MCE_FUZZ_BYTECODE=1 runs it to reproduce. See docs/milestones/M-FUZZ.md.
+// Luau's bytecode loader trusts its input (M-FUZZ 3 finding): a mutated chunk trips LUAU_ASSERT in debug
+// builds (lvmload.cpp: constant index >= sizek) and reads out of bounds in release. The fix is a trust
+// boundary, not a verifier (M-SCRIPT2 0): only the game's own pack may carry bytecode, a mod pack's Script
+// entries are dropped at mount (tests/asset/test_mods.cpp). This case calls add_bytecode directly, which is
+// what a trusted caller does, so it stays off by default; MCE_FUZZ_BYTECODE=1 runs it to reproduce.
 TEST_CASE("fuzz: Luau bytecode survives mutation in the host" * doctest::skip(std::getenv("MCE_FUZZ_BYTECODE") == nullptr)) {
     log::set_level(log::Level::Off);
     auto good = script::compile("fuzz", kSource);

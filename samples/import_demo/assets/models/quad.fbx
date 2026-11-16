@@ -1,0 +1,50 @@
+; FBX 7.4.0 project file
+FBXHeaderExtension:  {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7400
+	Creator: "import_demo gen_art.py"
+}
+GlobalSettings:  {
+	Version: 1000
+	Properties70:  {
+		P: "UpAxis", "int", "Integer", "",1
+		P: "UpAxisSign", "int", "Integer", "",1
+		P: "FrontAxis", "int", "Integer", "",2
+		P: "FrontAxisSign", "int", "Integer", "",1
+		P: "CoordAxis", "int", "Integer", "",0
+		P: "CoordAxisSign", "int", "Integer", "",1
+		P: "UnitScaleFactor", "double", "Number", "",100
+	}
+}
+Objects:  {
+	Geometry: 1001, "Geometry::Quad", "Mesh" {
+		Vertices: *12 {
+			a: -1,0,-1,1,0,-1,1,0,1,-1,0,1
+		}
+		PolygonVertexIndex: *4 {
+			a: 0,2,1,-4
+		}
+		GeometryVersion: 124
+	}
+	Model: 1002, "Model::Quad", "Mesh" {
+		Version: 232
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0,0,0
+			P: "Lcl Rotation", "Lcl Rotation", "", "A",0,0,0
+			P: "Lcl Scaling", "Lcl Scaling", "", "A",1,1,1
+		}
+	}
+	Material: 1003, "Material::Red", "" {
+		Version: 102
+		ShadingModel: "phong"
+		MultiLayer: 0
+		Properties70:  {
+			P: "DiffuseColor", "Color", "", "A",0.8,0.2,0.2
+		}
+	}
+}
+Connections:  {
+	C: "OO",1002,0
+	C: "OO",1001,1002
+	C: "OO",1003,1002
+}

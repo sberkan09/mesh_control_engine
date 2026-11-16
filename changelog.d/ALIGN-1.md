@@ -1,0 +1,1 @@
+- Editor, M-ALIGN: Edit > Align lines the selected entities up on the left, middle, right, bottom or top, and distributes three or more evenly; one undo step each.

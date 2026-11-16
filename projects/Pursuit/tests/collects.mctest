@@ -1,0 +1,29 @@
+{
+  "name": "the autopilot collects all five coins around the wall while the grunt chases",
+  "scene": "scenes/main.mcscene",
+  "ticks": 2400,
+  "actor": "Hero",
+  "input": [
+    {
+      "from": 2,
+      "to": 2,
+      "actions": {
+        "Jump": true
+      }
+    }
+  ],
+  "assert": [
+    {
+      "log_contains": "coin 1"
+    },
+    {
+      "log_contains": "coin 5"
+    },
+    {
+      "log_contains": "arena cleared"
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}

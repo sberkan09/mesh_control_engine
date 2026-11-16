@@ -1,0 +1,1 @@
+- M-WEATHERAUDIO milestone record (rain and wind ambience beds driven from the weather, opt-in, user-supplied clips), planned in `docs/milestones/M-WEATHERAUDIO.md`.

@@ -1,0 +1,1 @@
+- Test-only: a scene change to a target past 255 bytes is NotFound and keeps the world (HARDEN5-2).

@@ -1,0 +1,1 @@
+- Detour defense in depth, M-FUZZ step 6: `cmake/patch_recast.cmake` (a FetchContent patch, like pl_mpeg's) makes DetourTileCache's `simplifyContour` drop a contour of fewer than two points instead of dividing by zero, a second line behind the nav mesh loader's layer checks.

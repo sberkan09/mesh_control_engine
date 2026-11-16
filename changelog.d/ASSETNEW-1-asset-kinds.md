@@ -1,0 +1,1 @@
+- Asset kinds seam, M-ASSETNEW step 1: the table of JSON source asset kinds (extension, format, fields, starter object) moves from the MCP asset tools to editor core (`mce/editor/asset_kinds.h`) so the Assets panel can share it; MCP clients see no change.

@@ -296,3 +296,129 @@ TEST_CASE("loc: the player's choice survives a relaunch") {
         CHECK(l.locale() == "en");
     }
 }
+
+TEST_CASE("loc: plural_form_name names every form and parse_plural_form reads it back") {
+    for (u8 i = 0; i <= static_cast<u8>(PluralForm::Other); ++i) {
+        const PluralForm f = static_cast<PluralForm>(i);
+        PluralForm back = f == PluralForm::Other ? PluralForm::Zero : PluralForm::Other;
+        REQUIRE(parse_plural_form(StringView(plural_form_name(f)), back));
+        CHECK(back == f);
+    }
+    CHECK(StringView(plural_form_name(PluralForm::One)) == StringView("one"));
+    CHECK(StringView(plural_form_name(PluralForm::Other)) == StringView("other"));
+    CHECK(StringView(plural_form_name(static_cast<PluralForm>(9))) == StringView("?"));
+    PluralForm f = PluralForm::Few;
+    CHECK_FALSE(parse_plural_form("lots", f));
+    CHECK(f == PluralForm::Few);  // a refused name leaves the output alone
+}
+
+TEST_CASE("loc: valid_key takes letters, digits, '_', '-' and '.', and nothing else") {
+    CHECK(valid_key("menu.start"));
+    CHECK(valid_key("A-b_c.9"));
+    CHECK_FALSE(valid_key(""));
+    CHECK_FALSE(valid_key("has space"));
+    CHECK_FALSE(valid_key("a#one"));  // '#' belongs to the plural suffix of a CSV row
+    CHECK_FALSE(valid_key("caf\xC3\xA9"));
+}
+
+TEST_CASE("loc: valid_utf8 refuses overlongs, surrogates, truncation and code points past U+10FFFF") {
+    CHECK(valid_utf8(""));
+    CHECK(valid_utf8("plain ascii"));
+    CHECK(valid_utf8("\xC3\xA7ok g\xC3\xBCzel"));  // two-byte letters
+    CHECK(valid_utf8("\xE2\x82\xAC"));             // U+20AC, three bytes
+    CHECK(valid_utf8("\xF0\x9F\x98\x80"));         // U+1F600, four bytes
+    CHECK(valid_utf8("\xF4\x8F\xBF\xBF"));         // U+10FFFF, the last one
+    CHECK_FALSE(valid_utf8("\xC0\x80"));           // overlong NUL
+    CHECK_FALSE(valid_utf8("\xE0\x80\x80"));       // overlong three-byte
+    CHECK_FALSE(valid_utf8("\xED\xA0\x80"));       // a surrogate (U+D800)
+    CHECK_FALSE(valid_utf8("\xF4\x90\x80\x80"));   // U+110000
+    CHECK_FALSE(valid_utf8("\xC3"));               // cut short
+    CHECK_FALSE(valid_utf8("\xE2\x82"));           // cut short
+    CHECK_FALSE(valid_utf8("\x80"));               // a continuation byte alone
+    CHECK_FALSE(valid_utf8("\xC3\x28"));           // a bad continuation
+    CHECK_FALSE(valid_utf8("\xFF"));
+}
+
+TEST_CASE("loc: try_text reports a hit, and set_default_locale changes the last fallback") {
+    Localization l = en_tr();
+    CHECK(l.default_locale() == "en");
+
+    const LocaleTag device[] = {"tr-TR"};
+    l.set_preferred(device);
+    StringView out;
+    CHECK(l.try_text("menu.play", out));
+    CHECK(out == "Oyna");
+    CHECK(l.try_text("menu.quit", out));  // only the base table has it
+    CHECK(out == "Quit");
+    out = "untouched";
+    CHECK_FALSE(l.try_text("menu.missing", out));
+    CHECK(out == "untouched");  // a miss leaves the output alone
+
+    // With Turkish as the base, a player who prefers German ends up on Turkish, not English.
+    Localization d = en_tr();
+    d.set_default_locale("tr");
+    CHECK(d.default_locale() == "tr");
+    const LocaleTag german[] = {"de-DE"};
+    d.set_preferred(german);
+    CHECK(d.locale() == "tr");
+    CHECK(d.text("menu.play") == "Oyna");
+}
+
+TEST_CASE("loc: case mapping covers Cyrillic, Greek and Latin Extended-A, and passes other scripts through") {
+    // Cyrillic: the basic range and the U+0400..U+040F block (Ё, Ђ ...).
+    CHECK(upper("ru", "привет") == "ПРИВЕТ");
+    CHECK(lower("ru", "ПРИВЕТ") == "привет");
+    CHECK(upper("ru", "ёж") == "ЁЖ");
+    CHECK(lower("ru", "ЁЖ") == "ёж");
+    CHECK(upper("uk", "ѓ") == "Ѓ");
+    CHECK(lower("uk", "Ѓ") == "ѓ");
+
+    // Greek, with the final sigma going up to the capital Σ.
+    CHECK(upper("el", "αβγ") == "ΑΒΓ");
+    CHECK(lower("el", "ΑΒΓ") == "αβγ");
+    CHECK(upper("el", "ς") == "Σ");
+
+    // Latin Extended-A: pairs where the even code point is the capital, and where the odd one is.
+    CHECK(upper("pl", "ąćęłńóśźż") == "ĄĆĘŁŃÓŚŹŻ");
+    CHECK(lower("pl", "ĄĆĘŁŃÓŚŹŻ") == "ąćęłńóśźż");
+    CHECK(upper("cs", "ĺľň") == "ĹĽŇ");
+    CHECK(lower("cs", "ĹĽŇ") == "ĺľň");
+    CHECK(upper("fr", "ÿ") == "Ÿ");
+    CHECK(lower("fr", "Ÿ") == "ÿ");
+    CHECK(upper("en", "ſ") == "S");  // long s
+    CHECK(upper("en", "ı") == "I");  // dotless i
+
+    // Three- and four-byte sequences are kept as they are, between letters that change.
+    CHECK(upper("en", "a€😀b") == "A€😀B");
+    CHECK(lower("en", "A€😀B") == "a€😀b");
+    CHECK(upper("ja", "かな") == "かな");
+}
+
+TEST_CASE("loc: case mapping passes malformed UTF-8 bytes through untouched") {
+    CHECK(upper("en",
+                "a\xFF"
+                "b") ==
+          "A\xFF"
+          "B");                                      // a byte that starts no sequence
+    CHECK(upper("en", "a\xE2\x82") == "A\xE2\x82");  // a three-byte sequence cut short
+    CHECK(lower("en",
+                "A\xC3"
+                "(B") ==
+          "a\xC3"
+          "(b");                           // a continuation byte that is not one
+    CHECK(upper("en", "\x80") == "\x80");  // a lone continuation byte
+}
+
+TEST_CASE("loc: plural forms of Hebrew, Slovak and the languages without plurals") {
+    CHECK(plural_form("he", 1) == PluralForm::One);
+    CHECK(plural_form("he", 2) == PluralForm::Two);
+    CHECK(plural_form("he", 5) == PluralForm::Other);
+    CHECK(plural_form("sk", 1) == PluralForm::One);
+    CHECK(plural_form("sk", 4) == PluralForm::Few);
+    CHECK(plural_form("sk", 5) == PluralForm::Other);
+    CHECK(plural_form("be", 2) == PluralForm::Few);
+    CHECK(plural_form("uk", 25) == PluralForm::Many);
+    CHECK(plural_form("ar", 1) == PluralForm::One);
+    CHECK(plural_form("ar", 100) == PluralForm::Other);
+    for (const char* l : {"zh", "ko", "th", "vi", "id"}) CHECK(plural_form(l, 1) == PluralForm::Other);
+}

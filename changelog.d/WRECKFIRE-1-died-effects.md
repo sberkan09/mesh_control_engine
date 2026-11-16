@@ -1,0 +1,1 @@
+- Kit (M-WRECKFIRE): `FireOn::Died`; `ParticleBurst` drives a `ParticleEmitter3D` (`keep_emitting` for lasting smoke); `SfxTrigger` plays at the entity with `AudioSpatial`. Sample: every `09_openworld` car burns, smokes, sounds and shakes the camera when it dies. Record: `docs/milestones/M-WRECKFIRE.md`.

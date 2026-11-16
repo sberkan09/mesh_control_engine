@@ -1,0 +1,1 @@
+- Editor, M-SCENELINT step 2: `mce scene lint <scene>...` prints the mistakes in scenes and exits 1 when there are findings.

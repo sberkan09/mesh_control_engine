@@ -7,7 +7,7 @@
 #   sample_net_arena                   windowed, local: you and three bots, split across the screen
 if(TARGET mce_net)
     mce_add_executable(sample_net_arena UMBRELLA SOURCES main.cpp
-                       DEPS mce::mce_net mce::mce_asset mce::mce_ecs_scene mce::mce_platform mce::mce_render mce::mce_rhi_default)
+                       DEPS mce::mce_net mce::mce_asset mce::mce_ecs_scene mce::mce_scene mce::mce_platform mce::mce_render mce::mce_rhi_default)
     target_include_directories(sample_net_arena PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../common)
     mce_sample_pack(sample_net_arena)
     if(MCE_BUILD_TESTS)

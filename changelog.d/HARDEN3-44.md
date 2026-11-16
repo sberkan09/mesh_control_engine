@@ -1,0 +1,1 @@
+- Tests: `NavGrid::cell_bounds` and `cell_of_index` (row-major inverse of `index`, bounds on the lattice, outside cells blocked).

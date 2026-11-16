@@ -1,0 +1,15 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "b0a30000-0000-4000-8000-00000000005b",
+  "name": "reflect_ball",
+  "base_color": [
+    0.9,
+    0.9,
+    0.9,
+    1
+  ],
+  "metallic": 0.0,
+  "roughness": 0.6,
+  "double_sided": false
+}

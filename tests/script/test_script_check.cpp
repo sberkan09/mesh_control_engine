@@ -155,3 +155,55 @@ TEST_CASE("script check: mce.d.luau lists the registry, sorted") {
     script::write_definitions(again);
     CHECK(std::string(again.data(), again.size()) == text);
 }
+
+TEST_CASE("script check: the inventory global is typed") {
+    const Problems ok = check(R"(
+function update()
+    mce.each("Inventory", function(e)
+        inventory.add(e, "potion", 3)
+        local id, qty = inventory.slot(e, 1)
+        if inventory.has(e, "potion") and inventory.count(e, "potion") > 2 and inventory.weight(e) < 9000 then
+            inventory.equip(e, 1, "weapon")
+            inventory.unequip(e, "weapon")
+            local dropped: number = inventory.drop(e, 2)
+            local can: boolean = inventory.can_craft(e, "bandage")
+            if can then inventory.craft(e, "bandage", e) end
+        end
+        mce.log(tostring(id) .. tostring(qty))
+    end)
+end
+)");
+    INFO(ok.all);
+    CHECK(ok.list.empty());
+    const Problems bad = check(R"(function update()
+    inventory.add(1, "potion")
+    inventory.eqip(mce.find("x"), 1)
+end
+)");
+    INFO(bad.all);
+    CHECK(has(bad, "3:5 Key 'eqip' not found"));
+    CHECK_FALSE(bad.list.empty());
+}
+
+TEST_CASE("script check: the status global is typed") {
+    const Problems ok = check(R"(
+function update()
+    mce.each("StatusEffects", function(e)
+        status.add(e, "bleed", "poison", 4, 2.5, e)
+        status.add(e, "shield", "armor", 0.25, 10)
+        local on: boolean = status.has(e, "bleed")
+        if on then status.clear(e, "bleed") end
+        status.clear(e)
+    end)
+end
+)");
+    INFO(ok.all);
+    CHECK(ok.list.empty());
+    const Problems bad = check(R"(function update()
+    status.add(mce.find("x"), "bleed", "poison", 4)
+    status.hass(mce.find("x"), "bleed")
+end
+)");
+    INFO(bad.all);
+    CHECK_FALSE(bad.list.empty());
+}

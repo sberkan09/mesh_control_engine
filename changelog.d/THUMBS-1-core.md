@@ -1,0 +1,1 @@
+- Asset thumbnails, M-THUMBS step 1: `mce/editor/asset_thumb.h` draws a small picture of an asset on the CPU (textures downscaled over a checker, audio as a waveform, meshes flat-shaded from a three-quarter view, a plain tile for other kinds); the same asset always gives the same pixels.

@@ -1,0 +1,1 @@
+- M-SNOWCOVER milestone record (snow that settles on up-facing surfaces while it snows and melts after, opt-in), planned in `docs/milestones/M-SNOWCOVER.md`.

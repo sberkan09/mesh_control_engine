@@ -540,10 +540,11 @@ nlohmann/json and GitHub Actions; none of them was adopted.*
 | Math | `mce::math` scalar-first | DirectXMath jun2026 as test oracle only (`test_math_oracle`) | **hand-written** |
 | 2D physics | `mce_physics2d` (sequential impulse) | Box2D v3.1.1 as test-time oracle only (ADR-0016, Box2D wall) | **hand-written** |
 | 3D physics | Jolt (ADR-0003), behind `mce_physics3d` | v5.6.0 via FetchContent (JPH and Jolt link walls) | embedded |
-| Audio | `mce_audio` mixer on the SDL3 callback; Ogg Vorbis clips (ADR-0044) | stb_vorbis (stb @2c980bb) decodes, in `mce_asset` only (stb_vorbis wall); libvorbis v1.3.7 + libogg v1.3.5 encode, cook-only (libvorbis wall) | **hand-written** mixer |
+| Audio | `mce_audio` mixer on the SDL3 callback; Ogg Vorbis clips (ADR-0044) | stb_vorbis (stb @2c980bb) decodes, in `mce_asset` only (stb_vorbis wall); libvorbis v1.3.7 + libogg v1.3.5 encode, cook-only (libvorbis wall); dr_mp3 and dr_flac (dr_libs @dfe8377, public domain or MIT-0, David Reid) decode `.mp3` and `.flac` at cook time only (dr_libs wall and link wall, budgeted allocator) | **hand-written** mixer |
 | Video | `render::VideoDecoder` over pl_mpeg (ADR-0043), `kit::VideoPlayer` | pl_mpeg @c871f2b (MIT, MPEG-1 + MP2), in `mce_render` only (pl_mpeg wall) | embedded |
 | Reflection | `mce_refl` | — | **hand-written** |
-| Asset pipeline | `mce_asset` + `mce_asset_cook` + `mce_cook` | cook-only: stb @2c980bb (images, stb_truetype fonts), meshoptimizer v0.25, glslang; JSON is the hand-written codec `mce/cook/json.h` (errors carry line and column) | **hand-written** |
+| Asset pipeline | `mce_asset` + `mce_asset_cook` + `mce_cook` | cook-only: stb @2c980bb (images incl. Radiance `.hdr`, stb_truetype fonts), tinyexr v1.0.12 (`.exr` skies; BSD-3-Clause, Syoyo Fujita and contributors, with its bundled miniz, MIT; tinyexr wall), bc7enc_rdo @b943862 (BC7/BC5/BC4/BC1 desktop textures; MIT or Unlicense, Richard Geldreich; scalar C++, `-ffp-contract=off`, pinned by commit; bc7enc wall), meshoptimizer v0.25, glslang; JSON is the hand-written codec `mce/cook/json.h` (errors carry line and column) | **hand-written** |
+| FBX import | ufbx (ADR-0047), cook-only: `mce_ufbx` from one `ufbx.c` via `ufbx_impl.c`, `-ffp-contract=off` / `/fp:precise`, OBJ and geometry-cache readers compiled out | v0.23.1 pinned by commit `26a482a`; MIT or Unlicense (Samuli Raivio), MIT taken; ufbx wall and ufbx link wall | embedded |
 | Editor UI | Dear ImGui (docking) | v1.92.9b-docking; editor-only (ImGui wall); the gizmo is hand-rolled (ADR-0025, ADR-0030), no ImGuizmo | editor-only |
 | Logging | spdlog | v1.17.0, `SPDLOG_NO_EXCEPTIONS` | boilerplate |
 | Profiling | Tracy client | v0.14.1, on-demand | tool |
@@ -553,8 +554,8 @@ nlohmann/json and GitHub Actions; none of them was adopted.*
 | GPU debugging | RenderDoc / Xcode Metal capture | external tools | external |
 
 External-dependency rule (unchanged): `mce_core` links only spdlog + Tracy; anything new needs an ADR. Cook-time
-deps (stb, meshoptimizer, glslang via `mce_asset_cook`) never reach runtime targets (`check_walls.py` stb, meshopt
-and cook walls). Box2D and DirectXMath are test-lane only. Jolt links only into `mce_physics3d`.
+deps (stb, meshoptimizer, glslang via `mce_asset_cook`; ufbx for FBX) never reach runtime targets (`check_walls.py` stb, meshopt,
+ufbx and cook walls). Box2D and DirectXMath are test-lane only. Jolt links only into `mce_physics3d`.
 
 ---
 

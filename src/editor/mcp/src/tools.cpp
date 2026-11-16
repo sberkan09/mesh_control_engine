@@ -14,6 +14,7 @@
 
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
+#include "mce/cook/impostor.h"
 #include "mce/cook/scene_text.h"
 #include "mce/ecs/transform.h"
 #include "mce/input/script.h"
@@ -243,6 +244,18 @@ void write_script_errors(JsonWriter& w, const HeadlessRun& run) {
     if (run.script_errors.empty()) return;
     w.key("script_errors").begin_array();
     for (const ScriptFailure& f : run.script_errors) w.begin_object().key("script").str(f.name.view()).key("error").str(f.error.view()).end_object();
+    w.end_array();
+}
+
+void write_script_profile(JsonWriter& w, const HeadlessRun& run) {
+    if (run.scripts.empty()) return;
+    w.key("scripts").begin_array();
+    for (const ScriptProfile& s : run.scripts) {
+        w.begin_object().key("script").str(s.name.view()).key("failed").boolean(s.failed);
+        w.key("updates").num_u(s.updates).key("peak_steps").num_u(s.peak_steps).key("budget_steps").num_u(s.budget_steps);
+        w.key("avg_steps").num_f(s.updates ? static_cast<double>(s.total_steps) / static_cast<double>(s.updates) : 0.0);
+        w.end_object();
+    }
     w.end_array();
 }
 
@@ -805,6 +818,86 @@ bool navmesh_bake(ToolCall& c) {
     return true;
 }
 
+// Every SceneChunk's area merged into one HLOD proxy, assets/hlod/<scene>/chunk_<id>.mchlod, and the chunk's
+// ChunkLod3D pointed at it (M-OPENWORLD A3); scene_save keeps that.
+bool hlod_bake(ToolCall& c) {
+    if (!need_project(c)) return false;
+    kit::HlodBakeSettings3D settings;
+    if (const cook::JsonValue v = arg(c, "min_size"); v.valid()) {
+        if (!v.is_number() || v.as_number() < 0.0 || v.as_number() > 10000.0)
+            return arg_missing(c, "min_size", "a number of metres from 0 to 10000");
+        settings.min_size = static_cast<f32>(v.as_number());
+    }
+    cook::ImpostorSettings impostor;
+    bool with_impostor = false;
+    if (const cook::JsonValue v = arg(c, "impostor"); v.valid()) {
+        if (!v.is_bool()) return arg_missing(c, "impostor", "true or false");
+        with_impostor = v.as_bool();
+    }
+    if (const cook::JsonValue v = arg(c, "texels_per_metre"); v.valid()) {
+        if (!v.is_number() || v.as_number() < 0.25 || v.as_number() > 64.0)
+            return arg_missing(c, "texels_per_metre", "a number from 0.25 to 64");
+        impostor.texels_per_metre = static_cast<f32>(v.as_number());
+    }
+    editor::EntityId only = editor::kNoEntity;
+    if (arg(c, "entity").valid() && !arg_entity(c, "entity", only)) return false;
+    editor::EditorSession& session = c.server.session();
+    const Result<Array<editor::EditorSession::HlodBakeRow>> r = session.bake_hlod(settings, only, with_impostor ? &impostor : nullptr);
+    if (!r) {
+        FixedString<512> msg;
+        format_error(r.error(), msg);
+        return fail(c, msg.view());
+    }
+    c.out.begin_object();
+    c.out.key("chunks").begin_array();
+    for (const editor::EditorSession::HlodBakeRow& row : r.value()) {
+        const kit::HlodBakeStats3D& st = row.stats;
+        c.out.begin_object();
+        c.out.key("entity").num_u(row.chunk);
+        if (!row.proxy.is_null()) {
+            c.out.key("proxy").str(asset::to_string(row.proxy).view());
+            if (const editor::ProjectAsset* a = session.project().find(row.proxy)) {
+                cook::String path("assets/");
+                path += a->path.view();
+                c.out.key("path").str(path.view());
+                cook::String hash;
+                cook::appendf(hash, "%016llx", static_cast<unsigned long long>(file_content_hash(session.project().asset_path(a->path.view()).view())));
+                c.out.key("content_hash").str(hash.view());
+            }
+            c.out.key("bytes").num_u(row.bytes);
+        }
+        c.out.key("meshes").num_u(st.meshes);
+        c.out.key("merged").num_u(st.merged);
+        c.out.key("small").num_u(st.small);
+        c.out.key("skipped").num_u(st.skipped);
+        c.out.key("submeshes").num_u(st.submeshes);
+        c.out.key("triangles").num_u(st.triangles);
+        c.out.key("lod_levels").num_u(st.lod_levels);
+        if (!row.impostor.is_null()) {
+            const cook::ImpostorStats& is = row.impostor_stats;
+            c.out.key("impostor").begin_object();
+            c.out.key("mesh").str(asset::to_string(row.impostor).view());
+            if (const editor::ProjectAsset* a = session.project().find(row.impostor)) {
+                cook::String path("assets/");
+                path += a->path.view();
+                c.out.key("path").str(path.view());
+            }
+            c.out.key("bytes").num_u(row.impostor_bytes);
+            c.out.key("groups").num_u(is.groups);
+            c.out.key("boxes").num_u(is.boxes);
+            c.out.key("cards").num_u(is.cards);
+            c.out.key("quads").num_u(is.quads);
+            c.out.key("untextured").num_u(is.untextured);
+            c.out.key("atlas").begin_array().num_u(is.atlas_width).num_u(is.atlas_height).end_array();
+            c.out.end_object();
+        }
+        c.out.end_object();
+    }
+    c.out.end_array();
+    c.out.end_object();
+    return true;
+}
+
 // ---------------------------------------------------------------- build
 
 void write_report(JsonWriter& w, const cook::CookReport& r) {
@@ -834,11 +927,55 @@ bool cook_run(ToolCall& c) {
             paths.push_back(cook::String(pv.at(i).as_string()));
         }
     }
+    u64 max_texture_size = 0;  // 0 = no limit; a bad value (not a power of two from 1 to 16384) is the cook's error
+    if (!arg_uint(c, "max_texture_size", max_texture_size, 1, 0x7FFFFFFF, false)) return false;
+    StringView textures_arg;  // "rgba8" (default) or "bc"; astc is a phone cook (scripts/ship.py), not an editor one
+    if (!arg_string(c, "textures", textures_arg, false)) return false;
+    cook::TextureCompression textures = cook::TextureCompression::None;
+    if (textures_arg == "bc") textures = cook::TextureCompression::Bc;
+    else if (!textures_arg.empty() && textures_arg != "rgba8") return arg_missing(c, "textures", "\"rgba8\" or \"bc\"");
     progress(c.server, c.progress_token, 0, 1);
-    const cook::CookReport& r = c.server.session().cook(pack, adopt, paths.span(), skip_errors);
+    const cook::CookReport& r = c.server.session().cook(pack, adopt, paths.span(), skip_errors, static_cast<u32>(max_texture_size), textures);
     progress(c.server, c.progress_token, 1, 1);
     c.out.begin_object();
     write_report(c.out, r);
+    {  // the size report: cooked bytes by asset type, the five biggest assets, textures cut by max_size / max_texture_size
+        const cook::SizeReport& s = r.sizes;
+        c.out.key("sizes").begin_object();
+        c.out.key("textures").num_u(s.textures);
+        c.out.key("meshes").num_u(s.meshes);
+        c.out.key("audio").num_u(s.audio);
+        c.out.key("scenes").num_u(s.scenes);
+        c.out.key("other").num_u(s.other);
+        c.out.key("total").num_u(s.total());
+        c.out.key("texture_count").num_u(s.texture_count);
+        c.out.key("textures_downscaled").num_u(s.textures_downscaled);
+        c.out.key("largest").begin_array();
+        for (const cook::SizeEntry& e : s.largest) {
+            c.out.begin_object();
+            c.out.key("path").str(e.path.view());
+            c.out.key("bytes").num_u(e.bytes);
+            c.out.end_object();
+        }
+        c.out.end_array();
+        c.out.end_object();
+    }
+    {  // the import summary: one entry per mesh model (cached models report the same numbers; warnings count this run's only)
+        c.out.key("meshes").begin_array();
+        for (const cook::MeshSummary& m : r.meshes) {
+            c.out.begin_object();
+            c.out.key("path").str(m.path.view());
+            c.out.key("triangles").num_u(m.triangles);
+            c.out.key("submeshes").num_u(m.submeshes);
+            c.out.key("materials").num_u(m.materials);
+            c.out.key("joints").num_u(m.joints);
+            c.out.key("clips").num_u(m.clips);
+            c.out.key("lod_levels").num_u(m.lod_levels);
+            c.out.key("warnings").num_u(m.warnings);
+            c.out.end_object();
+        }
+        c.out.end_array();
+    }
     if (r.subset) {
         c.out.key("skipped").num_u(r.skipped);
         c.out.key("subset").boolean(true);
@@ -1383,6 +1520,7 @@ bool run_headless_tool(ToolCall& c) {
     write_log_lines(c.out, lines.span(), static_cast<usize>(log_lines));
     c.out.end_object();
     write_script_errors(c.out, h);
+    write_script_profile(c.out, h);
     if (inspecting) c.out.key("inspect").raw(inspect.json.view());
     if (trace.active()) {
         c.out.key("trace");
@@ -1508,7 +1646,7 @@ const ToolDef kTools[] = {
      R"({"type":"object","properties":{"type":{"type":"string","description":"Texture, Font, Sfx, Scene, Mesh, Material, ..."}}})",
      asset_list},
     {"asset_set_import_settings",
-     "Replace an asset's importer settings in its .mceasset sidecar (texture: {\"srgb\": bool, \"mips\": bool}; a normal map or LUT needs srgb false; video (.mpg): {\"audio\": bool, \"normalize\": bool}). Keys are validated by the next cook_run.",
+     "Replace an asset's importer settings in its .mceasset sidecar (texture: {\"srgb\": bool, \"mips\": bool, \"max_size\": 1024} where max_size is a power of two that halves a bigger image before its mips, to shrink the pack; \"compress\": \"none\"|\"auto\"|\"bc7\"|\"bc5\"|\"bc4\"|\"bc1\"|\"astc\" picks the block format under a cook with textures \"bc\" (none keeps RGBA8: pixel art, LUTs; auto picks by content); a normal map or LUT needs srgb false; video (.mpg): {\"audio\": bool, \"normalize\": bool}). Keys are validated by the next cook_run.",
      R"({"type":"object","properties":{"path":{"type":"string","description":"Path under assets/, e.g. textures/rock_n.png"},"guid":{"type":"string","description":"\"guid:<uuid>\" instead of path"},"settings":{"type":"object"}},"required":["settings"]})",
      asset_set_import_settings},
     {"entity_create",
@@ -1563,6 +1701,22 @@ const ToolDef kTools[] = {
      "the asset, its content_hash (the same scene bakes byte-identical), the tile grid, layers, input triangles and "
      "bytes. Without a baked asset the surface is baked when the scene starts.",
      kNoArgs, navmesh_bake},
+    {"hlod_bake",
+     "Bake an HLOD proxy for every SceneChunk of the open scene (or only `entity`): the area scene's visible rigid "
+     "MeshRefs with opaque or masked materials merged into one mesh per material (each source's LOD levels kept), "
+     "positions relative to the chunk entity, written to assets/hlod/<scene>/chunk_<entity id>.mchlod; the chunk's "
+     "ChunkLod3D `proxy` points at it (the component is added when missing; scene_save keeps it). The proxy draws "
+     "while the area is not loaded. Meshes smaller than min_size metres (default 1) are left out. Re-baking keeps the "
+     "file and GUID; the same scene bakes byte-identical (content_hash). Returns per chunk the mesh counts (merged, "
+     "small, skipped), submeshes, triangles and LOD levels. impostor: also bake the far stand-in (a box per root "
+     "entity with orthographic albedo captures on its sides and top, cross cards for tall thin groups such as trees) "
+     "into chunk_<entity id>_far.png + _far.mchlod and point ChunkLod3D `impostor` at it; the row then has an "
+     "impostor object (groups, boxes, cards, quads, untextured, atlas size).",
+     R"j({"type":"object","properties":{"entity":{"description":"a SceneChunk entity id or name; default every chunk"},)j"
+     R"j("min_size":{"type":"number","description":"metres; smaller meshes are left out (default 1)"},)j"
+     R"j("impostor":{"type":"boolean","description":"also bake the impostor (default false)"},)j"
+     R"j("texels_per_metre":{"type":"number","description":"impostor capture resolution, 0.25..64 (default 4)"}},"additionalProperties":false})j",
+     hlod_bake},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
     {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
@@ -1579,9 +1733,14 @@ const ToolDef kTools[] = {
      "could not be cooked with its first error (assets that depend on a failed one are blocked); the rest still "
      "cooks, as it does without skip_errors, but the pack is written only by a run with no errors. A scene "
      "component or field the loaded module does not know fails the cook: rebuild the module (module_build, or `mce "
-     "build`) and restart the server if it was not started with --module. Returns counts, diagnostics with "
-     "file:line and the output paths (relative to the project folder).",
-     R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false},"paths":{"type":"array","items":{"type":"string"}},"skip_errors":{"type":"boolean","default":false}}})",
+     "build`) and restart the server if it was not started with --module. max_texture_size: cap the largest side of "
+     "PNG/JPG textures at this many pixels (a power of two, 1..16384; default no limit) so the pack shrinks: bigger "
+     "ones are box-halved before their mips, a sidecar \"max_size\" (asset_set_import_settings) smaller than it wins; "
+     "changing it re-cooks the textures. textures: \"rgba8\" (default) or \"bc\" to store color textures as BC7/BC5/BC4/BC1 blocks (about a quarter of the size; desktop packs only, phones and the web need their own cook) per the sidecar \"compress\" key; switching it re-cooks everything. Returns counts, diagnostics with "
+     "file:line, the output paths (relative to the project folder) and sizes: cooked bytes by type (textures, meshes, "
+     "audio, scenes, other), the five largest assets, and how many textures the cap downscaled; meshes: one entry per 3D model "
+     "(path, triangles, submeshes, materials, joints, clips, lod_levels, warnings; the numbers are read from the cooked file, so a cached model reports them too, but warnings counts this run's only).",
+     R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false},"paths":{"type":"array","items":{"type":"string"}},"skip_errors":{"type":"boolean","default":false},"max_texture_size":{"type":"integer","minimum":1,"maximum":16384,"description":"Cap on a PNG/JPG texture's largest side, a power of two; default no limit"},"textures":{"type":"string","enum":["rgba8","bc"],"default":"rgba8","description":"Texture storage: rgba8, or bc for BC7/BC5/BC4/BC1 blocks in desktop packs"}}})",
      cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
     {"asset_delete", "Delete a source file under assets/ together with its .mceasset sidecar and its CREDITS.md row (a font's "
@@ -1614,7 +1773,7 @@ Span<const ToolDef> tool_table() {
     static const Array<ToolDef> all = [] {
         Array<ToolDef> a;
         for (const ToolDef& t : kTools) a.push_back(t);
-        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), procgen_tool_table(), timeline_tool_table(), bt_tool_table(), script_tool_table(), skeleton2d_tool_table(), import_tool_table(), views_tool_table()})
+        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), roads_tool_table(), procgen_tool_table(), timeline_tool_table(), bt_tool_table(), debugview_tool_table(), thumb_tool_table(), script_tool_table(), skeleton2d_tool_table(), import_tool_table(), views_tool_table()})
             for (const ToolDef& t : group) a.push_back(t);
         return a;
     }();

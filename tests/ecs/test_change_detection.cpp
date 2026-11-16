@@ -167,3 +167,14 @@ TEST_CASE("change detection: ticks survive counter wraparound") {
     w.tick(1.0 / 60, 40);
     CHECK(w.resource<Seen>().changed == 0);
 }
+
+TEST_CASE("change detection: tick_newer compares ticks relative to now, across a wrap") {
+    using ecs::detail::tick_newer;
+    CHECK(tick_newer(10, 5, 20));  // 10 is younger than 5
+    CHECK_FALSE(tick_newer(5, 10, 20));
+    CHECK_FALSE(tick_newer(7, 7, 20));  // the same tick is not newer
+    // Across the u32 wrap: tick 2 was stamped after tick 0xFFFFFFF0 when now is 5.
+    CHECK(tick_newer(2, 0xFFFFFFF0u, 5));
+    CHECK_FALSE(tick_newer(0xFFFFFFF0u, 2, 5));
+    CHECK(ecs::detail::kMaxChangeAge == (3u << 30));
+}

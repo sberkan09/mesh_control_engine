@@ -1,0 +1,1 @@
+- M-INVENTORY plan (2026-10-18): milestone record and ROADMAP row for items, inventories, equipment and loot as data.

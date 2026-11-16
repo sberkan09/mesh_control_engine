@@ -7,6 +7,7 @@
     mce example [<Name>] [--dest dir]           copy an example project out of the SDK (no name: list them)
     mce build <project> [--config Debug|Release] [-D<var>=<v>...]  configure (find_package(MCE)) + build
     mce play <project> [player flags...]        run the game (its host) from the build
+    mce test <project> [path]                   play the project's .mctest scenarios (no agent needed)
     mce headless <project> [--ticks N] [flags]  run it without a window; prints the state hash
     mce editor <project> [editor flags...]      the editor with the game module loaded
     mce mcp <project> [--allow-cheats]          the MCP server over stdio with the module loaded
@@ -29,6 +30,13 @@
                                                 checkout's scripts/ship.py: needs the Emscripten SDK)
     mce serve <zip | folder | project> [--port N] [--lan] [--open]   play a web build locally (the right
                                                 MIME types and headers; browsers do not run file:// pages)
+    mce scene diff <before> <after>             what changed between two .mcscene files (exit 1 when they differ)
+    mce scene lint <scene>...                   mistakes in scenes that load fine (exit 1 when there are findings)
+    mce scene stats <scene>...                  what a scene holds: entities, depth, components in use, bounds
+    mce scene find <scene>... [--name P] [--component T] [--prefab]   the entities that match (exit 1 when none)
+    mce scene fmt <scene>... [--write]          check scenes are in the canonical text, or rewrite them (exit 1 when not)
+    mce perf [<project | file.mcperf>] [--json]   read a perf capture (perf_run's cooked/.perf/last.mcperf, or the player's
+                                                -perf_capture file): the frame cost and the draw calls by cause
     mce friction [<project>...] [--out file] [--json]   collect the agents' friction notes (friction.jsonl,
                                                 written by the MCP tool report_friction) into one backlog
     mce update [<project>...] [--release [tag]] [--no-pull]  reinstall this SDK from where it came from, then rebuild
@@ -99,6 +107,19 @@ class Project:
         self.game = games[0] if games else None
         self.build = self.dir / "build"
         self.start_scene = str(self.meta.get("start_scene") or "").removeprefix("guid:")
+
+    def start_scene_path(self):
+        """The path under assets/ of the scene `start_scene` names (the MCP run_headless tool wants a path, not a guid), or None."""
+        if not self.start_scene:
+            return None
+        assets = self.dir / "assets"
+        for f in sorted(assets.rglob("*.mcscene")):
+            try:
+                if self.start_scene in f.read_text(encoding="utf-8", errors="replace"):
+                    return f.relative_to(assets).as_posix()
+            except OSError:
+                pass
+        return None
 
     @property
     def host(self):
@@ -237,9 +258,31 @@ def cmd_example(args):
     return 0
 
 
-def cook_script_pack(p):
+def max_texture_size_flag(value):
+    """['--max-texture-size', 'N'] for mce_cook (nothing for None); exits on a value mce_cook would refuse."""
+    if value is None:
+        return []
+    if not 1 <= value <= 16384 or value & (value - 1):
+        sys.exit(f"mce: --max-texture-size {value} is not valid: use a power of two from 1 to 16384 (for example 1024), "
+                 f"or leave the flag out for no limit")
+    return ["--max-texture-size", str(value)]
+
+
+def textures_flag(value, ship=False):
+    """['--textures', V] for mce_cook (nothing for None). `mce ship` offers rgba8|bc (astc is a phone cook:
+    scripts/ship.py); an invalid value exits with the fix."""
+    if value is None:
+        return []
+    allowed = ("rgba8", "bc") if ship else ("rgba8", "bc", "astc")
+    if value not in allowed:
+        sys.exit(f"mce: --textures {value} is not valid: use {' or '.join(allowed)}"
+                 + (" (phones cook astc with scripts/ship.py --target android|ios)" if value == "astc" else ""))
+    return ["--textures", value]
+
+
+def cook_script_pack(p, max_texture_size=None, textures=None):
     """A script project has no build: cooking assets/ (which checks the scripts) is it. Incremental."""
-    return run([tool("mce_cook"), p.dir, "--pack"])
+    return run([tool("mce_cook"), p.dir, "--pack"] + max_texture_size_flag(max_texture_size) + textures_flag(textures, True))
 
 
 def cmd_build(args):
@@ -336,11 +379,148 @@ def cmd_mcp(args):
     return run([tool("mce_mcp")] + module + ["--project", p.dir] + args.rest, exec_=True)
 
 
+def mcp_call(cmd, tool_name, arguments):
+    """Call one tool of the project's MCP server without an agent: spawn the server on stdio, call the tool once and
+    return its structured result (used by `mce test` and `mce inspect`)."""
+    srv = subprocess.Popen([str(c) for c in cmd], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    n = 0
+
+    def request(method, params):
+        nonlocal n
+        n += 1
+        srv.stdin.write(json.dumps({"jsonrpc": "2.0", "id": n, "method": method, "params": params}) + "\n")
+        srv.stdin.flush()
+        line = srv.stdout.readline()
+        if not line:
+            sys.exit("mce: the MCP server closed its output before answering")
+        return json.loads(line)
+
+    try:
+        request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "mce", "version": "1"}})
+        r = request("tools/call", {"name": tool_name, "arguments": arguments}).get("result", {})
+    finally:
+        srv.stdin.close()
+        srv.wait(timeout=60)
+    if r.get("isError") or r.get("structuredContent") is None:
+        sys.exit(f"mce: {tool_name} failed: " + (r.get("content") or [{}])[0].get("text", "")[:400])
+    return r["structuredContent"]
+
+
+def cmd_test(args):
+    p = Project(args.project)
+    p.built(host=False)
+    module = [] if p.script else ["--module", p.module]
+    out = mcp_call([tool("mce_mcp")] + module + ["--project", p.dir], "test_run", {"path": args.path} if args.path else {})
+    results = out.get("results", [])
+    for r in results:
+        name = r.get("file") or r.get("name")
+        if r.get("ok"):
+            print(f"  pass  {name}")
+            continue
+        bad = [c.get("check", "?") for c in r.get("checks", []) if not c.get("ok")]
+        print(f"  FAIL  {name}: {r.get('error') or ', '.join(bad)}")
+        for e in r.get("script_errors", []) or []:
+            print(f"        script {e.get('script')}: {e.get('error')}")
+    print(f"tests: {out.get('passed', 0)} passed, {out.get('failed', 0)} failed")
+    if not results:
+        print("mce: no .mctest found (scenarios live under the project's tests/ folder)")
+        return 1
+    return 1 if out.get("failed", 0) else 0
+
+
+def print_trace(trace):
+    """One row per sampled tick, one column per traced field (`run_headless`'s `trace`)."""
+    series = trace.get("series") or []
+    ticks = trace.get("ticks") or []
+
+    def cell(v):
+        if isinstance(v, float):
+            return f"{v:.4g}"
+        if isinstance(v, list):
+            return "(" + ", ".join(cell(x) for x in v) + ")"
+        return "-" if v is None else str(v)
+
+    heads = ["tick"] + [f"{s['entity']}:{s['field']}" for s in series]
+    rows = [[str(t)] + [cell(s["values"][i]) if i < len(s.get("values", [])) else "-" for s in series] for i, t in enumerate(ticks)]
+    widths = [max(len(h), *(len(r[c]) for r in rows)) if rows else len(h) for c, h in enumerate(heads)]
+    print("  ".join(h.rjust(w) for h, w in zip(heads, widths)))
+    for r in rows:
+        print("  ".join(c.rjust(w) for c, w in zip(r, widths)))
+    if trace.get("truncated"):
+        print(f"(truncated at {len(ticks)} rows)")
+
+
+def cmd_inspect(args):
+    """Run the game headless and print the live component values of entities (the `run_headless` tool's inspect)."""
+    if not (args.entity or args.component or args.trace):
+        sys.exit("mce: inspect needs --component <Type> (every entity with it), --entity <id or name> and/or --trace <entity>:<Component.path>")
+    fields = []
+    for t in args.trace or []:
+        ent, sep, field = t.partition(":")
+        if not sep or not ent or not field:
+            sys.exit(f"mce: --trace '{t}' is <entity id or name>:<Component.path>, e.g. Hero:LocalTransform.position.x")
+        fields.append({"entity": int(ent) if ent.isdigit() else ent, "field": field})
+    p = Project(args.project)
+    p.built(host=False)
+    module = [] if p.script else ["--module", p.module]
+    insp = {}
+    if args.entity:
+        insp["entities"] = [int(e) if e.isdigit() else e for e in args.entity]
+    if args.component:
+        insp["component"] = args.component
+    if args.show:
+        insp["show"] = [t for t in args.show.split(",") if t]
+    arguments = {"ticks": args.ticks, "log_lines": 0}
+    if insp:
+        arguments["inspect"] = insp
+    if fields:
+        arguments["trace"] = {"every": args.every, "fields": fields}
+    scene = args.scene or p.start_scene_path()
+    if scene:
+        arguments["scene"] = scene
+    out = mcp_call([tool("mce_mcp")] + module + ["--project", p.dir], "run_headless", arguments)
+    if insp:
+        print(json.dumps(out.get("inspect", {}), indent=2))
+    if fields:
+        print_trace(out.get("trace") or {})
+    print(f"{args.ticks} ticks, state_hash {out.get('state_hash', '?')}", file=sys.stderr)
+    errs = out.get("script_errors") or []
+    for e in errs:
+        print(f"script {e.get('script')}: {e.get('error')}", file=sys.stderr)
+    return 3 if errs else 0
+
+
+def cmd_profile(args):
+    """Run the game headless and print what each scene script cost (the `run_headless` tool's `scripts`)."""
+    p = Project(args.project)
+    p.built(host=False)
+    module = [] if p.script else ["--module", p.module]
+    arguments = {"ticks": args.ticks, "log_lines": 0}
+    scene = p.start_scene_path()
+    if scene:
+        arguments["scene"] = scene
+    out = mcp_call([tool("mce_mcp")] + module + ["--project", p.dir], "run_headless", arguments)
+    scripts = out.get("scripts") or []
+    if not scripts:
+        print("mce: the scene runs no scripts")
+        return 1
+    width = max(len(s["script"]) for s in scripts)
+    print(f"{'script'.ljust(width)}  {'updates':>8}  {'avg steps':>10}  {'peak steps':>10}  {'budget':>8}  {'peak/budget':>11}")
+    for s in scripts:
+        budget = s.get("budget_steps") or 0
+        share = f"{100.0 * s['peak_steps'] / budget:.1f}%" if budget else "-"
+        print(f"{s['script'].ljust(width)}  {s['updates']:>8}  {s['avg_steps']:>10.1f}  {s['peak_steps']:>10}  {budget:>8}  {share:>11}"
+              + ("  FAILED" if s.get("failed") else ""))
+    print(f"{args.ticks} ticks, state_hash {out.get('state_hash', '?')}")
+    return 3 if any(s.get("failed") for s in scripts) else 0
+
+
 def cmd_cook(args):
     p = Project(args.project)
     p.built(host=False)
     module = [] if p.script else ["--module", p.module]
-    return run([tool("mce_cook")] + module + [p.dir] + args.rest)
+    return run([tool("mce_cook")] + module + [p.dir] + max_texture_size_flag(args.max_texture_size)
+               + textures_flag(args.textures) + args.rest)
 
 
 def story_compiler():
@@ -363,6 +543,16 @@ def cmd_import(args):
     return mce_import.main(args.rest)
 
 
+def cmd_content(args):
+    import mce_content  # the open-licence content ledger (M-OPENWORLD D2), installed beside this script
+    return mce_content.main(args.rest)
+
+
+def cmd_retarget(args):
+    import mce_retarget  # humanoid animation retargeting (M-OPENWORLD D3), installed beside this script
+    return mce_retarget.main(args.rest)
+
+
 def sdk_version():
     version = SHARE / "VERSION"
     lines = version.read_text(encoding="utf-8").splitlines() if version.is_file() else []
@@ -382,6 +572,9 @@ def engine_checkout():
 
 
 def cmd_ship_web(args, p):
+    if args.textures == "bc":
+        sys.exit("mce: --textures bc is not offered for --target web: a web pack serves every browser, phones "
+                 "included, so ship it rgba8 (the default)")
     # A web build cross-compiles the engine with the project (cmake/MceProject.cmake links the game in),
     # which the installed SDK has no libraries for: it runs from the engine checkout.
     checkout = engine_checkout()
@@ -401,12 +594,13 @@ def cmd_ship_web(args, p):
         cmd.append("--smoke")
     if args.smoke_ticks:
         cmd += ["--smoke-ticks", str(args.smoke_ticks)]
+    cmd += max_texture_size_flag(args.max_texture_size)
     return run(cmd, cwd=checkout)
 
 
 def cmd_ship_script(args, p):
     """A script project ships the stock player, the engine library, the pack and a launcher."""
-    if cook_script_pack(p):
+    if cook_script_pack(p, args.max_texture_size, args.textures):
         return 1
     version, stamp = sdk_version()
     version = args.version or p.meta.get("version") or version
@@ -452,6 +646,7 @@ def cmd_ship(args):
         # The browser build (and phones, with the engine checkout's scripts/ship.py --target android|ios) builds
         # the stock player with the project's pack: user guide 27.7.
         return cmd_ship_web(args, p) if args.target == "web" else cmd_ship_script(args, p)
+    cap = max_texture_size_flag(args.max_texture_size) + textures_flag(args.textures, True)
     if args.target == "web":
         if args.steam:
             sys.exit("mce: --steam ships the desktop build")
@@ -459,6 +654,13 @@ def cmd_ship(args):
     p.built()
     if not p.pack.is_file():
         sys.exit(f"mce: {p.pack} is missing: run `mce build {p.dir}` first")
+    pack = p.pack
+    if cap:
+        # `mce build` cooks at full size: re-cook the project with the cap into <project>/assets.mce and ship that pack
+        # (it prints the size report; the build tree's pack stays as it was). `cap` holds --max-texture-size and --textures.
+        if run([tool("mce_cook"), "--module", p.module, p.dir, "--pack"] + cap):
+            sys.exit("mce: the re-cook failed; nothing was shipped")
+        pack = p.dir / "assets.mce"
     version, stamp = sdk_version()
     version = args.version or p.meta.get("version") or version
     # The same OS tag as scripts/ship.py, so both tools name a project's zip alike.
@@ -470,7 +672,7 @@ def cmd_ship(args):
         f"{p.name}{EXE}": p.host,
         p.module.name: p.module,
         ENGINE_LIB: LIB / ENGINE_LIB,
-        "assets.mce": p.pack,
+        "assets.mce": pack,
     }
     for name, src in files.items():
         if not src.is_file():
@@ -708,6 +910,101 @@ def cmd_version(args):
     return 0
 
 
+def perf_capture_path(where):
+    """A .mcperf file, or a project folder's last perf_run capture."""
+    path = pathlib.Path(where)
+    if path.is_dir():
+        path = path / "cooked" / ".perf" / "last.mcperf"
+    if not path.is_file():
+        sys.exit(f"mce: {path} does not exist (perf_run, an MCP tool, writes <project>/cooked/.perf/last.mcperf; "
+                 f"the player writes one with -perf_capture <file>)")
+    return path
+
+
+def perf_draw_causes(cap):
+    """[(cause, mean per frame, max, hint)] largest mean first, from the per-frame counters; the file names its
+    causes, so a capture from another engine version still reads. Counts are machine independent."""
+    names = cap.get("draw_causes") or []
+    hints = cap.get("draw_cause_hints") or []
+    frames = [f.get("counters", {}) for f in cap.get("frames", [])]
+    rows = []
+    for i, name in enumerate(names):
+        col = [(c.get("draw_causes") or [])[i] if i < len(c.get("draw_causes") or []) else 0 for c in frames]
+        if col and max(col) > 0:
+            rows.append((name, sum(col) // len(col), max(col), hints[i] if i < len(hints) else ""))
+    rows.sort(key=lambda r: (-r[1], names.index(r[0])))
+    instanced = [c.get("draws_instanced", 0) for c in frames]
+    runs = [c.get("runs_instanced", 0) for c in frames]
+    n = len(frames) or 1
+    return rows, sum(instanced) // n, sum(runs) // n
+
+
+def perf_report(cap, path):
+    """The text `mce perf` prints. Only the counters are deterministic; the times are the machine's."""
+    out = []
+    summary = cap.get("summary", {})
+    frames = summary.get("frames", len(cap.get("frames", [])))
+    out.append(f"{path}: {cap.get('app', '?')} on {cap.get('backend', '?')}, scene {cap.get('scene', '?')}, {frames} frames")
+    for key, label in (("frame_ms", "frame"), ("sim_ms", "sim"), ("render_ms", "render"), ("gpu_ms", "gpu")):
+        st = summary.get(key) or {}
+        if st.get("count"):
+            out.append(f"  {label + ' ms':<10} p50 {st['p50']:.2f}  p95 {st['p95']:.2f}  max {st['max']:.2f}")
+    k = summary.get("counters_avg", {})
+    out.append(f"  per frame (mean): {k.get('draws', 0)} draw calls, {k.get('triangles', 0)} triangles, "
+               f"{k.get('meshes', 0)} meshes, {k.get('sprites', 0)} sprites")
+    rows, inst_draws, inst_runs = perf_draw_causes(cap)
+    out.append("")
+    out.append("draw calls by cause (3D scene draws per frame, mean over the capture)")
+    if not rows and not inst_draws:
+        out.append("  none: the capture drew no 3D (or it predates the report)")
+        return "\n".join(out)
+    total = inst_draws + sum(r[1] for r in rows)
+    out.append(f"  {'cause':<16}{'draws':>7}{'max':>7}  what to change")
+    out.append(f"  {'instanced':<16}{inst_draws:>7}{'':>7}  folded into {inst_runs} instanced draw(s): nothing to do")
+    for name, mean, mx, hint in rows:
+        out.append(f"  {name:<16}{mean:>7}{mx:>7}  {hint}")
+    out.append(f"  {'total':<16}{total:>7}")
+    return "\n".join(out)
+
+
+def cmd_perf(args):
+    path = perf_capture_path(args.where)
+    try:
+        cap = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        sys.exit(f"mce: {path} is not JSON: {e}")
+    if cap.get("format") != "mce-perf":
+        sys.exit(f'mce: {path} is not a .mcperf capture ("format" must be "mce-perf")')
+    if args.json:
+        rows, inst_draws, inst_runs = perf_draw_causes(cap)
+        print(json.dumps({"file": str(path), "instanced_draws": inst_draws, "instanced_runs": inst_runs,
+                          "draw_causes": [{"cause": n, "avg": a, "max": m, "hint": h} for n, a, m, h in rows]}, indent=2))
+    else:
+        print(perf_report(cap, path))
+    return 0
+
+
+def cmd_scene(args):
+    # The tools own stdout and the exit code (diff: 0 identical, 1 differ; lint: 0 none, 1 findings; 2 unreadable),
+    # so no "mce:" command line.
+    if args.scene_command == "lint":
+        return subprocess.call([tool("mce_scene_lint")] + args.scenes)
+    if args.scene_command == "stats":
+        return subprocess.call([tool("mce_scene_stats")] + args.scenes)
+    if args.scene_command == "fmt":
+        return subprocess.call([tool("mce_scene_fmt")] + args.scenes + (["--write"] if args.write else []))
+    if args.scene_command == "find":
+        cmd = [tool("mce_scene_find")] + args.scenes
+        if args.name:
+            cmd += ["--name", args.name]
+        if args.component:
+            cmd += ["--component", args.component]
+        if args.prefab:
+            cmd.append("--prefab")
+        return subprocess.call(cmd)
+    return subprocess.call([tool("mce_scene_diff"), args.before, args.after])
+
+
 def main(argv):
     ap = argparse.ArgumentParser(prog="mce", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="command", metavar="<command>")
@@ -740,6 +1037,12 @@ def main(argv):
                             ("cook", cmd_cook, "cook the project's assets (module loaded)")):
         s = sub.add_parser(name, help=help_)
         s.add_argument("project")
+        if name == "cook":
+            s.add_argument("--max-texture-size", type=int, metavar="N",
+                           help="cap PNG/JPG textures at N pixels on the longest side (a power of two, 1..16384); "
+                                "default: no limit")
+            s.add_argument("--textures", metavar="MODE",
+                           help="rgba8 (default), bc (BC7/BC5/BC4/BC1 blocks for desktop packs) or astc (phones)")
         s.add_argument("rest", nargs=argparse.REMAINDER, help="flags passed through")
         s.set_defaults(fn=fn)
 
@@ -754,6 +1057,14 @@ def main(argv):
     s.add_argument("rest", nargs=argparse.REMAINDER, help="aseprite|spine|dragonbones <export.json> [--out f] [--name n] [--werror|--strict]")
     s.set_defaults(fn=cmd_import)
 
+    s = sub.add_parser("content", help="the open-licence content ledger: list, fetch and cook CC0 / CC-BY packs into a project")
+    s.add_argument("rest", nargs=argparse.REMAINDER, help="list|info|check|fetch|add|verify|credits ... (mce content --help)")
+    s.set_defaults(fn=cmd_content)
+
+    s = sub.add_parser("retarget", help="retarget humanoid animation clips from other glTF files onto a character's skeleton")
+    s.add_argument("rest", nargs=argparse.REMAINDER, help="<source.glb>... --onto <character.glb> [--out f.glb] (mce retarget --help)")
+    s.set_defaults(fn=cmd_retarget)
+
     s = sub.add_parser("mcp-config", help="register the project's MCP server with Claude Code (.mcp.json) "
                                           "and, with --desktop, Claude Desktop")
     s.add_argument("project")
@@ -761,17 +1072,68 @@ def main(argv):
     s.add_argument("--remove", action="store_true", help="remove the entry instead")
     s.set_defaults(fn=cmd_mcp_config)
 
+    s = sub.add_parser("scene", help="scene tools (mce scene diff <before> <after>, mce scene lint <scene>..., mce scene stats <scene>..., mce scene find <scene>..., mce scene fmt <scene>...)")
+    scene = s.add_subparsers(dest="scene_command", metavar="diff|lint|stats|find|fmt", required=True)
+    s = scene.add_parser("diff", help="what changed between two .mcscene files: entities added, removed or changed; exit 1 when they differ")
+    s.add_argument("before")
+    s.add_argument("after")
+    s.set_defaults(fn=cmd_scene)
+    s = scene.add_parser("lint", help="mistakes in scenes that load fine: unnamed or same-named siblings, zero scale, bad transforms, missing parents; exit 1 on findings")
+    s.add_argument("scenes", nargs="+")
+    s.set_defaults(fn=cmd_scene)
+    s = scene.add_parser("stats", help="what a scene holds: entities, roots, depth, prefab instances, components in use, position bounds")
+    s.add_argument("scenes", nargs="+")
+    s.set_defaults(fn=cmd_scene)
+    s = scene.add_parser("find", help="the entities of scenes that match a name part, a component or a prefab link; exit 1 when none")
+    s.add_argument("scenes", nargs="+")
+    s.add_argument("--name", help="part of the entity name, ignoring case")
+    s.add_argument("--component", help="a component type the entity carries")
+    s.add_argument("--prefab", action="store_true", help="only prefab instances")
+    s.set_defaults(fn=cmd_scene)
+    s = scene.add_parser("fmt", help="check that scenes are in the canonical text the editor saves; --write rewrites them; exit 1 when some are not")
+    s.add_argument("scenes", nargs="+")
+    s.add_argument("--write", action="store_true", help="rewrite the scenes that are not canonical")
+    s.set_defaults(fn=cmd_scene)
+
     s = sub.add_parser("headless", help="run the game without a window and print the state hash")
     s.add_argument("project")
     s.add_argument("--ticks", type=int, default=600)
     s.add_argument("rest", nargs=argparse.REMAINDER)
     s.set_defaults(fn=cmd_headless)
 
+    s = sub.add_parser("test", help="play a project's .mctest scenarios (tests/) headless and print pass or fail; exit 1 on a failure")
+    s.add_argument("project")
+    s.add_argument("path", nargs="?", help="one .mctest file or a folder under the project (default: tests/)")
+    s.set_defaults(fn=cmd_test)
+
+    s = sub.add_parser("inspect", help="run the game headless and print the live component values of entities as JSON")
+    s.add_argument("project")
+    s.add_argument("--ticks", type=int, default=300)
+    s.add_argument("--component", help="every live entity with this component (at most 64)")
+    s.add_argument("--entity", action="append", help="a scene entity id or name (repeatable)")
+    s.add_argument("--show", help="comma-separated components to print (default: the entity's own, or the --component plus LocalTransform)")
+    s.add_argument("--scene", help="play this saved scene (path under assets/)")
+    s.add_argument("--trace", action="append", metavar="ENTITY:FIELD",
+                   help="sample a field while it runs and print the series, e.g. Hero:LocalTransform.position.x (repeatable, at most 16)")
+    s.add_argument("--every", type=int, default=10, help="with --trace: sample every N ticks (default 10)")
+    s.set_defaults(fn=cmd_inspect)
+
+    s = sub.add_parser("profile", help="run the game headless and print each scene script's step cost against its budget")
+    s.add_argument("project")
+    s.add_argument("--ticks", type=int, default=300)
+    s.set_defaults(fn=cmd_profile)
+
     s = sub.add_parser("ship", help="zip the host, module, engine library and pack (--target web: the browser build)")
     s.add_argument("project")
     s.add_argument("--target", choices=("desktop", "web"), default="desktop")
     s.add_argument("--out")
     s.add_argument("--version")
+    s.add_argument("--max-texture-size", type=int, metavar="N",
+                   help="re-cook the pack with PNG/JPG textures capped at N pixels on the longest side (a power of two, "
+                        "1..16384) so the zip is smaller; a sidecar's smaller max_size wins. Default: no limit")
+    s.add_argument("--textures", metavar="MODE",
+                   help="rgba8 (default) or bc: re-cook the pack with BC7/BC5/BC4/BC1 block textures (about a quarter of "
+                        "the size; desktop only, a GPU without BC cannot draw them). Not for --target web")
     s.add_argument("--smoke", action="store_true", help="--target web: play it once in headless Chromium")
     s.add_argument("--smoke-ticks", type=int, default=0,
                    help="--target web: play N ticks in headless Chromium, screenshot, and check the state hash against "
@@ -790,6 +1152,11 @@ def main(argv):
     s.add_argument("--open", action="store_true", help="open it in the default browser")
     s.add_argument("--quiet", action="store_true", help="no request log")
     s.set_defaults(fn=cmd_serve)
+
+    s = sub.add_parser("perf", help="read a perf capture: frame cost and the draw calls by cause")
+    s.add_argument("where", nargs="?", default=".", help="a .mcperf file, or a project folder (its last perf_run capture)")
+    s.add_argument("--json", action="store_true", help="the draw-call causes as JSON")
+    s.set_defaults(fn=cmd_perf)
 
     s = sub.add_parser("friction", help="collect the friction notes agents wrote (report_friction) into a backlog")
     s.add_argument("projects", nargs="*", help="project folders (default: the current folder)")

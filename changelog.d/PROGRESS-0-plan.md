@@ -1,0 +1,1 @@
+- Docs (M-PROGRESS): plan for progression and goals in 09_openworld. Record: `docs/milestones/M-PROGRESS.md`.

@@ -1,6 +1,6 @@
 # M-MOVE3D — 3D movement that feels shipped (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–5 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
+**Status:** done (added 2026-10-16; steps 1–6 done, PR #562 for step 6). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
 
 **Why:** M-GAMEPLAY3D gave 3D games their systems: navmesh agents, joints, ragdolls, vehicles and sensors.
 What a player feels is still raw:
@@ -26,7 +26,7 @@ It needs no device. Every step gates on headless runs and replay hashes in `loca
 | 3 | Vehicle feel: anti-roll, downforce, wheel slip and skid events, self-righting, gears as data | SBA-136 | done |
 | 4 | AI drivers: `VehicleDriver3D` on a waypoint path, laps; agents with acceleration | SBA-137 | done |
 | 5 | Animation from movement: `Locomotion3D`, foot IK on slopes and stairs | SBA-138 | done |
-| 6 | MCP and docs; the demo `samples/08_movement` | SBA-139 | not started |
+| 6 | MCP and docs; the demo `samples/08_movement` | SBA-139 | done (#562; no Linear card, the tracker is this file) |
 
 **Demo:** `samples/08_movement`, built over MCP alone. A humanoid runs an obstacle course, and a cart races
 two AI karts. A scripted input replays to the same hash in Debug and Release.
@@ -214,3 +214,39 @@ headless sample hashes only `07_gameplay3d` changes (`ee6bfe319ca8e23b` -> `cc49
 ticks). A per-entity dump of both runs differs in one entity only, the camera: `kit_camera_follow`
 (`FixedUpdate_Post`) used to read the cart's `WorldTransform` from last tick and now follows this
 tick's pose. The cart, grunts, ragdolls, door and bridge are byte-identical at every tick checked.
+
+## Step 6 — MCP, docs and the demo
+
+No code in the engine changes: everything the demo needs was already reachable over MCP. Building it found no
+missing tool or component field; the only wrinkle is the order of a `Waypoint3D` chain (create it last to first,
+close the loop with `component_set`; guide 14 says so).
+
+**`samples/08_movement`** (`tests/mcp/test_mcp_movement.cpp` builds it from an empty project;
+`MCE_MOVEMENT_EXPORT=samples/08_movement` writes it out) has two scenes and two input scripts:
+
+- `scenes/course`: the runner (a `gen_mesh` humanoid on a `CharacterController3D` with acceleration, coyote
+  time, jump buffer and cut, a crouch height) stands on a lift (a dynamic plate on a `Joint3D` slider, velocity
+  motor 1 m/s, limit 3 m) and rides it up. It runs along the deck, jumps a 3 m gap 6 ticks after the deck ends
+  (coyote time is 9), and crouches through a tunnel whose lintel is 1.3 m above the deck, with a
+  `CameraFollow3D` spring arm that pulls from 6 m to under 5 m inside and grows back. A `Trigger3D` goal fires a
+  `ShakeTrigger`; `Landed` reactions count the touchdowns.
+- `scenes/race`: a cart with `use_input` (Move steers and throttles, Jump is the handbrake) and two `Vehicle3D`
+  karts under `VehicleDriver3D` (max speed 20 and 15 m/s, two laps) on a nine-waypoint loop. `skid_slip` 0.2
+  makes corners skid; a `ShakeTrigger` with `on: Skid` on each kart counts the `Skid3D` events.
+- `course.input` and `race.input` are the scripted inputs; the sample's CMake plays both headless
+  (`sample_08_movement_course_player_900`, `sample_08_movement_race_player_2600`).
+
+**Tests:**
+
+- `test_mcp_movement` checks the lift (1.5 m at tick 90, 3 m at tick 240), airborne over the gap at tick 430,
+  crouched under the lintel with the arm in, uncrouched and the arm back out, the goal entered once, the replay
+  hash; a jump 16 ticks later falls into the gap (coyote time is what made the first one work), and without
+  Crouch the runner stops at the tunnel mouth. The race has both karts finish two laps with skid reactions and
+  no self-righting, the cart skidding in its handbrake turn, and a replay hash.
+- Replays hold across builds: the player's hashes for both scenes were equal in the Debug and Release builds
+  (course `acbb7c132e323cb8` and race `33b3b0fd816a29d7` at 900 ticks, checked by hand; the test does not pin
+  them, so other threads' physics changes do not break it).
+- `tests/kit/test_move3d_budget.cpp` is the budget gate: 64 `CharacterController3D` walkers (jumping and
+  crouching on a schedule) and 8 AI-driven cars, with a spring-arm camera, step at most **4 ms per 60 Hz tick** on
+  average in optimized builds. Measured: 0.88 ms in Release, 10.4 ms in Debug (not asserted). It also checks
+  every tick of a 3 s replay hashes the same on two worlds.

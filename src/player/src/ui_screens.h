@@ -14,6 +14,8 @@
 #include "mce/kit/render_textures.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/kit/views.h"
+#include "item_grid_feed.h"
+#include "minimap_feed.h"
 #include "mce/ui/options_panel.h"
 #include "mce/ui/screen_link.h"
 #include "mce/ui/ui.h"
@@ -45,7 +47,8 @@ public:
     // Per rendered frame, before update: where each screen with a UiScreenView lays out — its
     // camera's window view in `views` (none: the whole window). `display_scale` and `user_scale`
     // pick a view's UI scale as compute_ui_scale does for the window.
-    void set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale);
+    void set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale,
+                   f32 reference_height = 0.0f);
     // Per rendered frame: visibility from the components, pending bindings, update, events -> actions.
     // A screen in a view lays out in its rect: the pointer is moved into it and reaches it only inside.
     void update(World& world, const ui::UpdateContext& ctx);
@@ -82,6 +85,8 @@ private:
         f32 view_ui_scale = 1.0f;
         ui::Document* doc = nullptr;  // null headless
         ui::OptionsPanel* options = nullptr;  // a document with a remap list (the stock options screen)
+        ItemGridFeed items;                   // its slot_N / equip_* / inventory_weight Text widgets (M-INVENTORY 4b)
+        MinimapFeed minimap;                  // its Minimap widgets (M-MISSION 3b); empty for most documents
     };
     const Screen* view_screen(u32 i) const;  // the i-th visible screen laid out in a view
     Array<Screen> screens_;

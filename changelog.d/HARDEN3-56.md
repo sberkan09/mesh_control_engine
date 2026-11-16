@@ -1,0 +1,1 @@
+- Tests: `game_services` upload with no local save fails without reaching the provider, `shutdown` stops the provider exactly once (M-HARDEN3 step 4).

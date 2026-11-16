@@ -1,0 +1,1 @@
+- M-GI2 50b: `render::GiVolume` carries `visibility`, `relocate`, `max_offset` and `follow` (nothing reads them yet), `gi_texels_per_probe` / `gi_volume_size` widen a probe to 10 texels when one is set, `Forward3DStats` gains four GI stats and `Forward3D` a `GiProbeState` pointer and a defaulted `draw_meshes` parameter. Seam PR, no frame changes.

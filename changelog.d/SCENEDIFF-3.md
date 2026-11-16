@@ -1,0 +1,1 @@
+- MCP, M-SCENEDIFF step 3: `scene_diff` returns what changed between two scenes, or between a saved scene and the open one.

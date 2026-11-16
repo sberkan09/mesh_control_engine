@@ -1,0 +1,1 @@
+- Fix: `scene::request_load` with a save slot name longer than 63 bytes loads nothing instead of loading the slot its cut name matches (HARDEN4-15).

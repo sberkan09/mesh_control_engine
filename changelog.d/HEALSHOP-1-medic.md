@@ -1,0 +1,1 @@
+- Kit (M-HEALSHOP 1): `HealShop3D` heals a hurt buyer with a `Wallet3D` for cash. Record: `docs/milestones/M-HEALSHOP.md`.

@@ -3,17 +3,20 @@
 
 #include <imgui.h>
 
+#include <cfloat>
 #include <cstdio>
 #include <cstring>
 
 #include "imgui_draw_ctx.h"
+#include "imgui_platform.h"
 #include "mce/cook/fs.h"
 #include "mce/ecs/transform.h"
 #include "mce/editor/asset_browser.h"
-#include "mce/editor/editor_shell.h"
-#include "mce/log.h"
-#include "imgui_platform.h"
 #include "mce/editor/console_model.h"
+#include "mce/editor/editor_shell.h"
+#include "mce/editor/hierarchy_filter.h"
+#include "mce/editor/select_all.h"
+#include "mce/log.h"
 #include "scene_panels.h"
 
 namespace mce::editor {
@@ -55,6 +58,20 @@ public:
         ImGui::Text("%.*s%s", static_cast<int>(scene_name.size()), scene_name.data(), scene.dirty() ? " *" : "");
         ImGui::SameLine(right - ImGui::CalcTextSize("+ Entity").x - ImGui::GetStyle().FramePadding.x * 2);
         if (ImGui::SmallButton("+ Entity")) create(shell, -1);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##hfilter", "Filter by name", query_, sizeof query_);
+        filter_.rebuild(scene, query_);
+        if (filter_.active() && filter_.match_count() > 0) {
+            char label[48];
+            std::snprintf(label, sizeof label, "Select %zu match%s", filter_.match_count(),
+                          filter_.match_count() == 1 ? "" : "es");
+            if (ImGui::SmallButton(label)) {  // the hits become the selection (first one the anchor)
+                const Array<EntityId> hits = select_matching(scene, query_);
+                scene.selection().clear();
+                scene.selection().set(hits[0]);
+                for (usize i = 1; i < hits.size(); ++i) scene.selection().toggle(hits[i]);
+            }
+        }
         ImGui::Separator();
 
         if (ImGui::BeginChild("##entities")) {
@@ -113,6 +130,8 @@ public:
     }
 
 private:
+    HierarchyFilter filter_;
+    char query_[64] = {};
     struct Drop {
         EntityId id = kNoEntity;              // the dragged entity
         EntityId parent = kNoEntity;          // its new parent
@@ -125,6 +144,7 @@ private:
         const DocEntity* ep = scene.doc().find(id);
         if (!ep || depth > scene.doc().size()) return;  // a ChildOf cycle draws once around
         const DocEntity& e = *ep;
+        if (!filter_.visible(scene.doc(), id)) return;  // the Hierarchy filter hides it
         Array<EntityId> kids;
         scene.children_of(id, kids);
         ImGui::PushID(static_cast<int>(e.id));
@@ -139,7 +159,11 @@ private:
                                        ImGuiTreeNodeFlags_DefaultOpen;
             if (kids.empty()) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
             if (selected) flags |= ImGuiTreeNodeFlags_Selected;
+            if (filter_.active()) ImGui::SetNextItemOpen(true);  // the hits show without opening the tree
+            const bool hit = filter_.is_match(scene.doc(), e.id);
+            if (hit) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_PlotHistogram));
             const bool expanded = ImGui::TreeNodeEx("##node", flags, "%s", label);
+            if (hit) ImGui::PopStyleColor();
             if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) {
                 const ImGuiIO& io = ImGui::GetIO();
                 if (io.KeyShift) scene.select_range(e.id, io.KeyCtrl);

@@ -8,10 +8,13 @@
 // to the same document. Nodes are named by their pre-order index, the order the cook writes them and
 // the outline every tool returns lists them in.
 
+#include <cmath>
+
 #include "mce/cook/bt_text.h"
 #include "mce/cook/cook.h"
 #include "mce/cook/fs.h"
 #include "mce/kit/ai.h"
+#include "mce/kit/perception.h"
 #include "mce/mcp/headless_run.h"
 #include "tool_args.h"
 #include "tools.h"
@@ -475,6 +478,102 @@ bool bt_trace(ToolCall& c) {
     return true;
 }
 
+// perception_debug_lines: where every Perceiver looks and what it sees, after playing the saved scene.
+struct PerceptionSnapshot {
+    const editor::SceneDocument* doc = nullptr;
+    JsonWriter* out = nullptr;
+    u32 perceivers = 0;
+};
+
+void write_vec3(JsonWriter& w, math::vec3 v) {
+    w.begin_array().num_f(static_cast<f64>(v.x)).num_f(static_cast<f64>(v.y)).num_f(static_cast<f64>(v.z)).end_array();
+}
+
+void perception_inspect(const World& cw, Span<const Entity> spawned, void* user) {
+    auto* snap = static_cast<PerceptionSnapshot*>(user);
+    World& w = const_cast<World&>(cw);  // the kit's readers take a mutable world (queries); nothing is written
+    JsonWriter& out = *snap->out;
+    Array<kit::PerceiverView> views;
+    kit::perceiver_views(w, views);
+    out.key("perceivers").begin_array();
+    for (const kit::PerceiverView& v : views) {
+        const kit::Perceiver* p = w.try_get<kit::Perceiver>(v.entity);
+        if (!p) continue;
+        ++snap->perceivers;
+        out.begin_object();
+        for (usize i = 0; i < spawned.size() && i < snap->doc->size(); ++i) {
+            if (spawned[i] != v.entity) continue;
+            out.key("entity").num_u(snap->doc->at(i).id).key("name").str(snap->doc->at(i).name.view());
+            break;
+        }
+        out.key("eye");
+        write_vec3(out, v.eye);
+        out.key("forward");
+        write_vec3(out, v.forward);
+        // Yaw of the forward direction about +Y, degrees: 0 looks along -Z, 90 along -X.
+        constexpr f64 kRadToDeg = 57.29577951308232;
+        out.key("yaw_deg").num_f(std::atan2(-static_cast<f64>(v.forward.x), -static_cast<f64>(v.forward.z)) * kRadToDeg);
+        out.key("space").str(p->space == kit::PerceptionSpace::Plane2D ? "Plane2D" : "Space3D");
+        out.key("sight_range").num_f(static_cast<f64>(p->sight_range)).key("sight_angle").num_f(static_cast<f64>(p->sight_angle));
+        out.key("sees").boolean(p->sees != 0);
+        out.key("target");
+        if (p->target.is_null()) out.null();
+        else out.num_u(p->target.index);
+        out.key("last_seen");
+        write_vec3(out, p->last_seen);
+        out.key("sightings").num_u(p->sightings).key("hearings").num_u(p->hearings);
+        out.end_object();
+    }
+    out.end_array();
+    Array<kit::PerceptionLine> lines;
+    kit::perception_debug_lines(w, lines);
+    out.key("lines").begin_array();
+    for (usize i = 0; i < lines.size() && i < kMaxRows; ++i) {
+        const kit::PerceptionLine& l = lines[i];
+        out.begin_object().key("from");
+        write_vec3(out, l.a);
+        out.key("to");
+        write_vec3(out, l.b);
+        out.key("color").begin_array();
+        out.num_f(static_cast<f64>(l.color.r)).num_f(static_cast<f64>(l.color.g)).num_f(static_cast<f64>(l.color.b)).num_f(static_cast<f64>(l.color.a));
+        out.end_array().end_object();
+    }
+    out.end_array();
+}
+
+bool perception_debug_lines_tool(ToolCall& c) {
+    if (!need_project(c)) return false;
+    u64 ticks = 1;
+    if (!arg_uint(c, "ticks", ticks, 1, kMaxTicks, false)) return false;
+    const Server::SceneFile& file = c.server.scene_file();
+    if (file.rel.empty()) return fail(c, "the scene was never saved: scene_save it (with a path under assets/) first");
+    if (scene(c).dirty()) return fail(c, "the scene has unsaved changes: scene_save first (this plays the cooked file)");
+    const editor::SceneDocument& doc = scene(c).doc();
+    const cook::CookReport& r = c.server.session().cook(false);
+    if (!r.ok()) {
+        c.error += "cook failed:";
+        append_diags(c.error, r.diags, 10);
+        return false;
+    }
+    PerceptionSnapshot snap;
+    snap.doc = &doc;
+    snap.out = &c.out;
+    c.out.begin_object();
+    const cook::String cooked = cook::path_join(c.server.session().project().root(), "cooked");
+    Result<HeadlessRun> run = run_headless(cooked.view(), doc.guid(), ticks, nullptr, nullptr, perception_inspect, &snap, nullptr,
+                                           c.server.session().project().base_roots());
+    if (!run) {
+        FixedString<512> msg;
+        format_error(run.error(), msg);
+        c.error += "run failed: ";
+        c.error += msg.view();
+        return false;
+    }
+    c.out.key("ticks").num_u(run.value().ticks);
+    c.out.end_object();
+    return true;
+}
+
 #define MCE_BT_DOC R"j("tree":{"type":"string","description":"The tree: a .mcbt path under assets/ or \"guid:<uuid>\""})j"
 
 const ToolDef kBtTools[] = {
@@ -509,6 +608,16 @@ const ToolDef kBtTools[] = {
      R"j("value":{"description":"A leaf's own value"},"fields":{"type":"object"},"replace":{"type":"object"},)j"
      R"j("remove":{"type":"boolean"}},"required":["tree"]})j",
      bt_set},
+    {"perception_debug_lines",
+     "Play the saved scene headless for 'ticks' (default 1) and report every Perceiver the way the editor's perception "
+     "overlay draws it: its eye and forward direction in world space (forward is the world rotation of the entity that "
+     "HOLDS the Perceiver applied to -Z in 3D, +X in 2D, so a Perceiver on a child follows the child's world yaw, and a "
+     "parent that already faces its motion plus a second system that turns the child add up), 'yaw_deg' (0 looks along "
+     "-Z, 90 along -X), the sight range and angle, whether it sees, its target and last_seen, and 'lines': the cone edges "
+     "and range arc (yellow), a line to the target it sees (green) or last saw (yellow-orange), each as from/to/color. "
+     "Use it when a guard looks the wrong way: compare 'forward' with the direction it walks.",
+     R"j({"type":"object","properties":{"ticks":{"type":"integer","minimum":1,"maximum":36000,"description":"Ticks to play before reporting (default 1)"}}})j",
+     perception_debug_lines_tool},
     {"bt_trace",
      "Play the saved scene headless (as run_headless does) and report what one entity's AiBrain did: every 'every' ticks "
      "the root's result, the running path (node indices and labels) and the blackboard's values; and each tick a node "

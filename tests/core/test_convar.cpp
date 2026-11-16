@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <cstdlib>
 #include <string>
 
@@ -9,7 +10,14 @@
 using namespace mce;
 
 namespace {
+// The platform temp directory ("/tmp" does not exist on Windows; the failed fopen aborted test_core there).
+std::string test_tmp_dir() { return std::filesystem::temp_directory_path().generic_string(); }
+}  // namespace
+
+namespace {
 MCE_CVAR(cv_test_int, "test.int", 3, "test int", CVarFlags::None);
+MCE_CVAR(cv_test_pack_int, "test.pack_int", 3, "test int set by a pack chunk", CVarFlags::None);
+MCE_CVAR(cv_test_pack_flag, "test.pack_flag", true, "test flag set by a pack chunk", CVarFlags::None);
 MCE_CVAR(cv_test_float, "test.float", 0.5f, "test float", CVarFlags::None);
 MCE_CVAR(cv_test_bool, "test.bool", false, "test bool", CVarFlags::None);
 MCE_CVAR(cv_test_str, "test.str", "hello", "test string", CVarFlags::None);
@@ -57,6 +65,19 @@ TEST_CASE("typed get/set and parsing") {
     cv_test_int.reset();
     cv_test_str.reset();
     CHECK(cv_test_str.get_string() == "hello");
+}
+
+TEST_CASE("float convars refuse nan, inf and an overflowing number and keep their value") {
+    cv_test_float.reset();
+    CHECK(cv_test_float.set_from_string("1e30"));  // large but finite
+    CHECK(cv_test_float.get_float() == 1e30f);
+    CHECK(cv_test_float.set_from_string("-0.5"));
+    for (const char* text : {"nan", "NaN", "inf", "-inf", "infinity", "1e999", "-1e999"}) {
+        INFO(text);
+        CHECK_FALSE(cv_test_float.set_from_string(text));
+        CHECK(cv_test_float.get_float() == -0.5f);
+    }
+    cv_test_float.reset();
 }
 
 TEST_CASE("string convars hold long paths and refuse what does not fit") {
@@ -210,7 +231,7 @@ TEST_CASE("M-ACCESS: a Saved convar change moves the settings generation") {
 }
 
 TEST_CASE("saved convars round-trip through the settings file") {
-    const std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") + "/mce_test_settings.cfg";
+    const std::string path = test_tmp_dir() + "/mce_test_settings.cfg";
     std::remove(path.c_str());
     {  // a file from an earlier run: a module's convar not registered here, and the three saved ones
         std::FILE* f = std::fopen(path.c_str(), "wb");
@@ -247,4 +268,121 @@ TEST_CASE("saved convars round-trip through the settings file") {
 
 TEST_CASE("a missing settings file is no error") {
     CHECK(console::load_settings("/nonexistent-dir/settings.cfg"));
+}
+
+TEST_CASE("project defaults: a defaults file moves the default, a settings value and the command line still win (M-WORKFLOW 7)") {
+    const std::string dir = test_tmp_dir();
+    const std::string defaults = dir + "/mce_test_defaults.cfg";
+    const std::string settings = dir + "/mce_test_defaults_settings.cfg";
+    cv_test_saved_db.reset();  // earlier cases may leave a value
+    cv_test_saved_tier.reset();
+    cv_test_saved_flag.reset();
+    std::remove(settings.c_str());
+    {
+        std::FILE* f = std::fopen(defaults.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("# a project's own defaults\ntest.saved_db -9\ntest.saved_tier medium\ntest.saved_flag false\ntest.nope 1\ntest.int oops\n", f);
+        std::fclose(f);
+    }
+    {  // a player's saved choice, from an earlier run
+        std::FILE* f = std::fopen(settings.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("test.saved_db -3\n", f);
+        std::fclose(f);
+    }
+    REQUIRE(cv_test_saved_tier.set_string("high"));  // the command line said -test.saved_tier high
+    REQUIRE(console::set_defaults(StringView(defaults.c_str())));  // unknown names and a bad value only warn
+    CHECK(cv_test_int.get_int() == 3);
+    CHECK(cv_test_saved_flag.get_bool() == false);  // untouched: takes the project's default
+    CHECK(cv_test_saved_flag.is_default());
+    CHECK(cv_test_saved_tier.get_string() == "high");  // the command line wins
+    CHECK_FALSE(cv_test_saved_tier.is_default());
+
+    REQUIRE(console::load_settings(StringView(settings.c_str())));
+    CHECK(cv_test_saved_db.get_float() == -3.0f);  // the saved choice beats the project's -9
+    cv_test_saved_db.reset();
+    CHECK(cv_test_saved_db.get_float() == -9.0f);  // reset goes back to the project's default
+
+    // Nothing the file set is written back as a player's choice.
+    REQUIRE(console::save_settings(StringView(settings.c_str())));
+    std::string text;
+    {
+        std::FILE* f = std::fopen(settings.c_str(), "rb");
+        REQUIRE(f);
+        char buf[512];
+        while (std::fgets(buf, sizeof(buf), f)) text += buf;
+        std::fclose(f);
+    }
+    CHECK(text.find("test.saved_flag") == std::string::npos);
+    CHECK(text.find("test.saved_tier") == std::string::npos);
+
+    std::remove(defaults.c_str());
+    std::remove(settings.c_str());
+    cv_test_saved_tier.set_default("auto");
+    cv_test_saved_flag.set_default("true");
+    cv_test_saved_db.set_default("0");
+    cv_test_saved_tier.reset();
+    cv_test_saved_flag.reset();
+    cv_test_saved_db.reset();
+    CHECK(console::set_defaults("/nonexistent-dir/defaults.cfg"));  // a missing file is no error
+}
+
+TEST_CASE("project defaults: a command-line value equal to the old or new default still wins; cheats stay locked; spacing is forgiven") {
+    const std::string dir = test_tmp_dir();
+    const std::string defaults = dir + "/mce_test_defaults2.cfg";
+    const std::string settings = dir + "/mce_test_defaults2_settings.cfg";
+    std::remove(settings.c_str());
+    cv_test_saved_db.reset();
+    cv_test_saved_flag.reset();
+    {
+        std::FILE* f = std::fopen(defaults.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("  test.saved_db    -9\ntest.saved_flag\tfalse\ntest.cheat 50\ntest.readonly 5\n", f);
+        std::fclose(f);
+    }
+    {
+        std::FILE* f = std::fopen(settings.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("test.saved_db -3\ntest.saved_flag true\n", f);
+        std::fclose(f);
+    }
+    // -test.saved_db -9 (the project's new default) and -test.saved_flag true (the built-in default) were given.
+    const char* argv[] = {"app", "-test.saved_db", "-9", "-test.saved_flag", "true"};
+    CHECK(console::parse_command_line(5, argv) == 0);
+    console::set_cheats_allowed(false);
+    REQUIRE(console::set_defaults(StringView(defaults.c_str())));
+    console::set_cheats_allowed(true);
+    CHECK(cv_test_cheat.get_float() == 1.0f);  // a defaults file cannot get round the cheat lock
+    CHECK(cv_test_ro.get_int() == 1);           // nor set a read-only convar
+    CHECK(cv_test_saved_flag.get_bool());       // -test.saved_flag true stays, though true is the built-in default
+    REQUIRE(console::load_settings(StringView(settings.c_str())));
+    CHECK(cv_test_saved_db.get_float() == -9.0f);  // the command line, equal to the new default, beats the saved -3
+    CHECK(cv_test_saved_flag.get_bool());
+
+    std::remove(defaults.c_str());
+    std::remove(settings.c_str());
+}
+
+TEST_CASE("project defaults: text from a pack applies like the file, line by line") {
+    cv_test_pack_int.reset();
+    cv_test_pack_flag.reset();
+    console::set_defaults_text("# from a pack\r\ntest.pack_int 4\n\n  test.pack_flag   false  \ntest.nope 1\ntest.pack_int");
+    CHECK(cv_test_pack_flag.get_bool() == false);
+    CHECK(cv_test_pack_flag.is_default());
+    CHECK(cv_test_pack_int.get_int() == 4);  // a name with no value is rejected; the earlier line stands
+    console::set_defaults_text("");  // empty chunk: nothing to do
+    cv_test_pack_flag.set_default("true");
+    cv_test_pack_int.set_default("3");
+    cv_test_pack_flag.reset();
+    cv_test_pack_int.reset();
+}
+
+TEST_CASE("convar: mark_command_line is sticky and leaves other convars alone") {
+    const bool other_before = cv_test_bool.from_command_line();
+    CHECK_FALSE(cv_test_float.from_command_line());
+    cv_test_float.mark_command_line();
+    CHECK(cv_test_float.from_command_line());
+    CHECK(cv_test_bool.from_command_line() == other_before);
+    cv_test_float.mark_command_line();  // marking again changes nothing
+    CHECK(cv_test_float.from_command_line());
 }

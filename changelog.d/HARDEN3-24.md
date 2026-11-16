@@ -1,0 +1,1 @@
+- Tests: `plural_form_name`, `valid_key`, `valid_utf8` (loc) and `access_role_name` (ui) have tests of their own.

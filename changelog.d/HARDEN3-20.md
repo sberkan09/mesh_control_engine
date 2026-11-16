@@ -1,0 +1,1 @@
+- Tests: input's `InputSystem::cancel_rebind` and `clear_toggles` get direct tests.

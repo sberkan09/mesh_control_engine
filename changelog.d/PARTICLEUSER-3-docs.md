@@ -1,0 +1,1 @@
+- M-PARTICLEUSER done: a saved `r.particles` cvar scales the weather particles and rain and snow follow `particle_scale`; the milestone record is closed and the M-PARTICLEQ follow-ups are marked done.

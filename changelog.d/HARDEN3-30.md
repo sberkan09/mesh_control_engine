@@ -1,0 +1,1 @@
+- Tests: kit `equip_slot_tag` names every equipment slot and returns null past the end.

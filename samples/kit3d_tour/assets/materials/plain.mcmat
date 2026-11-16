@@ -1,0 +1,15 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "b0a30000-0000-4000-8000-000000000047",
+  "name": "plain",
+  "base_color": [
+    0.93,
+    0.84,
+    0.6,
+    1
+  ],
+  "metallic": 0.0,
+  "roughness": 0.45,
+  "double_sided": false
+}

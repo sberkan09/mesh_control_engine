@@ -1069,13 +1069,7 @@ bool build_behavior_tree(JsonValue doc, StringView file, Array<byte>& payload, D
         detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-bt\"");
         return false;
     }
-    const JsonValue ver = doc.get("version");
-    if (!ver.is_integer() || ver.as_number() != kBtFormatVersion) {
-        String msg;
-        appendf(msg, "unsupported behavior tree version (this cook reads version %u)", kBtFormatVersion);
-        detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-        return false;
-    }
+    if (!detail::check_format_version(doc, kBtFormatVersion, "behavior tree", file, kStage, diags)) return false;
     asset::BtHeader header{};
     if (const JsonValue name = doc.get("name"); name.valid()) {
         if (!name.is_string() || name.as_string().size() >= sizeof(header.name))

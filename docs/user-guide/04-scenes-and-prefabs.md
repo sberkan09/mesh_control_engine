@@ -231,6 +231,43 @@ These components are not in `mce/gameplay.h`: a game module that touches them ad
 `#include <mce/scene/streaming.h>`.
 Save games do not track areas yet, so keep `SaveKey` entities in the base scene.
 
+A world several kilometres across loses float precision far from its origin (shaking models,
+jittery contacts). Add `FloatingOrigin3D` to one base-scene entity and the stream pump moves the whole
+world back near zero whenever the focus gets farther than `threshold` metres (default 1024) from it,
+in whole steps of `snap` metres (default 256):
+
+```json
+{ "name": "World", "components": { "FloatingOrigin3D": { "threshold": 1024, "snap": 256 } } }
+```
+
+Keep authoring areas in world coordinates: an area that loads after a move is placed by the engine.
+Physics bodies, characters, joints, navigation and the camera follow the move, and the frame after it
+renders as a camera cut. Game code that keeps world positions outside components (a list of waypoints
+in a resource, for example) either marks the field `WorldPoint` in its `MCE_COMPONENT` or registers
+`ecs::on_origin_shift`; `ecs::to_absolute` / `to_local` (`mce/ecs/origin.h`) convert to and from the
+fixed world frame.
+
+An area that is not loaded draws nothing by default, so far areas leave holes on the skyline. Give the area's
+`SceneChunk` entity a `ChunkLod3D` whose `proxy` is a cheap mesh of the area (an HLOD bake: a `.mchlod` file,
+the area's static meshes merged into one) and that mesh stands in while the area is out, at the chunk entity's
+position (section 8, the `ChunkLod3D` row). MCP's `hlod_bake` (chapter 14) makes the proxies: for every
+`SceneChunk` it merges the area scene's visible static meshes into `assets/hlod/<scene>/chunk_<id>.mchlod` and points
+the chunk's `ChunkLod3D.proxy` at it (adding the component); save the scene to keep that. Meshes smaller than
+`min_size` metres (default 1) are left out, and the same scene bakes byte-identical. The bake's sidecar asks the cook
+for two simplified far levels (`"lod_levels": 2`, as for a glTF) where the sources brought no levels of their own, so a
+distant proxy draws a fraction of its triangles; edit the sidecar's `lod_levels`, `lod_ratio` and `lod_error` to
+change that (0 keeps the proxy as baked).
+
+Past a few hundred metres even the proxy is more than the eye needs. `hlod_bake` with `impostor: true` also bakes an
+impostor per chunk: every root entity of the area (a building and its children) becomes a box whose four sides and top
+carry a picture of it taken from that side, and tall, thin groups such as trees and poles become two crossed cards. The
+pictures are rendered on the CPU from the cooked meshes and textures (base colour and tint, no lighting: the box is lit
+like any mesh) into one atlas, `chunk_<id>_far.png`, next to the mesh `chunk_<id>_far.mchlod`, and the chunk's
+`ChunkLod3D.impostor` points at the mesh, so beyond `impostor_distance` the chunk draws a handful of quads.
+`texels_per_metre` (default 4, at most 128 texels per side) sets their sharpness. Blended and transmissive materials
+are left out, as in the proxy; a texture the CPU cannot read (ASTC, half-float) is drawn white and counted in
+`untextured`.
+
 `mce_player`, play-in-editor and the MCP headless run stream with no game code. The windowed
 player reads area files on a background thread and instantiates at most one area per tick; headless
 runs and play-in-editor load an area in the tick that wants it, so their state hashes stay

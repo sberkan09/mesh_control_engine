@@ -19,6 +19,33 @@ TEST_CASE("rhi: format helpers") {
     CHECK(vertex_format_size(VertexFormat::UNorm8x4) == 4);
 }
 
+TEST_CASE("rhi: block_bytes and level_bytes (M-CONTENT 1b seam)") {
+    CHECK(block_bytes(TextureFormat::BC1_UNorm) == 8);
+    CHECK(block_bytes(TextureFormat::BC1_SRGB) == 8);
+    CHECK(block_bytes(TextureFormat::BC4_UNorm) == 8);
+    CHECK(block_bytes(TextureFormat::BC3_UNorm) == 16);
+    CHECK(block_bytes(TextureFormat::BC5_UNorm) == 16);
+    CHECK(block_bytes(TextureFormat::BC7_UNorm) == 16);
+    CHECK(block_bytes(TextureFormat::BC7_SRGB) == 16);
+    CHECK(block_bytes(TextureFormat::ASTC_4x4_UNorm) == 16);
+    CHECK(block_bytes(TextureFormat::ASTC_4x4_SRGB) == 16);
+    CHECK(block_bytes(TextureFormat::RGBA8_UNorm) == 0);
+    CHECK(block_bytes(TextureFormat::D32_Float) == 0);
+    CHECK(is_compressed_format(TextureFormat::BC4_UNorm));
+    CHECK(is_compressed_format(TextureFormat::BC1_SRGB));
+
+    CHECK(level_bytes(TextureFormat::RGBA8_UNorm, 4, 2) == 32);
+    CHECK(level_bytes(TextureFormat::RGBA16F, 3, 3) == 72);
+    CHECK(level_bytes(TextureFormat::BC1_UNorm, 8, 8) == 32);
+    CHECK(level_bytes(TextureFormat::BC4_UNorm, 8, 8) == 32);
+    CHECK(level_bytes(TextureFormat::BC1_SRGB, 4, 4) == 8);
+    CHECK(level_bytes(TextureFormat::BC5_UNorm, 8, 8) == 64);
+    CHECK(level_bytes(TextureFormat::BC7_UNorm, 1024, 1024) == 1024 * 1024);
+    CHECK(level_bytes(TextureFormat::BC7_SRGB, 5, 5) == 64);  // partial blocks round up: 2 x 2 blocks
+    CHECK(level_bytes(TextureFormat::BC4_UNorm, 1, 1) == 8);
+    CHECK(level_bytes(TextureFormat::ASTC_4x4_UNorm, 6, 2) == 32);
+}
+
 TEST_CASE("rhi: command buffer records and reads back in order") {
     CommandBuffer cb;
     CHECK(cb.empty());

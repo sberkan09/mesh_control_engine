@@ -1,0 +1,1 @@
+- Tests, M-FUZZ 7: the editor's scene document reader is fuzzed with mutated and value-swapped text (`test_fuzz_misc`); what loads saves, loads again and survives lint, stats and find.

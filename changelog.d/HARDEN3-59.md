@@ -1,0 +1,1 @@
+- input: an event with a NaN or infinite coordinate (a bad driver report) is dropped by `InputSystem::push_event` instead of sticking in the pad axes, the mouse delta and the view size; the dropped ones count in `events_ignored`.

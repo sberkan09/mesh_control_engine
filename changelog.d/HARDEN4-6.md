@@ -1,0 +1,1 @@
+- The mod resolver loads exactly `kMaxMods` packs and skips the next one with "too many mods", with and without a `load_order.txt` (`tests/asset/test_mods.cpp`).

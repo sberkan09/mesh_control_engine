@@ -1,0 +1,1 @@
+- Kit (M-SHOTFX): `FireOn::Fired` (a `WeaponFired3D` names its weapon and its `aim_from` camera). Sample: the 09_openworld player's shots show a muzzle flash and a small view kick. Record: `docs/milestones/M-SHOTFX.md`.

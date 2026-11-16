@@ -1,5 +1,6 @@
 #include "agent_sim.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -431,7 +432,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
     }
     const cook::JsonValue field = v.get("field"), alive = v.get("alive"), event = v.get("event"), log_has = v.get("log_contains"),
                           log_err = v.get("log_errors"), log_warn = v.get("log_warnings"), feel = v.get("feel"),
-                          scene = v.get("scene"), reachable = v.get("reachable");
+                          scene = v.get("scene"), reachable = v.get("reachable"), count = v.get("count"), script = v.get("script");
     if (field.valid()) {
         out.what = Condition::What::Field;
         if (!field.is_string()) return err_out(err, "'field' is 'Component.path'");
@@ -450,6 +451,25 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
             out.op = CompareOp::Ge;
             number(out.expected, 1);
         }
+    } else if (count.valid()) {
+        // Live entities with a component, spawned ones included ("the spawner made 3 enemies").
+        out.what = Condition::What::Count;
+        const refl::TypeRecord* t = count.is_string() ? refl::find_type(StringId(count.as_string())) : nullptr;
+        if (!t || !t->is_component()) return err_out(err, "'count' is a component type name, e.g. {\"count\": \"Enemy\", \"<=\": 3} (refl_list_components lists them)");
+        if (!have_value) return err_out(err, "a count check needs a comparison: \"value\" (==), or {\">=\": 1} etc.");
+        out.probe.type = t;
+        out.text = cook::String(count.as_string());
+    } else if (script.valid()) {
+        // A scene script's step profile (M-SCRIPTPROF): a budget regression fails a test.
+        out.what = Condition::What::Script;
+        const cook::JsonValue metric = v.get("metric");
+        const bool known = metric.is_string() && (metric.as_string() == "peak_steps" || metric.as_string() == "avg_steps" ||
+                                                  metric.as_string() == "total_steps" || metric.as_string() == "updates");
+        if (!script.is_string() || script.as_string().empty() || !known)
+            return err_out(err, "a script check is {\"script\": \"scripts/a.luau\", \"metric\": peak_steps | avg_steps | total_steps | updates, \"<=\": 500}");
+        if (!have_value) return err_out(err, "a script check needs a comparison, e.g. {\"script\": \"a.luau\", \"metric\": \"peak_steps\", \"<=\": 500}");
+        out.text = cook::String(script.as_string());
+        out.metric = cook::String(metric.as_string());
     } else if (scene.valid()) {
         // The scene the run is in (scene::request_change moves it), by source path.
         out.what = Condition::What::Scene;
@@ -489,7 +509,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         out.text = cook::String(feel.as_string());
         if (!have_value) return err_out(err, "a feel check needs a comparison, e.g. {\"feel\": \"deaths\", \"<=\": 0}");
     } else {
-        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, log_contains, log_errors, log_warnings, feel, reachable");
+        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, count, script (+ metric), log_contains, log_errors, log_warnings, feel, reachable");
     }
     return true;
 }
@@ -506,15 +526,22 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
             world.event_registry(events);
             // The C++ name (game::GemCollected), or the name without its namespace when that is unique.
             const StringView want = c.text.view();
-            auto unqualified = [&](StringView name) {
+            // MSVC's type names carry a "struct "/"class " prefix; the check names the C++ type without it.
+            auto bare = [](StringView name) {
+                for (StringView kw : {StringView("struct "), StringView("class ")})
+                    if (name.size() > kw.size() && name.substr(0, kw.size()) == kw) return name.substr(kw.size());
+                return name;
+            };
+            auto unqualified = [&](StringView full) {
+                const StringView name = bare(full);
                 return name.size() > want.size() + 2 && name.substr(name.size() - want.size()) == want &&
                        name.substr(name.size() - want.size() - 2, 2) == "::";
             };
             u64 pushed = 0;
             u32 exact = 0, suffix = 0;
-            for (const EventInfo& e : events) exact += e.name == want ? 1u : 0u;
+            for (const EventInfo& e : events) exact += bare(e.name) == want ? 1u : 0u;
             for (const EventInfo& e : events) {
-                const bool match = exact ? e.name == want : unqualified(e.name);
+                const bool match = exact ? bare(e.name) == want : unqualified(e.name);
                 if (!match) continue;
                 pushed += e.total_pushed;
                 ++suffix;
@@ -538,6 +565,19 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
             }
             break;
         }
+        case Condition::What::Count: {
+            u64 n = 0;
+            const ecs::ComponentId cid = world.find_component(c.probe.type->type_hash);
+            if (cid != ecs::kInvalidComponent) {
+                for (const auto& table : world.tables()) {
+                    const Span<const ecs::ComponentId> ids = table->ids();
+                    if (std::find(ids.begin(), ids.end(), cid) != ids.end()) n += table->entities().size();
+                }
+            }
+            c.actual = Value{};
+            number(c.actual, static_cast<f64>(n));
+            break;
+        }
         case Condition::What::Scene: {
             // The World is const here; the resource is only read.
             const scene::SceneChange* sc = const_cast<World&>(world).try_resource<scene::SceneChange>();  // NOLINT(cppcoreguidelines-pro-type-const-cast)
@@ -553,9 +593,9 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
     return c.ok;
 }
 
-void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTracker* feel) {
+void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTracker* feel, Span<const ScriptProfile> scripts) {
     if (c.what != Condition::What::LogContains && c.what != Condition::What::LogErrors && c.what != Condition::What::LogWarnings &&
-        c.what != Condition::What::Feel && c.what != Condition::What::Reachable)
+        c.what != Condition::What::Feel && c.what != Condition::What::Reachable && c.what != Condition::What::Script)
         return;  // world checks were evaluated in the run
     c.actual = Value{};
     switch (c.what) {
@@ -573,6 +613,38 @@ void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTrac
                 if (c.what == Condition::What::LogErrors && l.level >= log::Level::Error && l.level != log::Level::Off) ++n;
             }
             number(c.actual, static_cast<f64>(n));
+            break;
+        }
+        case Condition::What::Script: {
+            // The script by its path or by the end of it ("a.luau"); an unknown name has no value (the check
+            // fails, with the scripts that ran listed), never a silent 0.
+            const StringView want = c.text.view();
+            c.note.clear();
+            const ScriptProfile* found = nullptr;
+            for (const ScriptProfile& p : scripts) {
+                const StringView name = p.name.view();
+                const bool tail = name.size() > want.size() && name.substr(name.size() - want.size()) == want && name[name.size() - want.size() - 1] == '/';
+                if (name == want || tail) {
+                    found = &p;
+                    break;
+                }
+            }
+            if (found) {
+                const StringView m = c.metric.view();
+                const f64 updates = static_cast<f64>(found->updates);
+                number(c.actual, m == "peak_steps"    ? static_cast<f64>(found->peak_steps)
+                                 : m == "total_steps" ? static_cast<f64>(found->total_steps)
+                                 : m == "updates"     ? updates
+                                                      : (updates > 0 ? static_cast<f64>(found->total_steps) / updates : 0.0));
+            } else {
+                c.note = "no scene script named '";
+                c.note += want;
+                c.note += "' ran; the scripts:";
+                for (const ScriptProfile& p : scripts) {
+                    c.note += ' ';
+                    c.note += p.name.view();
+                }
+            }
             break;
         }
         case Condition::What::Feel: {
@@ -616,6 +688,16 @@ void write_condition(JsonWriter& w, const Condition& c) {
         case Condition::What::Event:
             what += "event ";
             what += c.text.view();
+            break;
+        case Condition::What::Count:
+            what += "count ";
+            what += c.text.view();
+            break;
+        case Condition::What::Script:
+            what += "script ";
+            what += c.text.view();
+            what += ' ';
+            what += c.metric.view();
             break;
         case Condition::What::Scene: what += "scene"; break;
         case Condition::What::LogContains:
@@ -687,8 +769,17 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
         auto one = [&](const cook::JsonValue& in, const char* what) {
             BotTarget bt;
             cook::JsonValue t = in;
-            if (in.is_object()) {  // a waypoint with a dwell: {"at": point or entity, "wait": ticks}
-                const cook::JsonValue wait = in.get("wait");
+            if (in.is_object()) {  // a waypoint: {"at": point or entity, "wait": ticks, "press": [actions]}
+                const cook::JsonValue wait = in.get("wait"), press = in.get("press");
+                if (press.valid()) {
+                    if (!press.is_array() || press.size() == 0 || press.size() > 8)
+                        return err_out(err, "waypoint 'press' is an array of 1-8 action names pressed for one tick on arrival");
+                    for (u32 i = 0; i < press.size(); ++i) {
+                        if (!press.at(i).is_string() || press.at(i).as_string().empty() || press.at(i).as_string().size() > 31)
+                            return err_out(err, "waypoint 'press': action names of 1-31 characters");
+                        bt.press.push_back(FixedString<32>(press.at(i).as_string()));
+                    }
+                }
                 t = in.get("at");
                 if (!t.valid() || (wait.valid() && (!wait.is_integer() || wait.as_number() < 0 || wait.as_number() > 6000))) {
                     err += what;
@@ -744,6 +835,53 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
     } else if (out.kind == BotConfig::Kind::Masher) {
         for (const char* a : {"Move", "Jump", "Fire", "Confirm", "Cancel"}) out.actions.push_back(FixedString<32>(StringView(a)));
     }
+    // Held actions and the checks that gate them or stop the bot (any kind).
+    auto when = [&](const cook::JsonValue& in, const char* what, BotWhen& dst) {
+        Condition cond;
+        if (!parse_condition(doc, in, cond, err)) return false;
+        if (cond.what != Condition::What::Field) {
+            err += what;
+            return err_out(err, " is a check on a component field: {\"entity\": \"Sentry\", \"field\": \"Perceiver.sees\", \"value\": 1}");
+        }
+        dst.probe = static_cast<FieldProbe&&>(cond.probe);
+        dst.op = cond.op;
+        dst.expected = cond.expected;
+        dst.tolerance = cond.tolerance;
+        return true;
+    };
+    auto action_name = [&](const cook::JsonValue& a, const char* what, FixedString<32>& dst) {
+        if (!a.is_string() || a.as_string().empty() || a.as_string().size() > 31) {
+            err += what;
+            return err_out(err, " is an action name of 1-31 characters");
+        }
+        dst.assign(a.as_string());
+        return true;
+    };
+    const cook::JsonValue hold = v.get("hold"), hold_when = v.get("hold_when"), stop_when = v.get("stop_when");
+    if (hold.valid()) {
+        if (!hold.is_array() || hold.size() == 0 || hold.size() > 8) return err_out(err, "bot.hold is an array of 1-8 action names held the whole run");
+        for (u32 i = 0; i < hold.size(); ++i) {
+            FixedString<32> a;
+            if (!action_name(hold.at(i), "bot.hold[]", a)) return false;
+            out.hold.push_back(a);
+        }
+    }
+    if (hold_when.valid()) {
+        if (!hold_when.is_array() || hold_when.size() == 0 || hold_when.size() > 8)
+            return err_out(err, "bot.hold_when is an array of 1-8 {\"action\": name, \"entity\": ..., \"field\": \"Component.path\", \"value\": ...}");
+        for (u32 i = 0; i < hold_when.size(); ++i) {
+            BotHold bh;
+            if (!hold_when.at(i).is_object() || !action_name(hold_when.at(i).get("action"), "bot.hold_when[].action", bh.action) ||
+                !when(hold_when.at(i), "bot.hold_when[]", bh.when))
+                return hold_when.at(i).is_object() ? false : err_out(err, "bot.hold_when[] is an object {\"action\", \"entity\", \"field\", \"value\"}");
+            out.hold_when.push_back(bh);
+        }
+    }
+    if (stop_when.valid()) {
+        if (!stop_when.is_object()) return err_out(err, "bot.stop_when is a check: {\"entity\": ..., \"field\": \"Component.path\", \"value\": ...}");
+        if (!when(stop_when, "bot.stop_when", out.stop_when)) return false;
+        out.has_stop = true;
+    }
     const cook::JsonValue air = v.get("air_jumps");
     if (air.valid()) {
         if (!air.is_integer() || air.as_number() < 0 || air.as_number() > 4) return err_out(err, "bot.air_jumps is 0-4 extra Jump presses in the air");
@@ -782,16 +920,37 @@ const input::InputState* Bot::sample_for_tick(u64 tick, u64) {
     wants_move_ = false;
     vec3 pos;
     const bool have = cfg_.has_actor && world_ && cfg_.actor < spawned_.size() && entity_position(*world_, spawned_[cfg_.actor], pos);
-    switch (cfg_.kind) {
-        case BotConfig::Kind::WalkTo:
-            if (have) walk_to(tick, pos);
-            break;
-        case BotConfig::Kind::Explore:
-            if (have) explore(tick, pos);
-            break;
-        case BotConfig::Kind::Masher: masher(tick); break;
+    if (cfg_.has_stop && world_ && when_true(cfg_.stop_when)) {
+        best_tick_ = tick;  // standing still on purpose is not being stuck
+        if (waiting_) ++wait_until_;
+    } else {
+        switch (cfg_.kind) {
+            case BotConfig::Kind::WalkTo:
+                if (have) walk_to(tick, pos);
+                break;
+            case BotConfig::Kind::Explore:
+                if (have) explore(tick, pos);
+                break;
+            case BotConfig::Kind::Masher: masher(tick); break;
+        }
     }
+    for (const FixedString<32>& a : cfg_.hold) script_.add(a.view(), tick, tick);
+    if (world_)
+        for (const BotHold& h : cfg_.hold_when)
+            if (when_true(h.when)) script_.add(h.action.view(), tick, tick);
     return &script_.evaluate(tick);
+}
+
+bool Bot::when_true(const BotWhen& w) const {
+    Value v;
+    if (!read_value(*world_, spawned_, w.probe, v)) return false;
+    return compare(v, w.op, w.expected, w.tolerance);
+}
+
+void Bot::press_on_arrival(u64 tick, const BotTarget& t) {
+    if (pressed_leg_ == leg_) return;
+    pressed_leg_ = leg_;
+    for (const FixedString<32>& a : t.press) script_.add(a.view(), tick, tick);
 }
 
 namespace {
@@ -816,6 +975,7 @@ void Bot::walk_to(u64 tick, vec3 pos) {
         d = flat(cfg_.plane, at) - flat(cfg_.plane, pos);
         dist = math::length(d);
         if (!gone && dist > cfg_.reach) break;
+        if (!gone) press_on_arrival(tick, t);
         if (leg_ + 1 == cfg_.targets.size()) {
             reached_ = true;
             return;

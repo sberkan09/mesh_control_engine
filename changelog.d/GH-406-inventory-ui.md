@@ -1,0 +1,1 @@
+- Inventory widgets in the stock player (M-INVENTORY step 4b, GH-406): Text widgets named `slot_1` to `slot_24`, `equip_<where>` and `inventory_weight` show the entity's `Inventory` and `Equipment` with no new widget kind. `docs/user-guide/12-ui-and-console.md`.

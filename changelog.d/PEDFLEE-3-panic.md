@@ -1,0 +1,1 @@
+- Kit (M-PEDFLEE 3): panic spreads from a running pedestrian to neighbours within 8 m and dies out. Record: `docs/milestones/M-PEDFLEE.md`.

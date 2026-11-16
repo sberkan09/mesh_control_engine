@@ -1,0 +1,1 @@
+- Named `ScriptVars` slots, M-SCRIPT3 step 10: `mce.field("ScriptVars", "v", 3)` makes a handle to one slot (1-based element of any array field), so a script reads and writes `mce.get(e, COINS)` instead of `v[3]`.

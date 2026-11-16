@@ -101,6 +101,82 @@ TEST_CASE("formats: RGBA16F level sizes and the material extension's height map 
     CHECK(MaterialExt::of_material(payload.span().first(sizeof(MaterialChunk))).height().is_null());
 }
 
+TEST_CASE("formats: block-compressed level sizes (M-CONTENT 1b seam)") {
+    CHECK(texture_level_bytes(TextureFormat::BC1, 8, 8) == 32);
+    CHECK(texture_level_bytes(TextureFormat::BC4, 8, 8) == 32);
+    CHECK(texture_level_bytes(TextureFormat::BC5, 8, 8) == 64);
+    CHECK(texture_level_bytes(TextureFormat::BC7, 8, 8) == 64);
+    CHECK(texture_level_bytes(TextureFormat::BC1, 1, 1) == 8);  // mips below 4 pixels are one padded block
+    CHECK(texture_level_bytes(TextureFormat::BC4, 2, 3) == 8);
+    CHECK(texture_level_bytes(TextureFormat::BC5, 1, 1) == 16);
+    CHECK(texture_level_bytes(TextureFormat::BC7, 5, 5) == 64);
+    CHECK(texture_level_bytes(TextureFormat::BC7, 1024, 1024) == 1024u * 1024u);
+    CHECK(texture_level_bytes(TextureFormat::ASTC_4x4, 8, 8) == 64);
+    CHECK(texture_level_bytes(static_cast<TextureFormat>(99), 8, 8) == 0);
+}
+
+namespace {
+// A BC chain of `size`x`size` down to 1x1 with zeroed blocks.
+Array<byte> bc_payload(TextureFormat format, u32 size, u32 flags, u32 layers = 1) {
+    Array<Array<byte>> levels;
+    Array<TextureMipData> mips;
+    for (u32 s = size;; s = s > 1 ? s / 2 : 1) {
+        Array<byte> data;
+        data.resize(static_cast<usize>(texture_level_bytes(format, s, s)) * layers, byte{0x5A});
+        levels.push_back(static_cast<Array<byte>&&>(data));
+        if (s == 1) break;
+    }
+    u32 s = size;
+    for (usize i = 0; i < levels.size(); ++i, s = s > 1 ? s / 2 : 1) mips.push_back({s, s, levels[i].span()});
+    Array<byte> out;
+    write_texture(format, layers, flags, mips.span(), out);
+    return out;
+}
+}  // namespace
+
+TEST_CASE("formats: TextureView::read accepts BC1/BC4/BC5/BC7 and checks them") {
+    const TextureFormat all[] = {TextureFormat::BC1, TextureFormat::BC4, TextureFormat::BC5, TextureFormat::BC7};
+    for (const TextureFormat f : all) {
+        CAPTURE(static_cast<u32>(f));
+        const Array<byte> p = bc_payload(f, 16, 0);
+        auto v = TextureView::read(p.span());
+        REQUIRE(v);
+        CHECK(v.value().header->format == f);
+        REQUIRE(v.value().mips.size() == 5);  // 16, 8, 4, 2, 1
+        CHECK(v.value().mips[0].layer_size == texture_level_bytes(f, 16, 16));
+        CHECK(v.value().mips[4].layer_size == texture_level_bytes(f, 1, 1));
+        CHECK(v.value().pixels(4).size() == texture_level_bytes(f, 1, 1));
+
+        // Truncated payloads are refused, never viewed out of range.
+        CHECK(!TextureView::read(p.span().first(p.size() - 16)));
+        // A mip entry whose size disagrees with the format is refused.
+        Array<byte> bad = p;
+        reinterpret_cast<TextureMip*>(bad.data() + sizeof(TextureHeader))[0].layer_size += 8;
+        CHECK(!TextureView::read(bad.span()));
+    }
+    // sRGB is a flag on BC1 and BC7 only.
+    CHECK(TextureView::read(bc_payload(TextureFormat::BC1, 8, TextureFlags::Srgb).span()));
+    CHECK(TextureView::read(bc_payload(TextureFormat::BC7, 8, TextureFlags::Srgb).span()));
+    CHECK(!TextureView::read(bc_payload(TextureFormat::BC4, 8, TextureFlags::Srgb).span()));
+    CHECK(!TextureView::read(bc_payload(TextureFormat::BC5, 8, TextureFlags::Srgb).span()));
+    // A BC base whose side is not a multiple of 4 is refused (WebGPU / D3D12 rule).
+    Array<byte> p6 = bc_payload(TextureFormat::BC7, 8, 0);
+    auto* h = reinterpret_cast<TextureHeader*>(p6.data());
+    h->width = 6;
+    h->height = 6;
+    reinterpret_cast<TextureMip*>(p6.data() + sizeof(TextureHeader))[0].width = 6;
+    reinterpret_cast<TextureMip*>(p6.data() + sizeof(TextureHeader))[0].height = 6;
+    CHECK(!TextureView::read(p6.span()));
+    // Two layers (compose_layer_array's output shape) read fine.
+    CHECK(TextureView::read(bc_payload(TextureFormat::BC5, 8, 0, 2).span()));
+    // An unassigned format value is still Unsupported (old-runtime behaviour).
+    Array<byte> unk = bc_payload(TextureFormat::BC7, 8, 0);
+    reinterpret_cast<TextureHeader*>(unk.data())->format = static_cast<TextureFormat>(8);
+    auto r = TextureView::read(unk.span());
+    REQUIRE(!r);
+    CHECK(r.error().code == Errc::Unsupported);
+}
+
 TEST_CASE("formats: sfx write/read with loop validation") {
     const f32 s[6] = {0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f};
     SfxHeader h{};

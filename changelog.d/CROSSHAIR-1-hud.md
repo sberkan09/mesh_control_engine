@@ -1,0 +1,1 @@
+- Sample (M-CROSSHAIR): `09_openworld` HUD has a crosshair at the middle of the screen. Record: `docs/milestones/M-CROSSHAIR.md`.

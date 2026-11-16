@@ -1,0 +1,22 @@
+{
+ "format": "mce-sound",
+ "version": 1,
+ "guid": "d03f2c26-29cf-530a-a894-903529b27c3c",
+ "clips": [
+  "guid:93528939-b42f-541b-b8ec-69ede39e287c",
+  "guid:281338d9-c78a-59a7-8cd4-9b85007be981",
+  "guid:5dd74588-c746-5ed3-b42a-45425690ab14",
+  "guid:92674aa4-9cb6-5c04-90da-cd7da3bb9c2b",
+  "guid:6558a1c6-cbfb-5520-b9d7-be662ffd4eb1"
+ ],
+ "pick": "random",
+ "no_repeat": true,
+ "pitch": [
+  0.9,
+  1.1
+ ],
+ "gain_db": [
+  -3,
+  0
+ ]
+}

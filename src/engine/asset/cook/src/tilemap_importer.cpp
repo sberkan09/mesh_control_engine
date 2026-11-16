@@ -72,13 +72,7 @@ public:
             detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-tilemap\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kTilemapFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported tilemap version (this cook reads version %u)", kTilemapFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kTilemapFormatVersion, "tilemap", file, kStage, diags)) return false;
         asset::TilemapHeader h{};
         f64 tile_size = 1.0;
         read_count(doc, "width", 1, kMaxSide, h.width, file, diags);

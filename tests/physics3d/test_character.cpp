@@ -210,3 +210,20 @@ TEST_CASE("character: same-binary determinism of a scripted walk") {
     };
     CHECK(run() == run());
 }
+
+TEST_CASE("character: set_character_height crouches freely, refuses to stand under a ceiling unless forced") {
+    World3D w;
+    add_floor(w);
+    REQUIRE(w.create_character(kPlayer, {0, kStand, 0}));
+    const ControllerParams3D standing;                                    // half height 0.6, radius 0.3: 1.8 m tall
+    CHECK_FALSE(w.set_character_height(ent(77), 0.2f, standing, false));  // no such character
+    CHECK(w.set_character_height(kPlayer, 0.2f, standing, false));        // crouched: 1.0 m tall, feet unchanged
+    // A ceiling 1.2 m above the floor: a crouched capsule fits under it, a standing one does not.
+    REQUIRE(add_box(w, ent(2), BodyType3D::Static, {0, 1.7f, 0}, {5, 0.5f, 5}));
+    CHECK_FALSE(w.set_character_height(kPlayer, 0.6f, standing, false));
+    CHECK(w.set_character_height(kPlayer, 0.6f, standing, true));  // forced
+    // Crouch again, then take the ceiling away: standing up is allowed.
+    CHECK(w.set_character_height(kPlayer, 0.2f, standing, true));
+    w.destroy_body(ent(2));
+    CHECK(w.set_character_height(kPlayer, 0.6f, standing, false));
+}

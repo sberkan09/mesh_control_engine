@@ -1,0 +1,1 @@
+- M-WETSURFACE milestone record (wet surfaces from `Weather.wetness`: darker porous albedo, sharper reflections and puddles, opt-in), planned in `docs/milestones/M-WETSURFACE.md`.

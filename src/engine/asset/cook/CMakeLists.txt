@@ -15,6 +15,9 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/diagnostics.cpp
         src/envmap_importer.cpp
         src/navmesh_importer.cpp
+        src/hlod_importer.cpp
+        src/impostor.cpp
+        src/roads_importer.cpp
         src/font_importer.cpp
         src/fs_util.cpp
         src/image.cpp
@@ -23,7 +26,9 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/input_map_importer.cpp
         src/json.cpp
         src/material_importer.cpp
+        src/mesh_build.cpp
         src/mod_project.cpp
+        src/obj_importer.cpp
         src/particle_importer.cpp
         src/sound_set_importer.cpp
         src/spritesheet_importer.cpp
@@ -39,14 +44,18 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/shader_importer.cpp
         src/store_importer.cpp
         src/config_importer.cpp
+        src/convar_defaults_importer.cpp
+        src/items_importer.cpp
         src/services_importer.cpp
         src/string_importer.cpp
         src/string.cpp
+        src/texture_bc.cpp
         src/texture_importer.cpp
         src/tilemap_importer.cpp
         src/ui_importer.cpp
         src/video_importer.cpp
         src/vorbis_encode.cpp
+        src/audio_decode.cpp
         src/wav_importer.cpp
     PUBLIC_DEPS
         mce::mce_asset
@@ -58,8 +67,11 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce::mce_ui
         mce_stb
         mce_meshopt
+        mce_tinyexr
         mce_astcenc
+        mce_bc7enc
         mce_vorbisenc
+        mce_drlibs
         glslang::glslang
         glslang::glslang-default-resource-limits)
 
@@ -68,4 +80,18 @@ mce_add_library(mce_asset_cook UMBRELLA
 if(MCE_WITH_SCRIPT)
     target_sources(mce_asset_cook PRIVATE src/script_importer.cpp)
     target_link_libraries(mce_asset_cook PRIVATE mce::mce_script_compiler)
+endif()
+
+# Autodesk FBX (M-IMPORT3D 3b, ADR-0047) through ufbx, where the build has it (host builds; a cross build cooks with the
+# host's mce_cook). MCE_HAS_FBX guards the registration in importer_registry.cpp. -ffp-contract=off keeps the importer's
+# own float maths (it adds no libm calls beyond sqrt and ceil) identical on every compiler.
+if(TARGET mce_ufbx)
+    target_sources(mce_asset_cook PRIVATE src/fbx_importer.cpp)
+    target_link_libraries(mce_asset_cook PRIVATE mce_ufbx)
+    target_compile_definitions(mce_asset_cook PRIVATE MCE_HAS_FBX=1)
+    if(MSVC)
+        set_source_files_properties(src/fbx_importer.cpp PROPERTIES COMPILE_OPTIONS /fp:precise)
+    else()
+        set_source_files_properties(src/fbx_importer.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
+    endif()
 endif()

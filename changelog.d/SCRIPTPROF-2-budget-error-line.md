@@ -1,0 +1,1 @@
+- A script that runs out of its step budget now fails with the line that spent it (`spin:2: step budget exceeded (200000 per tick)`), M-SCRIPTPROF step 2.

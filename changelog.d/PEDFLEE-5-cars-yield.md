@@ -1,0 +1,1 @@
+- Kit (M-PEDFLEE 5): traffic cars give way to a fleeing pedestrian on the road, as to a crossing one. Record: `docs/milestones/M-PEDFLEE.md`.

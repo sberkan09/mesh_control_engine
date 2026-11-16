@@ -32,6 +32,7 @@
 // not depend on how many views draw or how the screen is split.
 
 #include "mce/containers/array.h"
+#include "mce/draw_cause.h"
 #include "mce/ecs/world.h"
 #include "mce/math/math.h"
 #include "mce/refl/macros.h"
@@ -123,6 +124,7 @@ struct ViewRecordContext {
     f32 frame_dt = 1.0f / 60.0f;          // the frame's first 3D extract takes it (Kit3DExtract::set_frame_dt)
     render::LodSettings lod;
     bool scale_quality = true;            // scale_view_quality by each view's share of the window
+    bool collect_draw_causes = false;     // Scene3D::set_collect_draw_causes on every 3D view (ViewRecordStats::first_3d_*)
 };
 struct ViewRecordStats {
     u32 views_3d = 0;
@@ -130,6 +132,11 @@ struct ViewRecordStats {
     u32 views_texture = 0;  // of those, drawn into render textures
     u32 window_3d = 0, window_2d = 0;      // of those, drawn into the window
     render::Scene3D::Stats first_3d;       // the window's first 3D view's scene
+    // The renderer's numbers of that same view (Forward3D::last_stats() right after it was recorded): its
+    // instanced main-pass draws, and the draws that were not instanced by DrawCause (zero unless collect_draw_causes).
+    u32 first_3d_runs_instanced = 0;
+    u32 first_3d_draws_instanced = 0;
+    u32 first_3d_draw_causes[kDrawCauseCount] = {};
     render::BatchStats first_2d;           // the window's first 2D view's batch
 };
 

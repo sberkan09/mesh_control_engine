@@ -79,6 +79,8 @@ Result<void> UiScreens::add(Entity e, asset::AssetSystem& assets, asset::Guid gu
             delete sc.doc;
             return r;
         }
+        sc.minimap.bind(*sc.doc);
+        sc.items.bind(*sc.doc);
         if (input_) {
             sc.options = new ui::OptionsPanel();
             if (!sc.options->attach(*sc.doc, *input_)) {
@@ -148,7 +150,8 @@ const ui::Document* UiScreens::focus_document() const {
     return top;
 }
 
-void UiScreens::set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale) {
+void UiScreens::set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale,
+                          f32 reference_height) {
     for (Screen& s : screens_) {
         s.in_view = false;
         const kit::UiScreenView* sv = s.always_visible ? nullptr : world.try_get<kit::UiScreenView>(s.entity);
@@ -157,7 +160,8 @@ void UiScreens::set_views(World& world, Span<const kit::ViewEntry> views, f32 di
             if (v.camera != sv->camera || !v.target.is_null()) continue;
             s.in_view = true;
             s.rect = v.rect;
-            s.view_ui_scale = ui::compute_ui_scale({v.rect.width, v.rect.height}, display_scale, user_scale);
+            s.view_ui_scale = ui::compute_ui_scale({v.rect.width, v.rect.height}, display_scale, user_scale, {360, 640},
+                                                    reference_height);
             break;
         }
     }
@@ -198,6 +202,8 @@ void UiScreens::update(World& world, const ui::UpdateContext& ctx) {
             c.pointer_down = c.pointer_pressed = c.pointer_released = false;
             c.wheel = 0.0f;
         }
+        if (s.visible && !s.items.empty()) s.items.feed(world, *s.doc, s.entity);  // M-INVENTORY 4b
+        if (s.visible && !s.minimap.empty()) s.minimap.feed(world, *s.doc);  // M-MISSION 3b: before the document draws
         s.doc->update(c);
         if (s.options && s.visible) s.options->update();
         if (s.visible) relay_.collect(*s.doc);

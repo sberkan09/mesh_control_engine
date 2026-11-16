@@ -1,0 +1,1 @@
+- Gameplay debug overlay, M-DEBUGVIEW step 3: View > "Gameplay debug (while playing)" draws a 3D game's colliders, triggers, joints, characters, vehicles and paths over the editor viewport; off by default.

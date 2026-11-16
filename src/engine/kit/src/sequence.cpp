@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "mce/audio/components.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/prefab.h"
 #include "mce/ecs/transform.h"
 #include "mce/log.h"
@@ -315,7 +316,8 @@ void sequence_runner(Frame& f) {
                     p->anchor = position_of(w, phys, e);
                     p->anchored = true;
                 }
-                const math::vec3 target = (s.flags & asset::SequenceStepFlags::Relative) ? p->anchor + step_pos(s) : step_pos(s);
+                // An absolute MoveTo is authored in absolute coordinates: after a floating-origin rebase it is local - origin.
+                const math::vec3 target = (s.flags & asset::SequenceStepFlags::Relative) ? p->anchor + step_pos(s) : step_pos(s) - origin_offset(w);
                 if (move_toward(w, phys, e, target, s, f.dt)) next();
                 else stop = true;
                 break;

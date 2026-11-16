@@ -1,0 +1,1 @@
+- Docs (M-MELEE): plan for the melee attack in 09_openworld. Record: `docs/milestones/M-MELEE.md`.

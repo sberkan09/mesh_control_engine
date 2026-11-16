@@ -161,6 +161,57 @@ events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped); `W
 `VehicleDriver3D` (M-MOVE3D 4: pure-pursuit AI driver with corner braking and laps, `LapCompleted3D`,
 `FireOn::Lap`), run inside `"kit3d_vehicles"` before the car takes its inputs.
 
+`seats3d.h` (M-OPENWORLD C1): `VehicleSeat3D` (on a `Vehicle3D`: `seat`, `exit`, `enter_radius`,
+`max_exit_speed`, `locked`, `driver`) and `Rider3D` (on a character: `use_input` for the Interact action, `enter`,
+`seated`, `vehicle`, `camera`), `VehicleEntered3D` / `VehicleExited3D`. Boarding takes the rider's
+`CharacterController3D` off (the settings are held in a resource and restored on exit), sets
+`Vehicle3D.use_input`, and switches a `VehicleDriver3D` off; `"kit3d_seats"` (`FixedUpdate_Pre`, after
+`"kit3d_vehicles"`) decides, `"kit3d_seat_pose"` (`FixedUpdate_Physics`, after `"kit3d_vehicle_state"`)
+carries the rider. Tests: `tests/kit/test_seats3d.cpp`.
+
+`combat3d.h` (M-OPENWORLD C2): `Health3D`, `Weapon3D` (hitscan rays or projectiles; Fire / Reload actions,
+rate, spread from a component seed, magazine and reload), `Projectile3D` (stepped by the engine as a ray per
+tick with gravity and splash), `apply_damage` for any other source; events `WeaponFired3D`, `WeaponHit3D`,
+`Damage3D`, `Died3D` (producer `FixedUpdate_Pre`). A death sets `Ragdoll3D.active` with the hit's impulse
+(`ragdoll_on_death`), a big hit staggers (`stagger_damage`). Systems `"kit3d_weapons"`, `"kit3d_projectiles"`,
+`"kit3d_health"` after `"kit3d_ragdolls"`. Tests: `tests/kit/test_combat3d.cpp`.
+
+`wanted3d.h` (M-OPENWORLD C3): `Wanted3D` (on the offender: `heat`, `level`, per-crime heat, witness rule,
+cool-down) and `Police3D` (on a unit: `min_level`, `attack_level`, `PoliceState` Idle / Pursue / Attack / Search,
+sight, `drive_nav` for its `NavAgent3D`, `aim` for its `Weapon3D`; blackboard keys `wanted`, `police_state`,
+`target`, `last_known` on an `AiBrain`). Crimes come from `Damage3D` / `Died3D` against `civilian_team` /
+`police_team` victims, or from `report_crime`; events `Crime3D`, `WantedChanged3D`, `Arrested3D` (a unit within `arrest_range` of an offender standing still at a level of `arrest_max_level` or below arrests it after `arrest_time`: M-ARREST; an idle unit within `dispatch_range` of the last known place is sent there: reinforcements). System `"kit3d_wanted"` Busted and wasted (M-WASTED): `Respawn3D` on the player (`delay`, engine-written `timer`/`reason`) and `RespawnPoint3D { kind }` (Hospital, Station) on placed entities; after `Died3D` (wasted) or `Arrested3D` (busted) and `delay` seconds the system `"kit3d_respawn"` moves the entity to the nearest point of the matching kind, restores its `Health3D`, clears the wanted level and pushes `Respawned3D { entity, reason, position }`. Money (M-CASH): `Wallet3D { cash }`, `CashDrop3D { min, max }` (pays the killer's wallet on `Died3D`), event `CashChanged3D`, `give_cash` / `take_cash`, system `"kit3d_cash"`. Pay-and-spray (M-PAYSPRAY): `PaySpray3D { radius, price_per_level }` on a garage clears the wanted level of an offender in `radius` who can pay (`Wallet3D`), event `Sprayed3D`, system `"kit3d_payspray"`. Mission pay (M-MISSIONPAY): `MissionReward3D { cash }` on a Mission entity credits the actor's wallet when the mission completes. Car theft (M-CARJACK): `CarOwner3D { heat, stolen }` on a vehicle adds `heat` as a crime the first time a rider with a `Wanted3D` boards it. With `needs_witness` 1 it counts only when `crime_seen` (a police unit sees the car). Ammo shop (M-AMMOSHOP): `AmmoShop3D { radius, price_per_round, stock_to }` on a placed entity tops up the `Weapon3D.reserve` of a buyer with a `Wallet3D` within `radius` and charges for it, event `AmmoBought3D`, system `"kit3d_ammoshop"`. Medic (M-HEALSHOP): `HealShop3D { radius, price_per_hp }` heals a hurt buyer with a `Wallet3D` within `radius` for cash, event `HealBought3D`, system `"kit3d_healshop"`. Cash pickups (M-CASHPICKUP): `CashPickup3D { cash, radius, respawn }` pays the first `Wallet3D` holder within `radius`, event `CashPickedUp3D`, system `"kit3d_cashpickup"`. Chop shop (M-CHOPSHOP): `ChopShop3D { radius, price }` buys a stolen car (`CarOwner3D.stolen`) from its driver (`Wallet3D`), destroys the car, event `CarSold3D`, system `"kit3d_chopshop"`. Repair shop (M-REPAIRSHOP): `RepairShop3D { radius, max_speed, price, price_per_level, wanted_drop, need_unseen }` mends a stopped car with a `Wallet3D` driver (`repair_vehicle`, impact_damage.h) and lowers the unseen driver's wanted level for cash, event `Repaired3D`, system `"kit3d_repairshop"`. Confiscation (M-ARRESTLOSS): `Confiscate3D { ammo_kept }` on the player cuts the `Weapon3D` reserve when `kit3d_respawn` wakes it up busted. Mission fee (M-MISSIONFEE): `MissionReward3D.fail_fee` is taken from the actor's wallet when the mission fails. Mission givers (M-MISSIONSTART): `MissionMarker { mission, radius }` starts an Idle Mission when its actor is within `radius`; `MissionWantedFail { level }` on a Mission fails it (reason 3) when its actor's wanted level reaches `level`. Retry (M-MISSIONRETRY): `MissionRetry { delay }` on a Mission puts it back to Idle (objectives Pending) `delay` seconds after it fails. Kill and interact jobs (M-MISSIONKILL): `Objective.team` (kill: only deaths of this `Health3D.team`; 0 any) and `Objective.by_actor` (kill: only the actor's kills); a Kill whose resolved target is already dead is done.
+(`FixedUpdate_Pre`, after `"kit3d_health"`). Tests: `tests/kit/test_wanted3d.cpp`.
+
+`roads.h` (M-OPENWORLD B1, ADR-0046): `RoadNetwork3D` places a cooked `.mcroads` (`asset::RoadView`) at its
+entity (translation only) and runs its traffic lights on `time` (saved; `"roads_clock"`, FixedUpdate_Pre,
+paused by `lights` 0). `RoadRegistry` (a resource) copies each network out of its chunk once (re-read on hot
+reload; `define` registers one from a payload) with a 32 m grid of lane segments. Queries on a placed
+`RoadNet` (`road_net`, `road_net_first`): `road_nearest` (flat distance, optional heading filter, connectors
+opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left), `road_route` (A* over
+lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
+`tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
+
+`traffic.h` (M-OPENWORLD B2, ADR-0046): `TrafficDriver3D` drives a `Vehicle3D` along a placed network's lanes
+(`"traffic_drivers"`, FixedUpdate_Pre ahead of `"kit3d_vehicles"`): projection onto its lane, hashed turn
+choice two lanes ahead, IDM speed against the car ahead, stop lines (red, amber, stop signs, conflicting
+connectors by rank and arrival) and bends, pure pursuit steering. `TrafficSpawner3D` (`"traffic_spawners"`,
+before the drivers) spawns cars from a prefab or the game's `TrafficSpawnHook` in a ring around a focus and
+removes far, lost or flipped ones. All driver state is in the component (saved, hashed). A `Pedestrian3D` in `Cross` mode
+within a car's lanes ahead (lane half width + 1.2 m, checked every 1.5 m up to its stopping distance + 15 m) stops it
+3 m short. A car stuck behind a stopped car that nobody drives (`drive = 0`, a wreck) takes a free lane beside it when its road has a second lane in its direction (M-TRAFFICAVOID); once past, it returns to the lane it left (`TrafficDriver3D::home`); on a road with one lane each way it passes through the oncoming lane when that is empty (`TrafficDriver3D::offset`), otherwise it queues.
+
+`crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
+a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
+crowd fills the network) and removes the ones past `despawn_radius`. A pedestrian is a few numbers (edge, distance
+along, direction, hop target, own random stream), no behaviour tree: edges are the road centreline offset by half the
+carriageway plus half `sidewalk`, trimmed at the junction; at a junction it hops to another edge end there, round
+the corner or across a road, and a crossing waits until every road it crosses has no straight-on traffic with green or
+amber and enough red left (`road_light`). Level of detail: step every tick within `near_radius`, every 4th within
+`far_radius`, else every 16th, staggered by entity index. Spawn candidates are a function of the focus's 32 m cell and
+`CrowdSpawner3D::serial` counts attempts, so replays and saves resume exactly. `"kit_crowd"` runs in FixedUpdate_Pre
+after `"roads_clock"`; `crowd_stats` is the per-tick budget counters. Tests: `tests/kit/test_crowd.cpp`.
+
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
 entity: `count`, `enters`, `last_other`), both pushing `TriggerEnter3D` / `TriggerExit3D` with the
@@ -170,7 +221,7 @@ out. `install_sensors3d` (from `install_stock`, after `install_bodies3d`): `"kit
 `"kit3d_triggers"`. Tests: `tests/kit/test_sensors3d.cpp`.
 
 `effects.h` (M-DATA-REACH 4): `FireOn` (`Manual` via the `fire` flag, `Start`, `TriggerEnter`,
-`ContactBegin`); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`), `ParticleBurst`,
+`ContactBegin`, `Died` when a `Died3D` names the entity, `Fired` when a `WeaponFired3D` names the weapon or the camera it aims from); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`; at the entity when it has `AudioSpatial`), `ParticleBurst` (also fires a `ParticleEmitter3D`; `keep_emitting` switches it on for lasting smoke),
 `ShakeTrigger`, `CameraShake2D` (added to the view by `primary_camera`), `CameraFollow2D` (offset,
 dead zone, smoothing, look-ahead, bounds), `CameraFollow3D` (orbit with yaw/pitch, Look-input
 orbit; M-MOVE3D 2: a spring arm over `World3D::camera_sweep`, look-ahead, first person, lock-on), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts), `NavGridSource`
@@ -248,12 +299,63 @@ together:
 - Missing or unloadable textures draw as the magenta checker (FR-DX-050); a null texture GUID draws
   a solid quad.
 - Component layouts carry explicit `pad_` fields so hashed component bytes stay defined.
+- ChunkLod3D (M-OPENWORLD A4, `mce/kit/chunk_lod3d.h`): `Kit3DExtract` draws the `proxy` of a `SceneChunk` entity
+  whose `SceneChunkStatus` is not `Loaded` (the `impostor` beyond `impostor_distance`, nothing beyond
+  `max_distance`), at the chunk entity's transform, counted in `Kit3DStats::chunk_proxies` / `chunk_impostors`.
+  The distance is from the camera to the chunk box: a render decision, while loading stays focus-based.
+  `bake_chunk_hlod` (`chunk_lod3d.cpp`) loads an area scene into a scratch world and merges its visible rigid
+  `MeshRef`s with opaque or masked materials through `render::build_merged_mesh` (one submesh per material, each
+  source's LOD levels kept), positions relative to the chunk entity; hidden, unloadable, skinned and non-opaque
+  meshes count as `skipped`, those under `min_size` as `small`. `EditorSession::bake_hlod` writes the result as
+  `.mchlod` (`cook::write_hlod_file`) and sets `ChunkLod3D.proxy` as one undo step. Its new sidecars carry
+  `"lod_levels": 2`: the `hlod` importer then adds meshopt levels (`generate_lods`, as the model importers) to the
+  submeshes that have none, leaving the sources' own levels and level 0 as baked. `collect_chunk_sources` is the
+  gathering half (one callback with every source; a child's world matrix composes its `LocalTransform`s up the
+  `ChildOf` chain when the scratch world has no `WorldTransform`), and gives each source a `group`: its root entity's
+  ordinal. The impostor bake (`cook::bake_impostor`, `mce/cook/impostor.h`, M-OPENWORLD A3) takes those groups: a
+  box (four sides and the top) or, for a group taller than `card_ratio` x its width and narrower than `card_size`, two
+  crossed cards, each quad an orthographic albedo capture rasterised on the CPU (cooked BC/RGBA8 textures decoded,
+  sRGB through one table, alpha-masked materials cut, uncovered texels dilated) packed into one atlas by shelves.
+  `EditorSession::bake_hlod(settings, only, &impostor)` writes `chunk_<id>_far.png` (a `texture` sidecar) and
+  `chunk_<id>_far.mchlod` and sets `ChunkLod3D.impostor` in the same undo step as the proxy.
+- StaticMerge3D per frame (M-OPENWORLD A3): an unchanged group costs a walk over its children and a word-wise hash of
+  their raw inputs (entity, mesh, material, position, rotation, scale, tints, shadow flag, mesh generation); the mesh
+  views and material checks run only when that hash changes, counted in `Kit3DStats::merged_rebuilt`. The change
+  plans the cells (children by cell, kept as entity and placement on the group); `r.merge_budget` /
+  `set_merge_budget` then merges at most that many cells per frame, re-reading each child's MeshRef, mesh view and
+  material when its cell merges, while the unmerged children draw on their own (`merge_pending`). A rebase while
+  cells wait plans the group again. Per-entity
+  arrays of the extract (`world_stamp_`, `worlds_`, `lod_states_`, `tracked_`, `merged_stamp_`) grow by half their
+  capacity, not to `e.index + 1`: 24k entities arriving in one frame cost 16 ms instead of 2.7 s.
+- Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
+  `install_nav3d` and `install_cinematic` register `ecs::on_origin_shift` listeners for the physics world,
+  static instances, cached body poses, world-anchored joint ends, the navmesh offset and crowd targets,
+  and root camera rails. Kit fields holding world points (`Locomotion3D::last_position`,
+  `SequencePlayer::anchor`, `CameraFollow3D::pivot` and `last_goal`, `NavAgent3D::target` and
+  `next_corner`, `Perceiver::last_seen` and `heard_at`, `Ragdoll3D::root_position`, `Raycast3D::point`)
+  are flagged `WorldPoint`; `Blackboard` vectors are not. An absolute sequence `MoveTo` is a fixed-world
+  target. `Kit3DExtract` notices a rebase through `WorldOrigin::serial`: it shifts its interpolation
+  history, foliage and merged-mesh caches, re-uploads terrains, starts a camera cut and passes the shift
+  to `Scene3D::set_origin_shift`.
 - The renderer has no particle code; particles are sprite instances in the one sprite batch.
 - Engine container ban applies (`scripts/ci/check_walls.py`).
 
 ## How it is tested
 
 ctest `test_kit` (no GPU), `tests/kit/`:
+
+- `test_chunk_lod3d.cpp`: "chunk lod: the proxy near, the impostor far, nothing past max_distance, hidden while
+  loaded" (and kept while loading) and "chunk lod: a world without ChunkLod3D draws exactly as before".
+  The bake is tested in `tests/editor/test_hlod_bake.cpp` (`test_editor`, "editor hlod bake*": counts, undo,
+  byte-identical re-bake, `min_size`; the impostor's files, GUIDs and byte-identical re-bake). The capture itself is
+  `tests/asset/test_cook_impostor.cpp` (`test_cook`: boxes and cards, colours in the atlas, every quad's window
+  covered, blended sources left out, same bytes twice).
+- `test_static_merge3d.cpp` also gates the city path by counts: "static merge: a 4096-piece city block reaches the
+  scene as its cells and merges again only on a change" and "static merge: a merge budget spreads a block over
+  frames, the waiting cells' children drawing on their own".
+- `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
+  stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
+  more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".
 
 - `test_fsm.cpp`: "fsm: a timed transition fires on its exact tick and resets state time", exit and
   entry order, `StateChanged`, validation, "fsm: state and state time survive a save mid-state".
@@ -297,3 +399,155 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
   yet (#152).
 - No gameplay starter components (controller, pickups; the follow camera and effects are in `effects.h`); see "Building a 2D game on
   the kit" above (M9).
+
+## Inventory, equipment and pickups (M-INVENTORY 2)
+
+`mce/kit/inventory.h`, installed by `install_stock`. The items are a project's `.mcitems` catalog (`ItemCatalog`).
+
+- `Inventory`: 24 slots of (`item`, `qty`), the catalog it indexes, an optional `max_weight_milli` (thousandths of a kilogram, 0: none).
+  `item` is the catalog index plus one, 0 meaning empty. All arithmetic is whole numbers, so the same inputs give the same state hash.
+- `Equipment`: one catalog index per `EquipSlot` (Head, Body, Hands, Feet, Weapon, Offhand, Accessory1, Accessory2). An item fits a
+  slot when it carries the tag `equip.<slot>` (`equip.weapon`, `equip.head`, ...). Equipping moves one unit out of an inventory slot;
+  a unit already in the slot goes back first, and nothing changes if it has nowhere to go.
+- `ItemPickup3D` on an entity with a `Trigger3D`: whatever with an `Inventory` enters takes it; it is destroyed when all of it fits,
+  otherwise `qty` shrinks to what is left.
+- Rules as plain functions (`inventory_add`, `inventory_remove`, `inventory_count`, `inventory_move`, `inventory_split`,
+  `equipment_equip`, `equipment_unequip`): add fills existing stacks and then empty slots and stops at the weight limit (an item that
+  weighs nothing is never limited by weight); move onto an empty slot moves, onto the same item merges up to the stack, onto another
+  item swaps; split moves part of a stack to the first empty slot.
+- Events, processed in `FixedUpdate_Pre` (push them one tick before you need the result; they are swapped at the sync point):
+  `GiveItem`, `TakeItem`, `MoveItem`, `SplitItem`, `EquipItem`, `UnequipItem`, `UseItem` in; `ItemAdded` (with the remainder that did
+  not fit), `ItemRemoved`, `ItemEquipped`, `ItemUnequipped`, `ItemUsed` out. `UseItem` on an item tagged `consumable` takes one unit; if the item has a `heal` stat it also heals the user's `Health3D` (capped at `max`, `ItemHealed{owner, item, amount}` out), and a heal at full health or on a dead body is refused: nothing is consumed and `ItemUsed.consumed` is 0 (M-ITEMFX 1). Without a `Health3D` the item is consumed as before.
+- Worn items change the wearer's `Health3D` (M-ITEMFX 2): the `armor` stats of the equipped items add to `Health3D.armor` (kept within 0..1) and their `max_health` stats to `Health3D.max` (never below 1; `current` is clamped down when `max` falls). Only the change is applied each tick and `Equipment.armor_applied` / `max_applied` remember what was added (not saved: `Health3D` is not in a save game either, so both load at the authored values and the bonus is applied again; a `Health3D` replaced at run time is noticed through `Health3D::bonus_mark` and gets the bonus again (a copy that is changed and written back keeps the old mark and is not noticed)), so the authored base is never overwritten, a level-up that raises `max` stays on top, and unequipping gives back what was added (within float rounding). An entity with `Equipment` but no `Health3D` is left alone.
+- Loot tables and chests: see the next section. Not yet: Luau and the `ItemGrid` widget (step 4), a sample (step 5).
+
+## Loot tables, drops and chests (M-INVENTORY 3)
+
+`mce/kit/loot.h`, installed by `install_stock` (it installs the inventory kit first). The tables are in the project's `.mcitems`
+catalog: weighted entries, nested tables, guaranteed entries, quantity ranges and roll ranges.
+
+- `roll_loot(catalog, table, Rng&, out)`: a pure function of the catalog, the table and the stream. A table does its guaranteed
+  entries first, in entry order, then rolls `rolls_min..rolls_max` times, each roll picking one weighted entry (integer cumulative
+  weights, a 64-bit draw; no float). An entry that names a table rolls that table (depth-limited). Equal items merge in first-seen
+  order; a quantity saturates instead of wrapping. The same table and the same stream give the same list on every machine.
+- `LootDrop` (on an entity with `Health3D`): when `Died3D` fires, rolls `table` once and spawns each result as an `ItemPickup3D` with
+  a sphere `Trigger3D` (`radius`) on a fixed ring (`scatter` metres; a second ring beyond eight). `dropped` and `rolls` are saved.
+  With `mesh` set each pickup also gets a `MeshRef` (`tint`, `mesh_scale`) and sits `lift` metres above the body's origin; empty `mesh`: invisible pickups.
+- `ItemHotkey3D` (on an entity with an `Inventory`): the `UseItem` input action sends a `UseItem` for the first consumable slot (the 09_openworld bag uses H).
+- `Container` (a chest; give the entity an `Inventory` on the same catalog): the first `OpenContainer{container, opener}` rolls
+  `table` into the chest's own `Inventory` (slots you pre-filled stay), then the opener takes as much as fits (stacks and weight
+  cap apply). The rest stays; a later open takes more. `ContainerOpened{taken, left}` and an `ItemAdded` per move are sent. An opener
+  on a different catalog than the chest moves nothing.
+- Seeds: `seed` 0 derives from the table id and the entity index; a non-zero `seed` is used as given (set it for loot that must be
+  the same on every run). The stream is `Rng::child(seed, "loot", rolls)`, so loading a save carries on with the next draw.
+- Luau: the `inventory` global (`docs/user-guide/27-scripting.md`). UI: Text widgets named `slot_N`, `equip_<where>` and `inventory_weight` are filled by the stock player (`docs/user-guide/12-ui-and-console.md`).
+- Saves: `Inventory`, `Equipment`, `Container` and `LootDrop` fields are `Save` fields of the ordinary save, which is versioned as a whole; a save without them loads with empty defaults, and an unknown field from a newer module is skipped. A save stores catalog item *numbers*, so a catalog may only grow at the end; renumbering items changes what an old save holds.
+- Not yet: a sample (step 5).
+
+## Crafting rules, events and stations (M-CRAFT 2)
+
+`mce/kit/craft.h`, installed by `install_stock` (after the loot kit). The recipes are in the project's `.mcitems` catalog (see above).
+
+- `craft_check(inv, catalog, recipe)` / `craft_apply(inv, catalog, recipe)`: pure functions of an `Inventory`. A craft is atomic: every
+  input comes out and every output goes in, or nothing changes. The room for the outputs is checked *after* the inputs are taken out,
+  against stacks, slots and the weight limit exactly as `inventory_add` does, so a full inventory can still make a recipe whose
+  inputs free the space. Results (`CraftResult`, `craft_result_name`): `Ok`, `NoRecipe`, `MissingInput` (reported before room),
+  `NoRoom`, `NoStation`, `StationBusy`, `NoInventory`.
+- `CraftingStation` (on any entity): `station` is the tag it offers (`workbench`). A recipe with a `station` needs a `CraftingStation` of
+  that tag; a recipe without one is made by hand.
+- Events: `CraftItem{owner, recipe, station}` in (`station` null: by hand); `ItemCrafted{owner, recipe, station}` and
+  `CraftFailed{owner, recipe, station, reason}` out. A recipe with time 0, or one made by hand, is applied in the tick the event is read.
+  A timed recipe at a station is checked when it starts and queued (`recipe`, `left_us` on the station, one at a time); the inputs
+  are taken and the outputs added when the time is up, as one atomic step, so the inventory stays usable meanwhile and a craft that
+  no longer fits fails with its reason. `recipe`, `left_us` and `crafter` are saved, so a craft in progress survives a save. Destroying a station drops its queued craft without
+  an event (nothing was taken); the station tag is checked again when the time is up. A recipe without a station tag is always made by hand, even when a station is named.
+- System `kit_craft` (FixedUpdate_Pre, after `kit_loot`). Luau: `inventory.can_craft(e, recipe, station?)` and `inventory.craft(e, recipe, station?)` (`docs/user-guide/27-scripting.md`); `samples/12_loot` crafts a tonic by hand and a pack at a workbench.
+
+## Timed status effects (M-STATUS 1)
+
+`mce/kit/status.h`, installed by `install_stock` (after the crafting kit). A `StatusEffects` component holds up to 8 effects, each an id, a
+kind, an amount and a time left in whole microseconds (the fixed step rounded to microseconds, so a run is the same every time).
+
+- Kinds: `Regen` (hp/s, capped at `Health3D.max`, a dead entity is not healed), `Poison` (hp/s taken in half-second pulses through
+  `apply_damage`, so armor, `Died3D`, ragdolls and `LootDrop` work as for any damage; the instigator is the applier), `Armor` (adds to
+  `Health3D.armor`, kept within 0..1) and `MaxHealth` (adds to `Health3D.max`, never below 1, `current` clamped down when it falls).
+  A poison pulse that has not completed when the effect ends is not dealt.
+- Bonuses are applied as a remembered change (`applied`, not saved), like `Equipment`: the authored base is never overwritten, a
+  level-up that raises `max` stays on top and the end of the effect gives back exactly what it added. `Health3D` is not in a save game
+  either, so the bonus applies again on the first tick after a load.
+- Events: `ApplyStatus{target, id, kind, amount, seconds, source}` and `ClearStatus{target, id}` (empty id: all) in; `StatusApplied`
+  (`refreshed` when the id was active), `StatusEnded` (`expired` 1 or 0 when cleared) and `StatusRefused` (all 8 slots busy, or bad
+  input: seconds outside 0.01 to 3600, a non-finite amount, an unknown kind) out. Applying an id that is active refreshes it (a refresh that changes the kind first gives back what the old kind added); nothing stacks. Regen and Poison need a positive amount, amounts are limited to ±1e6, clears are handled before applies in a tick (a cleanse then a re-apply ends with the effect on), and each effect remembers who applied it, so a poison kill credits the poisoner. A corrupt saved slot (non-finite amount, unknown kind) is dropped. A `Health3D` replaced at run time is noticed through `Health3D::bonus_mark` and the bonus kinds are applied to it again (a copy written back with the old mark is not noticed).
+- System `kit_status` (FixedUpdate_Pre, after `kit_craft`). Items and Luau: the next step.
+
+### Items and Luau start effects (M-STATUS 2)
+
+- A consumable with `regen` (hp/s) and `regen_seconds` starts a `Regen` effect named after the item; `armor_boost` and `boost_seconds` start an
+  `Armor` effect named `<item>:armor`. The user needs `Health3D` (alive) and `StatusEffects`; without them an item that only carries effects is
+  refused and not consumed, as a heal at full health is. An item that also has `heal` follows the heal rule. The effect starts a tick after the
+  use (`ApplyStatus` is queued by `kit_inventory` and read by `kit_status`).
+- Luau: `status.add(e, id, kind, amount, seconds, source?)`, `status.has(e, id)`, `status.clear(e, id?)` (`src/api_status.cpp`, typed in
+  `definitions.cpp`, call table in `docs/user-guide/27-scripting.md`). Bad arguments raise an error that names the call.
+- `samples/12_loot` (M-STATUS 3) drinks an elixir (regen 20 hp/s for 0.5 s, armor boost 0.3 for 1 s) while a poisoned strike (8 hp/s from the goblin) runs; `loot_test.cmake` pins the two `status:` lines.
+
+### Consumable cooldowns (M-ITEMCD)
+
+- A consumable with a `cooldown` stat (seconds, up to 3600) starts a `Cooldown` status named `cd:<item>` when used, and a use while it runs is refused and
+  not consumed (nothing heals either). The user needs `StatusEffects`; without it the stat is ignored. A refused use (full health, dead) starts no cooldown.
+  Two `UseItem` events for the same item in one tick pass only once (M-GAMEPLAYFIX). A `cooldown_group` stat (1 to 999999) names the status `cdg:<group>` instead, so every
+  item of the group shares one cooldown (all potions). Luau: `status.has(e, "cd:potion")` tells a
+  script (and a HUD) the item is cooling down; `status.add(e, id, "cooldown", 1, seconds)` makes a cooldown by hand.
+
+### Stat-driven weapon damage (M-WEAPONSTAT)
+
+- Worn items' `damage` stats are added to the `damage` of a `Weapon3D` on the same entity as the `Equipment`, like `armor` and `max_health` (a remembered
+  change, applied once, given back on unequip, never below 0). A `Weapon3D` on a separate entity gets the bonus of its wielder (its `owner`, else its own entity); the weapon remembers the change in `Weapon3D::bonus_applied`, so a new owner takes it over and several weapons each get it (M-GAMEPLAYFIX).
+
+### Dead pedestrians (M-PEDDEAD)
+
+- A `Pedestrian3D` with a dead `Health3D` switches to `PedestrianMode::Down`: it stops, stays 10 s (`kPedestrianCorpseSeconds`) and is removed. It does not count toward
+  `max_count` (the street refills) and shows in `CrowdStats::down`. A revived one walks again.
+
+### Contact events (M-CONTACTEVENTS)
+
+A `RigidBody3D` with `contact_events = 1` raises `ContactBegin3D { a, b, point, normal, approach_speed, impulse }` (producer `FixedUpdate_Physics`, so read it in `FixedUpdate_Post`
+or in `FixedUpdate_Pre` of the next tick) when it closes on another body faster than `contact_min_speed` m/s (0 means 2). `a` sorts before `b`, `normal` points from `a` to `b`;
+one event per pair per step, the same pair is not reported again for 0.1 s unless it hits twice as fast. A `SfxTrigger` / `ParticleBurst` with `FireOn::ContactBegin` fires on it
+and `PhysicsEvents` counts `contact_begins` / `last_contact` / `contact_speed` (point and normal stay 2D). Only `RigidBody3D` entities opt in; characters, crowd pedestrians and ragdoll parts do not report.
+Record: `docs/milestones/M-CONTACTEVENTS.md`.
+
+### Crash damage (M-CONTACTEVENTS 4)
+
+`ImpactDamage3D` on an entity with `Health3D` and a `RigidBody3D` whose `contact_events` is on (a car, a crate): every `ContactBegin3D` it is in that closes at least `min_speed` m/s costs
+`(speed - min_speed + 1) * damage_per_ms` hp through `apply_damage`, once per second at most. The instigator is the other body or its `VehicleSeat3D` driver, so ramming a traffic car as a wanted
+player is a crime. `kit_impact_damage` (FixedUpdate_Pre) reads the previous tick's events. `kit_vehicle_ram` skips bodies that have `ImpactDamage3D`, so one touch is not two hits; the ram zone
+stays the way cars hurt crowd pedestrians, who have no physics body. The car's `VehicleSeat3D` driver takes `occupant_share` (default 0.5) of the same blow.
+On an entity with a `CharacterController3D` the component is also the contact opt-in (a character is no `RigidBody3D`), so a character landed on, run over or hit by a thrown crate takes the same crash damage.
+
+`kit_wreck` (installed with it, FixedUpdate_Pre): a car whose `Health3D` is dead (it has a `Vehicle3D`) is a wreck: `use_input` off, throttle and steer zero, handbrake on, and a `TrafficDriver3D` / `VehicleDriver3D` on it lets go (`drive = 0`). Set `Health3D::destroy_on_death` to remove it after `linger`, or leave it as scenery (M-CARWRECK).
+
+### Vehicle ram (M-VEHICLEHIT)
+
+`VehicleRam3D` on a `Vehicle3D` entity (installed by `install_vehicle_ram`, part of the stock kit) hurts the living `Health3D` bodies in a box in front of the car
+while it moves faster than `min_speed` m/s (reversing: the box is behind). The box runs `zone_start` to `zone_end` metres along the travel direction and `half_width` to each side.
+Damage is `(speed - min_speed + 1) * damage_per_ms`, with an impulse of `speed * impulse_per_ms` along the travel direction, through `apply_damage`; the instigator is the
+`VehicleSeat3D` driver when there is one (so `Wanted3D` sees a crime), else the car. The car, the driver and the dead are skipped, and one car hurts a victim once a second at most.
+Record: `docs/milestones/M-VEHICLEHIT.md`.
+
+### Fleeing pedestrians (M-PEDFLEE)
+
+- A live pedestrian whose `Health3D` was hit in the last 5 s (`kPedestrianFleeSeconds`; `hits > 0` and `since_hit` below it) switches to `PedestrianMode::Flee`: on its pavement edge
+  it turns to the end that is farther from `last_attacker`, moves 2.5 times as fast (`kPedestrianFleeScale`, `pace` shows it) and does not wait for lights. At junctions it picks
+  its way as usual. After the 5 s it walks again. Nothing new is saved: the state is a function of `Health3D`. A pedestrian hit again keeps running.
+- A `WeaponFired3D` within 30 m (`kPedestrianFearRadius`) of a pedestrian scares it the same way (M-PEDFLEE 2): it runs from the muzzle for 5 s, whichever side the shot came from. The
+  scared list lives in the crowd system, not in the save: a loaded game starts with calm streets. The crowd system reads the event, so the combat kit's `WeaponFired3D` is registered
+  by `install_crowd` too.
+- A crash scares them too (M-PEDCRASH): a `ContactBegin3D` that closes at 5 m/s or more (`kCrashSpeed`) and involves a `Vehicle3D` is a scare source at its `point`, handled like a muzzle (30 m, 5 s, the panic spreads). The car needs `RigidBody3D::contact_events` (an `ImpactDamage3D` car has it). Record: `docs/milestones/M-PEDCRASH.md`.
+- A vehicle at 6 m/s or more bearing down on a pedestrian (within `speed * 2 s + 3 m` ahead, 2.5 m either side of its line) makes it run from the vehicle for 3 s (M-PEDCRASH 2).
+- Panic spreads (M-PEDFLEE 3): a pedestrian within 8 m (`kPedestrianPanicRadius`) of one that is running, and still has more than 1.5 s to run, catches it and runs from the same spot with one
+  second less (`kPedestrianPanicHop`), so a ripple moves through a crowd and dies out. A pedestrian that was hurt warns its neighbours the same way. Not saved.
+
+### Hardening (M-GAMEPLAYFIX 1)
+
+- The part of a Poison pulse that was under way when the effect ends is dealt in proportion. Two `UseItem` events for one cooldown item in the same tick pass once.
+

@@ -1,0 +1,1 @@
+- Cook, M-FORMATVER: the asset text importers share one version check that accepts older versions.

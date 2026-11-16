@@ -53,12 +53,17 @@ struct MountOptions {
     // Dev mounts verify every container's payload CRC on load. A shipped pack is verified once at
     // mount and trusted afterwards (assets.md §3, the < 1 s boot budget).
     bool verify_payload_crc = true;
+    // Script chunks are Luau *bytecode*, and Luau's loader trusts its input (M-FUZZ finding): only the
+    // game's own cooked content may carry it, so the default is no code. A root mounted with allow_code =
+    // false has its Script entries dropped at mount time with a warning: they neither load nor override
+    // the game's. Set it true only for a pack the game or the project's own cook produced.
+    bool allow_code = false;
 };
 
 class AssetSystem {
 public:
     // Placeholder payloads, one per ChunkType value (room for the appended types).
-    static constexpr usize kPlaceholderSlots = 32;
+    static constexpr usize kPlaceholderSlots = 48;
 
     explicit AssetSystem(mem::IAllocator& a = mem::heap());
     ~AssetSystem();

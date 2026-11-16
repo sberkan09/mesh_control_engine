@@ -28,6 +28,8 @@ MTLPixelFormat mtl_format(TextureFormat f, MTLPixelFormat depth_stencil) {
         case TextureFormat::R11G11B10F: return MTLPixelFormatRG11B10Float;
         case TextureFormat::BC1_UNorm: return MTLPixelFormatBC1_RGBA;
         case TextureFormat::BC3_UNorm: return MTLPixelFormatBC3_RGBA;
+        case TextureFormat::BC4_UNorm: return MTLPixelFormatBC4_RUnorm;
+        case TextureFormat::BC1_SRGB: return MTLPixelFormatBC1_RGBA_sRGB;
         case TextureFormat::BC5_UNorm: return MTLPixelFormatBC5_RGUnorm;
         case TextureFormat::BC7_UNorm: return MTLPixelFormatBC7_RGBAUnorm;
         case TextureFormat::BC7_SRGB: return MTLPixelFormatBC7_RGBAUnorm_sRGB;
@@ -40,17 +42,9 @@ MTLPixelFormat mtl_format(TextureFormat f, MTLPixelFormat depth_stencil) {
     return MTLPixelFormatRGBA8Unorm;
 }
 
-usize level_bytes(TextureFormat f, u32 w, u32 h) {
-    if (is_compressed_format(f)) {
-        const usize block = f == TextureFormat::BC1_UNorm ? 8 : 16;
-        return usize((w + 3) / 4) * ((h + 3) / 4) * block;
-    }
-    return usize(w) * h * bytes_per_pixel(f);
-}
-
 // Bytes per row as Metal wants it for a tightly packed upload/readback (block rows for BCn).
 usize row_bytes(TextureFormat f, u32 w) {
-    if (is_compressed_format(f)) return usize((w + 3) / 4) * (f == TextureFormat::BC1_UNorm ? 8 : 16);
+    if (is_compressed_format(f)) return usize((w + 3) / 4) * block_bytes(f);
     return usize(w) * bytes_per_pixel(f);
 }
 
@@ -248,6 +242,9 @@ ResultV MetalDevice::init() {
         caps_.max_compute_group_size[2] = static_cast<u32>(tg.depth);
         for (u32& n : caps_.max_compute_group_count) n = 0xFFFFFFFFu;
         caps_.max_storage_image_units = kMaxImageUnits;
+        if (@available(macOS 11.0, iOS 16.4, *)) caps_.texture_bc = [device_ supportsBCTextureCompression];
+        caps_.texture_bc_srgb = caps_.texture_bc;  // conservative: Metal has no per-format query
+        caps_.texture_astc = [device_ supportsFamily:MTLGPUFamilyApple2];
         init_timestamps();
         MCE_LOG_INFO("rhi.metal: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 

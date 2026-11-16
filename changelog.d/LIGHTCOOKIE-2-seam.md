@@ -1,0 +1,1 @@
+- Light cookies, step 40a: the data-only seam (`PointLight::cookie*`, `render::SunCookie`, the `Forward3DDesc`/`Forward3DStats` fields and `rhi::bank::kLightCookies`); nothing reads it yet, frames are unchanged.

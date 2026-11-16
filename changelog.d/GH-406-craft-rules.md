@@ -1,0 +1,1 @@
+- Kit (M-CRAFT 2): `craft_check` / `craft_apply` (atomic recipes over an `Inventory`: every input and room for every output, or nothing changes), the `CraftingStation` component, `CraftItem` in and `ItemCrafted` / `CraftFailed` out, system `kit_craft`. Installed by `install_stock`. Docs: `docs/engine/kit.md`.

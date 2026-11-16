@@ -1,0 +1,1 @@
+- Kit (M-ARREST): police arrest an offender who stands still within reach at a low wanted level (`Arrested3D`, new `Police3D` fields `arrest_*`). Record: `docs/milestones/M-ARREST.md`.

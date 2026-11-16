@@ -140,10 +140,11 @@ struct Camera3DComponent {
     f32 far_z = 1000.0f;
     u32 primary = 1;
     u32 mouse_look = 0;
-    u32 pad_ = 0;
+    f32 focus_distance = 0.0f;  // M-VISUAL3 3: meters to the sharpest plane for this camera; 0 = Environment3D's dof_focus_distance
 };
 MCE_COMPONENT(Camera3DComponent, (fov_deg, Range{5, 170}), (near_z, Range{0.001f, 100}), (far_z, Range{1, 100000}), primary,
-              (mouse_look, Help{"1: capture the mouse for look (released while paused or in the console)"}))
+              (mouse_look, Help{"1: capture the mouse for look (released while paused or in the console)"}),
+              (focus_distance, Range{0, 1000}, Help{"depth of field: meters to the sharpest plane for this camera; 0 = the environment's dof_focus_distance"}))
 
 // Plays a node / skeleton clip of the entity's MeshRef mesh by name, cross-fading over `fade`
 // seconds when `clip` changes. kit3d advances `time` every tick (deterministic); a game may also
@@ -237,6 +238,7 @@ struct Environment3D {
     f32 shadow_blend = 0.1f;
     u32 sky_ibl = 0;  // 1: the sky lights the scene (image-based lighting, M-VISUAL 2)
     f32 ibl_texture_intensity = 1.0f;
+    u32 ibl_pad_ = 0;  // explicit: the AssetRef below is 8-byte aligned (state_hash reads every byte)
     asset::AssetRef<asset::Texture> ibl_texture;  // equirect the IBL bakes from; null = the visible sky
     // M-VISUAL 7. The physically based sky: it replaces the gradient and the sky texture, tints the sun
     // (sun_color is then the light above the air) and sets the ambient from the sky and the lit ground.
@@ -258,6 +260,8 @@ struct Environment3D {
     f32 exposure_compensation = 0.0f;        // EV added to the auto target
     f32 auto_exposure_speed_up = 3.0f;       // adaptation per second (EV) when the frame brightens
     f32 auto_exposure_speed_down = 1.0f;     // ... and when it darkens
+    f32 auto_exposure_min = 0.03f;           // clamps of the auto factor (times `exposure`): a night scene
+    f32 auto_exposure_max = 32.0f;           // stays dark with a small max (1.5 lifts it half a stop at most)
     f32 color_grade_strength = 1.0f;
     u32 depth_of_field = 0;
     f32 dof_focus_distance = 8.0f;           // meters to the sharpest plane
@@ -278,7 +282,7 @@ struct Environment3D {
     u32 ssr = 0;
     f32 ssr_max_distance = 8.0f;   // world meters a reflection ray travels
     f32 ssr_thickness = 0.25f;     // meters behind a surface a ray may pass and still hit it
-    f32 ssr_max_roughness = 0.5f;  // rougher surfaces keep the probes only
+    f32 ssr_max_roughness = 0.6f;  // rougher surfaces keep the probes only
     f32 ssr_roughness_fade = 0.2f; // roughness range below the maximum over which reflections fade
     f32 ssr_intensity = 1.0f;
     u32 ssr_steps = 32;            // march steps per ray (4..128): more find thinner things, cost more
@@ -296,7 +300,17 @@ struct Environment3D {
     f32 contact_thickness = 0.1f;   // meters behind a surface a sample may be and still occlude
     f32 contact_intensity = 1.0f;   // 0..1: how much of the sun an occluded pixel loses
     u32 contact_steps = 12;         // march steps per ray (4..64)
-    u32 pad_ = 0;
+    f32 sky_rotation_deg = 0.0f;    // M-VISUAL3 4: yaw of the sky texture about +Y (sky and IBL textures; the gradient and atmosphere ignore it)
+    // M-VISUAL3 3. The camera's look, in the tonemap pass; all off by default.
+    f32 vignette = 0.0f;             // 0..1: darkening at the frame's corners
+    f32 vignette_smoothness = 0.5f;  // 0.05..1: how far in from the corners it reaches
+    f32 film_grain = 0.0f;           // 0..1: animated, luminance-weighted grain
+    f32 grain_size = 1.5f;           // 1..4: grain cell size in output pixels
+    f32 chromatic_aberration = 0.0f; // 0..1: radial colour fringe toward the edges (1 = 0.5 % of the view width)
+    f32 lens_dirt_intensity = 0.0f;  // 0..4: how strongly bloom lights the dirt texture
+    u32 tonemapper = 0;              // 0 ACES fit (the long-standing one), 1 AgX, 2 Khronos PBR Neutral
+    u32 lens_pad_ = 0;
+    asset::AssetRef<asset::Texture> lens_dirt;  // rgb dirt mask over the frame, imported srgb false; empty = none
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -314,7 +328,10 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               volumetric_albedo, (volumetric_distance, Range{4, 500}),
               (auto_exposure, Help{"1: the exposure follows the frame's brightness (histogram)"}),
               (exposure_compensation, Range{-8, 8}), (auto_exposure_speed_up, Range{0, 20}),
-              (auto_exposure_speed_down, Range{0, 20}), (color_grade_strength, Range{0, 1}),
+              (auto_exposure_speed_down, Range{0, 20}),
+              (auto_exposure_min, Range{0.001f, 64}, Help{"smallest auto exposure factor (darkens a bright frame at most this far)"}),
+              (auto_exposure_max, Range{0.001f, 64}, Help{"largest auto exposure factor (keeps a night frame dark)"}),
+              (color_grade_strength, Range{0, 1}),
               (depth_of_field, Help{"1: blur away from dof_focus_distance"}), (dof_focus_distance, Range{0.1f, 1000}),
               (dof_focus_range, Range{0, 100}), (dof_blur_range, Range{0.1f, 1000}), (dof_max_radius, Range{0, 0.05f}),
               (motion_blur, Help{"1: smear moving objects (and the camera's motion) along their velocity"}),
@@ -330,7 +347,14 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (sharpen, Range{0, 1}, Help{"contrast-adaptive sharpening of the final frame (0 = off)"}),
               (contact_shadows, Help{"1: short screen-space sun shadows in creases and under small details"}),
               (contact_length, Range{0.01f, 5}), (contact_thickness, Range{0.005f, 2}), (contact_intensity, Range{0, 1}),
-              (contact_steps, Range{4, 64}))
+              (contact_steps, Range{4, 64}),
+              (sky_rotation_deg, Range{-360, 360}, Help{"yaw of the sky texture about +Y, degrees; 0 = as authored"}),
+              (vignette, Range{0, 1}, Help{"darkens the frame's corners (0 = off)"}), (vignette_smoothness, Range{0.05f, 1}),
+              (film_grain, Range{0, 1}, Help{"animated film grain (0 = off)"}), (grain_size, Range{1, 4}),
+              (chromatic_aberration, Range{0, 1}, Help{"colour fringe toward the frame's edges (0 = off)"}),
+              (lens_dirt_intensity, Range{0, 4}, Help{"how strongly bloom lights lens_dirt (needs bloom on)"}),
+              (tonemapper, Range{0, 2}, Help{"0 = ACES fit, 1 = AgX, 2 = Khronos PBR Neutral"}),
+              (lens_dirt, Help{"dirt mask over the frame, imported srgb false; empty = none"}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 
@@ -390,13 +414,29 @@ struct Foliage3D {
     u32 cast_shadows = 1;
     u32 random_yaw = 1;
     u32 enabled = 1;
+    // M-VISUAL3 6: each copy's colour = tint x mix(white, tint_variation, hash of its origin); the default (white) keeps `tint`.
+    math::vec4 tint_variation{1.0f, 1.0f, 1.0f, 1.0f};
+    f32 wind_height = 0.0f;    // metres where the sway reaches wind_amplitude; 0 = amplitude x h^2 (h in metres)
+    f32 wind_gust = 0.0f;      // 0..1: slow gusts travelling along wind_direction across the field
+    f32 wind_flutter = 0.0f;   // metres of fast per-vertex leaf jitter at wind_height
+    u32 mesh_pad_ = 0;         // explicit: mesh_1.. below are 8-byte aligned
+    // More kinds in one scatter: each point picks mesh, mesh_1, mesh_2 or mesh_3 by a hash weighted by mesh_weights
+    // (relative shares; an unbound mesh gets none).
+    asset::AssetRef<asset::Mesh> mesh_1, mesh_2, mesh_3;
+    math::vec4 mesh_weights{1.0f, 0.0f, 0.0f, 0.0f};
 };
 MCE_COMPONENT(Foliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
               (half_extents, Help{"metres, x and z, around the entity"}), (count, Range{0, 1000000}), seed,
               (scale_min, Range{0.01f, 100}), (scale_max, Range{0.01f, 100}),
               (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
               (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
-              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled,
+              (tint_variation, Help{"each copy's colour = tint x mix(white, this, hash of its origin); white = no variation; keep alpha 1"}),
+              (wind_height, Range{0, 100}, Help{"metres where the sway reaches wind_amplitude; 0 = amplitude x h^2"}),
+              (wind_gust, Range{0, 1}, Help{"slow gusts travelling along wind_direction"}),
+              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height; needs wind_amplitude > 0"}),
+              (mesh_1, Help{"a second kind in the same scatter"}), (mesh_2, Help{"a third kind"}), (mesh_3, Help{"a fourth kind"}),
+              (mesh_weights, Help{"relative share of mesh, mesh_1, mesh_2, mesh_3"}))
 
 // ---- terrain (M-TERRAIN) -------------------------------------------------------------------------
 
@@ -452,6 +492,11 @@ struct TerrainFoliage3D {
     u32 random_yaw = 1;
     u32 enabled = 1;
     u32 pad_ = 0;
+    math::vec4 tint_variation{1.0f, 1.0f, 1.0f, 1.0f};  // as Foliage3D
+    f32 wind_height = 0.0f;
+    f32 wind_gust = 0.0f;
+    f32 wind_flutter = 0.0f;
+    u32 pad2_ = 0;
 };
 MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
               (layer, Range{0, 8}, Help{"the splat layer whose weight sets the density; 8 = everywhere"}),
@@ -460,7 +505,11 @@ MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the me
               (max_slope_deg, Range{0, 90}, Help{"no copies on steeper ground"}),
               (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
               (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
-              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled,
+              (tint_variation, Help{"each copy's colour = tint x mix(white, this, hash of its origin); white = no variation; keep alpha 1"}),
+              (wind_height, Range{0, 100}, Help{"metres where the sway reaches wind_amplitude; 0 = amplitude x h^2"}),
+              (wind_gust, Range{0, 1}, Help{"slow gusts travelling along wind_direction"}),
+              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height; needs wind_amplitude > 0"}))
 
 // A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
 // entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)
@@ -519,6 +568,7 @@ struct ParticleEmitter3D {
     u32 additive = 1;
     u32 emitting = 1;
     u32 pad_ = 0;
+    u32 pad2_ = 0;  // explicit tail: the struct is 8-byte aligned (state_hash reads every byte)
 };
 MCE_COMPONENT(ParticleEmitter3D, texture, (color_start, Help{"linear, HDR allowed; a opacity"}), color_end,
               (offset, Help{"entity space"}), (box, Help{"spawn volume half extents"}), (direction, Help{"entity space"}),

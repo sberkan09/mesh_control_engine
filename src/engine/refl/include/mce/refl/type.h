@@ -36,6 +36,7 @@ enum : u32 {
     Save = 1u << 2,         // included in save games (ecs-gameplay §2.13 [Save] marker)
     EditorRange = 1u << 3,  // editor_min/editor_max are meaningful (set by refl::Range)
     Replicated = 1u << 4,   // sent from the server to clients by mce_net's snapshots (M-NET2 step 7)
+    WorldPoint = 1u << 5,   // a Vec3 holding a world-space point: moved by a floating-origin rebase (M-OPENWORLD A2)
 };
 }
 

@@ -1,0 +1,1 @@
+- M-SNOWSPARKLE step 31d: the user guide has a "Snow sparkles" paragraph and the milestone and the ROADMAP row are closed.

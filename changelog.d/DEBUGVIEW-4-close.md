@@ -1,0 +1,1 @@
+- M-DEBUGVIEW step 4: the `debug_view` picture is pinned by exact pixel counts per view; the rasteriser background had its channel order wrong (red instead of dark grey) and is fixed. The milestone is done.

@@ -1,0 +1,1 @@
+- Docs: M-GAMEFEEL-SFX closes the throw, blast, melee and pickup sound items in the 09_openworld milestones (step 3).

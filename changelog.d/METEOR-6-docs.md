@@ -1,0 +1,1 @@
+- M-METEOR step 18e (docs and close): guide sections 9.19p and 8.3 meteor text, the `12_weather` sample entry and the milestone record; docs only.

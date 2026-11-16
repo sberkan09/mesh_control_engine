@@ -1,0 +1,1 @@
+- Editor, M-QUICKOPEN (planned): Ctrl+P will open a search box that finds an asset, an entity, a panel or a command by a few letters.

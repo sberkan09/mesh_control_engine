@@ -257,6 +257,7 @@ void describe_fields(JsonWriter& w, const refl::TypeRecord& type, u32 depth) {
         if (f.has(refl::FieldFlags::Transient)) w.key("transient").boolean(true);
         if (f.has(refl::FieldFlags::Save)) w.key("save").boolean(true);
         if (f.has(refl::FieldFlags::Replicated)) w.key("replicated").boolean(true);
+        if (f.has(refl::FieldFlags::WorldPoint)) w.key("world_point").boolean(true);
         if (f.help && *f.help) w.key("help").str(f.help);
         w.end_object();
     }

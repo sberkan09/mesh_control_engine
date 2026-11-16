@@ -1,0 +1,1 @@
+- Editor, M-SELHISTORY 2: Alt+Left / Alt+Right (and Edit > Previous selection / Next selection) step through the entities you selected; deleted entities are skipped and the history is per open scene.

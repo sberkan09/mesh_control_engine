@@ -1,0 +1,74 @@
+{
+  "format": "mce-prefab",
+  "version": 1,
+  "guid": "b180c24c-b439-4078-b946-ff5bbf4488c9",
+  "name": "lamp",
+  "entities": [
+    {
+      "name": "lamp",
+      "components": {
+        "LocalTransform": {},
+        "MeshRef": {
+          "mesh": "guid:1e1f0000-0000-4000-8000-0000000000a4"
+        }
+      }
+    },
+    {
+      "name": "Lamp",
+      "components": {
+        "ChildOf": {
+          "parent": "$0"
+        },
+        "LocalTransform": {
+          "position": [
+            0,
+            3,
+            1
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "PointLight3D": {
+          "color": [
+            1,
+            0.9,
+            0.7,
+            1
+          ],
+          "intensity": 1.8642,
+          "radius": 13.654
+        }
+      }
+    },
+    {
+      "name": "View",
+      "components": {
+        "Camera3DComponent": {
+          "fov_deg": 45.8366,
+          "near_z": 0.1,
+          "far_z": 100
+        },
+        "ChildOf": {
+          "parent": "$0"
+        },
+        "LocalTransform": {
+          "position": [
+            0,
+            1,
+            5
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    }
+  ]
+}

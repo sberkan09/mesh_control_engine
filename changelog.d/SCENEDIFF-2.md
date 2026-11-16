@@ -1,0 +1,1 @@
+- Editor, M-SCENEDIFF step 2: `mce scene diff <before> <after>` prints what changed between two scenes and exits 1 when they differ.

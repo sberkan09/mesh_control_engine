@@ -65,7 +65,12 @@ if(TARGET template_probe_game)
         MCE_PROBE_PROJECT="${CMAKE_BINARY_DIR}/template_probe/TemplateProbe")
     add_dependencies(test_mcp_agent template_probe_game)
 endif()
-add_test(NAME test_mcp_agent COMMAND test_mcp_agent -tse=gpu)
+# The split-screen case opens a real window (SDL offscreen needs EGL); Windows and macOS have none on hosted runners.
+if(WIN32 OR APPLE)
+    add_test(NAME test_mcp_agent COMMAND test_mcp_agent -tse=gpu "-tce=render_frame: a four-way split screen*")
+else()
+    add_test(NAME test_mcp_agent COMMAND test_mcp_agent -tse=gpu)
+endif()
 if(TARGET template_probe_game)
     set_tests_properties(test_mcp_agent PROPERTIES RESOURCE_LOCK template_probe_module)
 endif()
@@ -117,6 +122,30 @@ target_include_directories(test_mcp_gameplay3d PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 target_compile_definitions(test_mcp_gameplay3d PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_gameplay3d"
     MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
+# M-MOVE3D demo: the samples/08_movement course and race built over MCP alone.
+mce_add_test(test_mcp_movement UMBRELLA
+    SOURCES
+        test_mcp_movement.cpp
+        test_mcp_debugview.cpp
+        test_mcp_thumbs.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_platform)
+target_include_directories(test_mcp_movement PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_movement PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_movement"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+# M-OPENWORLD E1: the samples/09_openworld city plays headless (traffic, crowd, enter/exit, shooting, police).
+mce_add_test(test_mcp_openworld UMBRELLA
+    SOURCES
+        test_mcp_openworld.cpp
+    DEPS
+        mce::mce_mcp_core
+        mce::mce_platform)
+target_include_directories(test_mcp_openworld PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
+target_compile_definitions(test_mcp_openworld PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp_openworld"
+    MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
 # project_check against planted problems; ship_build's refusals (its zip is checked in tests/sdk).
 mce_add_test(test_mcp_check UMBRELLA
     SOURCES
@@ -146,7 +175,7 @@ target_compile_definitions(test_mcp_team PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRE
 # a report then fails the test (and the transcript runner checks every server's exit code).
 if(MCE_ASAN AND NOT MSVC)
     foreach(t test_mcp mcp_transcript test_mcp_agent test_mcp_agent_gpu test_mcp_playtest test_mcp_docs
-              test_mcp_content test_mcp_gameplay3d test_mcp_check test_mcp_team)
+              test_mcp_content test_mcp_gameplay3d test_mcp_movement test_mcp_openworld test_mcp_check test_mcp_team)
         if(TEST ${t})
             set_property(TEST ${t} APPEND PROPERTY ENVIRONMENT "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
         endif()

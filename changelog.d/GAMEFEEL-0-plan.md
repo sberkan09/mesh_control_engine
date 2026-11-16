@@ -1,0 +1,1 @@
+- Plan for M-GAMEFEEL-SFX: sounds for grenade, melee, pickup and goal events in the open-world sample (docs only).

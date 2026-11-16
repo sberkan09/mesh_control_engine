@@ -1,0 +1,1 @@
+- Tests: the project file picker, the budgets check, the per-target budget overlay, the world-settings entity, gizmo mode labels and `.mcperf` loading now have cases.

@@ -46,6 +46,13 @@ publicly on `mce::mce_ecs` and `mce::mce_asset`, so the ECS itself never include
   `FixedUpdate_Post` and `transform_propagate` where it is called, so installing it after other Post
   systems is fine), `propagate_transforms`, `set_parent`, `parent_of`, `children_of`, `depth_of`,
   `hierarchy_stats`, `compose`, `to_world`.
+- `origin.h` (M-OPENWORLD A2, floating origin): the `WorldOrigin` resource (`cell[3]` in `snap`-metre units,
+  `snap`, `serial`, `last_delta`), `install_world_origin`, `world_origin`, `rebase_world(world, cells)` (moves
+  every root `LocalTransform`, every `WorldTransform` and every reflected field flagged `WorldPoint` by
+  `-cells * snap`, without stamping change ticks, then calls the listeners), `on_origin_shift` /
+  `remove_origin_shift` (listeners for caches outside components), `shift_entities` (places entities authored
+  in absolute coordinates, such as a streamed chunk), `origin_offset`, and the f64 `to_absolute` / `to_local`
+  with `WorldPoint64`. `scene::FloatingOrigin3D` drives it from the streaming pump.
 
 `mce_ecs_scene`
 - `prefab.h`: `ecs::instantiate(World&, SceneView | payload bytes, SpawnParams, out)` and `ecs::load_scene`.
@@ -113,6 +120,9 @@ ctest `test_ecs` (`tests/ecs/CMakeLists.txt`, links `mce_ecs`):
   moves, system reader ticks, Commands stamping at sync, "ticks survive counter wraparound".
 - `test_hierarchy.cpp`: same-tick parent rotation, dirty subtrees only, re-parenting, cycle rejection, subtree
   destroy, "moving 1 of 5,000 entities re-composes exactly that entity (FR-ENT-040/050)".
+- `test_origin.cpp`: "origin: a rebase moves roots, world transforms and WorldPoint fields, not children or
+  directions" (listeners once per rebase, no change-tick stamps, `shift_entities`) and "origin: absolute and
+  local round-trip far away, a world without the origin is untouched" (about 100 km out).
 
 ctest `test_ecs_scene` (links `mce_ecs_scene`, `mce_asset_cook`, `mce_input`):
 - `test_prefab.cpp`: cook-time flattening, handle remap and overrides, replicas and a parent, scenes with
@@ -151,5 +161,7 @@ Headless sample runs exercise the ECS end to end, for example `sample_02_boids_3
   M6-ecs.md).
 - The renderer's extract does not use `changed<WorldTransform>()` for interpolation yet (M6-ecs.md, ADR-0025).
 - Per-subsystem hashers composed into `state_hash` are not done (ADR-0025, "Not in this change").
+- A rebase does not move `WorldPoint`-less vectors that mix points and offsets (the kit `Blackboard`), nor
+  positions held by game code outside components; those modules register an `on_origin_shift` listener.
 - Systems run serially on the main thread, and `mce::jobs` runs inline. The auto-parallel experiment
   (ecs-gameplay.md §4.1) was built, measured and not merged; see `docs/research/auto-parallel-scheduling.md`.

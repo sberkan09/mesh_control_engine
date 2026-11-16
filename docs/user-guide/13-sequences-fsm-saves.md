@@ -7,7 +7,7 @@ behavior trees for AI as data (13.8), and save games and replays built on reflec
 ## 13.1 Sequences
 
 A sequence is an action list an entity plays step by step on the fixed tick. Author it as a
-`.mcseq` asset and attach it with `SequencePlayer`:
+`.mcseq` asset and attach it with `SequencePlayer`. In the editor, a double click on a sequence in Assets opens the Sequence panel (chapter 3): the steps as a list you can add to, reorder and edit, saved only if the cook accepts them. The file format is:
 
 ```json
 { "format": "mce-sequence", "version": 1, "guid": "<uuid>", "name": "intro", "loop": false,
@@ -92,6 +92,9 @@ applied on top of the base scene on load ("base world plus deltas"). You decide 
    caches, physics bodies) is rebuilt from the scene and your systems.
 3. Bump the module version in `MCE_GAME_MODULE` when the meaning of saved fields changes; a
    mismatch is reported in `LoadStats`, not fatal.
+
+A menu needs no code: a `UiFlowRules` rule with `SaveSlot` or `LoadSlot` saves and loads a slot while the
+game is paused (`12-ui-and-console.md`, `samples/09_openworld`'s Esc menu).
 
 The player runtime does the file work: `-save <slot>` loads the slot at start if it exists and
 writes it on a clean quit. From code (a custom host or a menu action):
@@ -442,6 +445,13 @@ A `Perceiver` gives an AI eyes and ears, and writes what it notices into its tre
   its `visibility` is tested with a ray. In 3D the ray goes through the kit's physics world, and in
   2D (`space: Plane2D`) through physics2d's. Colliders in the `mask` layers block it. The nearest one
   in sight becomes the target.
+- **Which way it looks.** Forward is the **world** rotation of the entity that holds the `Perceiver`,
+  applied to −Z (3D) or +X (2D plane). The `eye` offset turns with it. So a `Perceiver` on a child
+  (an `Eyes` entity under a guard) looks where the child's world yaw points: the parent's yaw plus
+  the child's own. `NavAgent3D` with `face_motion` already turns the entity it moves toward its
+  velocity, so a second system that also turns the child (a "face the player" script, a `Pivot`)
+  doubles the turn and the cone points off. Put the `Perceiver` on the entity that faces, and let
+  one thing turn it. To see where it points, call the MCP tool `perception_debug_lines` (below).
 - **Memory.** A target out of sight is remembered for `forget` seconds. `awareness` falls from 1 to 0
   over that time, and then the target is dropped.
 - **Hearing.** A `kit::Noise` event (push one from code, or use the `make_noise` task) is heard within
@@ -467,6 +477,12 @@ lower branches:
 Perception runs just before the trees in each tick, and its state is in the `Perceiver`, so it is
 deterministic and saved. `kit::perception_debug_lines` returns each perceiver's cone and a line to its
 target, for a debug overlay.
+
+Over MCP, `perception_debug_lines {"ticks": N}` plays the saved scene headless and returns, for every
+`Perceiver`, its world `eye`, `forward` and `yaw_deg` (0 looks along −Z, 90 along −X), `sight_range`,
+`sight_angle`, whether it `sees`, its `target` and `last_seen`, plus `lines`: the cone edges and range
+arc, and a line to the target it sees or last saw (`from`, `to`, `color` as RGBA). A guard that seems
+to look 90° off shows it at once: compare `forward` with the direction it walks.
 
 ### Choosing by score, sharing tokens, finding a spot
 

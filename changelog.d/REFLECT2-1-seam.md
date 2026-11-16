@@ -1,0 +1,1 @@
+- M-REFLECT2 48a seam: `Forward3DStats::ssr_blur` and `ssr_motion` (both false, unused until 48c and 48e); the only wide-header edit of the milestone, shipped alone as CLAUDE.md asks.

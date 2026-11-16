@@ -163,9 +163,32 @@ add_library(mce_stb_headers INTERFACE)
 target_include_directories(mce_stb_headers SYSTEM INTERFACE "${stb_SOURCE_DIR}")
 add_library(mce::stb_headers ALIAS mce_stb_headers)
 
+# ---- dr_libs (cook-time only: MP3 and FLAC decoding of audio clips, M-IMPORTMEDIA step 2; ADR-0049) ----
+# dr_mp3.h and dr_flac.h, single-header C decoders (public domain / MIT-0, David Reid), pinned by commit. Compiled into
+# mce_drlibs through src/drlibs_impl.c (warnings off, no stdio, no Ogg-FLAC); confined to the cook's audio_decode.cpp by the "dr_libs wall" and "dr_libs link wall" in
+# scripts/ci/check_walls.py. Input is untrusted: audio_decode.cpp gives both decoders a budgeted allocator and caps
+# the decoded frames. Host builds only, like the cook itself. Licenses: docs/ARCHITECTURE.md section 7.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(dr_libs
+        GIT_REPOSITORY https://github.com/mackron/dr_libs.git
+        GIT_TAG        dfe8377631000664666519fdb83da193fd8037f4
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(dr_libs)
+    add_library(mce_drlibs STATIC "${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src/drlibs_impl.c")
+    target_include_directories(mce_drlibs SYSTEM PUBLIC "${dr_libs_SOURCE_DIR}")
+    set_target_properties(mce_drlibs PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_drlibs PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_drlibs PRIVATE -w -ffp-contract=off)
+    endif()
+endif()
+
 # ---- meshoptimizer (cook-time only: vertex cache / fetch optimization of glTF meshes) ----
 # Confined to mce_asset_cook by the "meshopt wall" in scripts/ci/check_walls.py (FR-AST-010):
-# runtimes read the already-optimized CHNK_MESH. Only the sources the cook calls are compiled.
+# runtimes read the already-optimized CHNK_MESH. Only the sources the cook calls are compiled (the vertex / index
+# codecs and filters are the EXT_meshopt_compression decoders of the glTF importer; the same files hold the
+# encoders tests/asset/test_cook_gltf_ext.cpp builds its fixtures with).
 FetchContent_Declare(meshoptimizer
     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
     GIT_TAG        v0.25
@@ -174,9 +197,12 @@ FetchContent_Declare(meshoptimizer
 FetchContent_MakeAvailable(meshoptimizer)
 
 add_library(mce_meshopt STATIC
+    "${meshoptimizer_SOURCE_DIR}/src/indexcodec.cpp"
     "${meshoptimizer_SOURCE_DIR}/src/indexgenerator.cpp"
     "${meshoptimizer_SOURCE_DIR}/src/simplifier.cpp"
     "${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp"
+    "${meshoptimizer_SOURCE_DIR}/src/vertexcodec.cpp"
+    "${meshoptimizer_SOURCE_DIR}/src/vertexfilter.cpp"
     "${meshoptimizer_SOURCE_DIR}/src/vfetchoptimizer.cpp")
 target_include_directories(mce_meshopt SYSTEM PUBLIC "${meshoptimizer_SOURCE_DIR}/src")
 set_target_properties(mce_meshopt PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -184,6 +210,30 @@ if(MSVC)
     target_compile_options(mce_meshopt PRIVATE /W0)
 else()
     target_compile_options(mce_meshopt PRIVATE -w)
+endif()
+
+# ---- tinyexr (cook-time only: OpenEXR .exr skies and environment maps -> RGBA16F; M-VISUAL3 4) ----
+# BSD-3-Clause (Syoyo Fujita and contributors); its bundled miniz (deps/miniz, MIT) does the ZIP/PIZ-era
+# inflate. The latest 1.0.x release, v1.0.12, pinned by its commit. Single-header implementation compiled
+# into mce_tinyexr (src/tinyexr_impl.cpp, warnings off, no threads/OpenMP/ZFP); confined to the cook's texture
+# importer by the "tinyexr wall" in scripts/ci/check_walls.py. Licenses: docs/ARCHITECTURE.md §7.
+FetchContent_Declare(tinyexr
+    GIT_REPOSITORY https://github.com/syoyo/tinyexr.git
+    GIT_TAG        735ff73ce5959cf005eb99ce517c9bcecab89dfb
+    SOURCE_SUBDIR  _no_cmake_)
+FetchContent_MakeAvailable(tinyexr)
+
+add_library(mce_tinyexr STATIC
+    "${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src/tinyexr_impl.cpp"
+    "${tinyexr_SOURCE_DIR}/deps/miniz/miniz.c")
+target_include_directories(mce_tinyexr SYSTEM PUBLIC "${tinyexr_SOURCE_DIR}" "${tinyexr_SOURCE_DIR}/deps/miniz")
+target_compile_definitions(mce_tinyexr PRIVATE TINYEXR_USE_MINIZ=1 TINYEXR_USE_PIZ=1 TINYEXR_USE_ZFP=0 TINYEXR_USE_THREAD=0
+                                               TINYEXR_USE_OPENMP=0)
+set_target_properties(mce_tinyexr PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(mce_tinyexr PRIVATE /W0)
+else()
+    target_compile_options(mce_tinyexr PRIVATE -w -ffp-contract=off)
 endif()
 
 # ---- astc-encoder (cook-time only: ASTC 4x4 textures for phones, mce_cook --textures astc) ----
@@ -217,6 +267,57 @@ if(NOT CMAKE_CROSSCOMPILING)
         target_compile_options(mce_astcenc PRIVATE /W0 /fp:precise)
     else()
         target_compile_options(mce_astcenc PRIVATE -w -ffp-contract=off)
+    endif()
+endif()
+
+# ---- bc7enc_rdo (cook-time only: BC7 / BC5 / BC4 / BC1 desktop textures, mce_cook --textures bc; M-CONTENT 1b) ----
+# MIT or Unlicense (Richard Geldreich). The repo has no tags: pinned by commit (master on 2026-10-17), no GIT_SHALLOW,
+# like tinyexr. Built from three sources only (bc7enc.cpp BC7, rgbcx.cpp BC1/BC4/BC5, bc7decomp.cpp for the tests'
+# decode): scalar C++, no SIMD in the encoder, no threads. Never compile bc7e.ispc, ispc.exe or the RDO files.
+# -ffp-contract=off keeps the output bytes identical across compilers and hosts. Confined to the cook's texture_bc.cpp
+# by the "bc7enc wall" and "bc7enc link wall" in scripts/ci/check_walls.py. Licenses: docs/ARCHITECTURE.md §7.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(bc7enc_rdo
+        GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
+        GIT_TAG        b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(bc7enc_rdo)
+    add_library(mce_bc7enc STATIC
+        "${bc7enc_rdo_SOURCE_DIR}/bc7enc.cpp"
+        "${bc7enc_rdo_SOURCE_DIR}/rgbcx.cpp"
+        "${bc7enc_rdo_SOURCE_DIR}/bc7decomp.cpp")
+    target_include_directories(mce_bc7enc SYSTEM PUBLIC "${bc7enc_rdo_SOURCE_DIR}")
+    set_target_properties(mce_bc7enc PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_bc7enc PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_bc7enc PRIVATE -w -ffp-contract=off)
+    endif()
+endif()
+
+# ---- ufbx (cook-time only: Autodesk FBX import, M-IMPORT3D step 3; ADR-0047) ----
+# MIT or Unlicense (Samuli Raivio), one ufbx.c + ufbx.h, no dependencies. Release v0.23.1 pinned by its commit (no
+# GIT_SHALLOW, like tinyexr). Compiled into mce_ufbx through src/ufbx_impl.c (warnings off, -ffp-contract=off /
+# /fp:precise so ufbx's unit, axis and evaluation maths round the same on every compiler). Never set
+# ufbx_load_opts.thread_opts: without a thread pool ufbx runs on the calling thread. UFBX_NO_FORMAT_OBJ (the cook has
+# its own OBJ importer; a .fbx sniffed as OBJ must not reach a second OBJ parser) and UFBX_NO_GEOMETRY_CACHE (external
+# .mc/.pc2 vertex-cache readers the cook never asks for) remove input-reachable parsers; everything else stays on.
+# The define set is the .c's only (none changes ufbx.h's types: ufbx_real stays double). Confined to the cook's
+# fbx_importer.cpp by the "ufbx wall" and "ufbx link wall" in scripts/ci/check_walls.py. Licenses: ARCHITECTURE §7.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(ufbx
+        GIT_REPOSITORY https://github.com/ufbx/ufbx.git
+        GIT_TAG        26a482ae66871d7de36eb722aa060bce95bce274  # v0.23.1
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(ufbx)
+    add_library(mce_ufbx STATIC "${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src/ufbx_impl.c")
+    target_include_directories(mce_ufbx SYSTEM PUBLIC "${ufbx_SOURCE_DIR}")
+    target_compile_definitions(mce_ufbx PRIVATE UFBX_NO_FORMAT_OBJ UFBX_NO_GEOMETRY_CACHE)
+    set_target_properties(mce_ufbx PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_ufbx PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_ufbx PRIVATE -w -ffp-contract=off)
     endif()
 endif()
 
@@ -309,6 +410,7 @@ FetchContent_Declare(recastnavigation
     GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
     GIT_TAG        v1.6.0
     GIT_SHALLOW    TRUE
+    PATCH_COMMAND  ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_LIST_DIR}/patch_recast.cmake"  # simplifyContour guard (M-FUZZ)
     SOURCE_SUBDIR  _no_cmake_)  # its sources are compiled below with our flags
 FetchContent_MakeAvailable(recastnavigation)
 set(_mce_recast_dirs Recast Detour DetourCrowd DetourTileCache)
@@ -371,6 +473,8 @@ endif()
 FetchContent_Declare(pl_mpeg
     GIT_REPOSITORY https://github.com/phoboslab/pl_mpeg.git
     GIT_TAG        c871f2be022ece7ef4f64230b4fb8e1fb9eb6023
+    # a bounds fix in the macroblock copy, until upstream has one (cmake/patch_pl_mpeg.cmake)
+    PATCH_COMMAND  ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_LIST_DIR}/patch_pl_mpeg.cmake"
     SOURCE_SUBDIR  _no_cmake_)
 FetchContent_MakeAvailable(pl_mpeg)
 

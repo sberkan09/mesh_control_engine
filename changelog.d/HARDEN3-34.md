@@ -1,0 +1,1 @@
+- Tests: platform `Process::read_some`, `base_path` and `preferred_locales`.

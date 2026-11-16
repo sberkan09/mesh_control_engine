@@ -1,0 +1,1 @@
+- M-POLLEN done: the user guide gets "Pollen drifts." in `08-3d.md` (the opt-in `Pollen` component, drawn as one camera-following alpha-blended particle emitter on spring days, with the Luau `weather.set_pollen` API from 9.19v); the milestone record is closed with follow-ups.

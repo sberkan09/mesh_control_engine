@@ -1,0 +1,1 @@
+- MCP, M-LINTFIX: `scene_lint_fix` repairs what `scene_lint` finds in a saved scene and writes the file in the canonical text.

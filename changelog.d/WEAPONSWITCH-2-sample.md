@@ -1,0 +1,1 @@
+- Sample (M-WEAPONSWITCH 2): 09_openworld has a pistol, an SMG and a shotgun on `Loadout3D` (keys 1 to 3, X / Z, D-pad up / down); the HUD shows the weapon name. Record: `docs/milestones/M-WEAPONSWITCH.md`.

@@ -1,0 +1,1 @@
+- Kit (M-ARREST 4): `Police3D::drive_car` 2 drives a police car along the `RoadNetwork3D` (quickest lane route to the target) instead of in a straight line; the 09_openworld pursuit cars use it. Record: `docs/milestones/M-ARREST.md`.

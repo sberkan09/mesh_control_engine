@@ -1,0 +1,1 @@
+- M-PARTICLEQ done: the six opt-in weather emitters scale with `QualitySettings::particle_scale` (Low 0.5) instead of a recognised-Low guess; the milestone record is closed with follow-ups and the six sibling records' open follow-up is marked done.

@@ -1,0 +1,1 @@
+- Physics, M-PHYSDRIVE2D: new `LaunchVelocity2D`, `Impulse2D` and `ConstantForce2D` components push 2D bodies (thrown ball, one-shot push, wind or conveyor force) from the Inspector, MCP and scene files.

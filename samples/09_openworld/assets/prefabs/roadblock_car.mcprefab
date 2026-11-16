@@ -1,0 +1,50 @@
+{
+ "format": "mce-prefab",
+ "version": 1,
+ "guid": "3643b620-d4a6-545e-a67d-3e419d5540ce",
+ "name": "roadblock_car",
+ "entities": [
+  {
+   "name": "Roadblock car",
+   "components": {
+    "LocalTransform": {},
+    "BoxCollider3D": {
+     "half": [
+      0.9,
+      0.95,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "name": "Model",
+   "components": {
+    "ChildOf": {
+     "parent": "$0"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.5,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  }
+ ]
+}

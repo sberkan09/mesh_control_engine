@@ -1,0 +1,1 @@
+- Fuzz corpora for the `.mcenv`, `.mchlod` and `.glsl` importers, M-FUZZ step 5 (`tests/fuzz/test_binary_import.cpp`; the three left the fuzz wall's exemption list). Found and fixed an undefined `memcpy` from a null pointer in the shader importer for a stage that binds no resources.

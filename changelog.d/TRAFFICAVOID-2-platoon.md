@@ -1,0 +1,1 @@
+- Kit (M-TRAFFICAVOID): cars dodging a wreck in the same tick no longer choose the same gap in the neighbouring lane. Record: `docs/milestones/M-TRAFFICAVOID.md`.

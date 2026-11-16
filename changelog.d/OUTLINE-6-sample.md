@@ -1,0 +1,1 @@
+- Edge outlines in the tour, M-OUTLINE step 39e: `kit3d_tour` gets a second scene `scenes/tour_ink.mcscene` (the tour under an `EdgeOutline3D`; named to sort after `tour`, so the default run and its hash are unchanged) with `sample_kit3d_tour_ink_headless` and a `slow` GPU capture `sample_kit3d_tour_ink_gpu`, and the temporary sample-coverage allow-line is gone.

@@ -1,0 +1,1 @@
+- Docs (M-GRENADE 3): the grenade milestone is closed and struck through in the open-world gaps list. Record: `docs/milestones/M-GRENADE.md`.

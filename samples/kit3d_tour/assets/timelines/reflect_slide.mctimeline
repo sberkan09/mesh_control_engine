@@ -1,0 +1,39 @@
+{
+  "format": "mce-timeline",
+  "version": 1,
+  "guid": "b0a30000-0000-4000-8000-00000000005a",
+  "name": "reflect_slide",
+  "duration": 6,
+  "tracks": [
+    {
+      "type": "transform",
+      "target": 0,
+      "keys": [
+        {
+          "t": 0,
+          "position": [
+            -1.6,
+            0.7,
+            2.0
+          ]
+        },
+        {
+          "t": 3,
+          "position": [
+            3.6,
+            0.7,
+            2.0
+          ]
+        },
+        {
+          "t": 6,
+          "position": [
+            -1.6,
+            0.7,
+            2.0
+          ]
+        }
+      ]
+    }
+  ]
+}

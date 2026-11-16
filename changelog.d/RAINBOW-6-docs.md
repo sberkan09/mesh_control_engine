@@ -1,0 +1,1 @@
+- M-RAINBOW step 17e (docs and close): guide sections 9.19o and 8.3 rainbow text, the `12_weather` sample entry and the milestone record; docs only.

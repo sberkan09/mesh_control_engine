@@ -4,8 +4,16 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <cmath>
+#include <functional>
+
+#include "../asset/hdr_fixtures.h"
 #include "fixture3d.h"
 #include "golden.h"
+#include "mce/asset/container.h"
+#include "mce/cook/importer.h"
+#include "mce/render/asset_upload.h"
 
 using namespace mce;
 using namespace mce::render;
@@ -15,7 +23,7 @@ namespace {
 
 void check_golden(const char* name, const Fixture3D& f) {
     CHECK(f.device->validation_error_count() == 0);
-    golden::check(name, kW, kH, f.pixels.span());
+    golden::check(name, kW, kH, f.pixels.span(), f.device->caps().device_name.c_str());
 }
 
 Sky gradient_sky() {
@@ -408,6 +416,22 @@ TEST_CASE("golden: sunlight bounced off the ground lights the box's unlit face")
     check_golden("gi_bounce", f);
 }
 
+// M-GI2 50e: inside the dark room of upload_thin_wall_rooms, looking at the 0.2 m wall it shares with a sunlit room;
+// the volume spans both rooms with 2 m between probes. With its visibility record the sunlit room's probes no longer
+// light the dark room's floor and wall: only the dim blue light of the dark room's back wall reaches them.
+TEST_CASE("golden: a thin wall between a sunlit and a dark room: the volume's visibility stops the light leaking") {
+    Fixture3D f;
+    upload_thin_wall_rooms(f);
+    const auto scene = [](Scene3D& s) {
+        thin_wall_scene(s);
+        s.set_gi_volume(thin_wall_gi(true));
+    };
+    for (int i = 0; i < 8; ++i) f.render(0.0f, true, scene);
+    CHECK(f.renderer.forward_3d().last_stats().gi);
+    CHECK(f.renderer.forward_3d().last_stats().gi_visibility);
+    check_golden("gi_thin_wall", f);
+}
+
 // ---- M-VISUAL 7: atmosphere and volumetric fog -------------------------------------------------
 
 TEST_CASE("golden: the physically based sky at sunset lights the scene through its IBL") {
@@ -547,6 +571,36 @@ TEST_CASE("golden: a scattered, wind-swept batch with its shadows and a projecte
     check_golden("scale_foliage_decal", f);
 }
 
+// ---- M-VISUAL3 6: foliage variation and wind ------------------------------------------------------------------------
+
+TEST_CASE("golden: a windy meadow whose copies vary in colour, with a wind height, gusts and flutter") {
+    Fixture3D f;
+    FoliageScatter sc;
+    sc.half_extents = {3.0f, 3.0f};
+    sc.count = 90;
+    sc.seed = 4;
+    sc.scale_min = 0.2f;
+    sc.scale_max = 0.5f;
+    Array<math::mat4> grass;
+    scatter_foliage(sc, grass);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(0.8f, 0.016f);
+        InstanceBatch b;
+        b.id = 1;
+        b.version = 1;
+        b.mesh = 1;
+        b.transforms = grass.span();
+        b.tint = {0.55f, 0.9f, 0.4f, 1.0f};
+        b.tint_variation = {0.1f, 2.5f, 3.0f, 1.0f};
+        b.wind_amplitude = 0.25f;
+        b.wind_frequency = 0.7f;
+        b.wind_ext = {0.5f, 0.7f, 0.03f, 0.0f};
+        s.add_batch(b);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().batches == 1);
+    check_golden("foliage_variation", f);
+}
+
 TEST_CASE("golden: a GPU particle burst glowing above the ground") {
     Fixture3D f;
     if (!f.device->caps().compute) return;
@@ -565,4 +619,938 @@ TEST_CASE("golden: a GPU particle burst glowing above the ground") {
         });
     CHECK(f.renderer.forward_3d().last_stats().particle_emitters == 1);
     check_golden("particles_burst", f);
+}
+
+// ---- M-VISUAL3 2: parallax occlusion mapping ----------------------------------------------------
+
+TEST_CASE("golden: parallax_cobble: a grazing view of a brick floor whose joints are carved by its height map") {
+    Fixture3D f;
+    ParallaxFloor p = make_parallax_floor(f);
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        MeshInstance fl;
+        fl.mesh = 20;
+        fl.material = &p.on;
+        s.add(fl);
+    });
+    check_golden("parallax_cobble", f);
+}
+
+// ---- M-WETSURFACE 5b: wet surfaces ----------------------------------------------------------------
+
+TEST_CASE("golden: wet_plaza: rain-darkened rough ground with puddles, a metal sphere and a wall under a low sun") {
+    Fixture3D f;
+    upload_wet_plaza(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        WetSurfaces w = wet_plaza_wet(1.0f, 0.5f);
+        w.puddle_scale = 2.0f;
+        wet_plaza_scene(s, w);
+    });
+    check_golden("wet_plaza", f);
+}
+
+// ---- M-SNOWCOVER 6b: snow cover -------------------------------------------------------------------
+
+TEST_CASE("golden: snow_plaza: full snow cover with wind-biased patches over the rain-wet plaza and its puddles") {
+    Fixture3D f;
+    upload_wet_plaza(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        WetSurfaces w = wet_plaza_wet(1.0f, 0.5f);
+        w.puddle_scale = 2.0f;
+        snow_plaza_scene(s, snow_plaza_snow(1.0f), w);
+    });
+    check_golden("snow_plaza", f);
+}
+
+// ---- M-WINDDIR 8c: snow wind direction ------------------------------------------------------------
+
+// An even layer (no noise) at coverage 0.6: in snow_plaza's noise the sphere's cap lies inside one patch whose mask
+// is 1 on both sides whatever the wind, so that frame does not show the direction; here the cap's -x-facing (lee)
+// side takes the extra snow and the +x-facing one the less.
+TEST_CASE("golden: snow_plaza_west: an even snow layer on the plaza, the wind toward -x (lee bias mirrored)") {
+    Fixture3D f;
+    upload_wet_plaza(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        WetSurfaces w = wet_plaza_wet(1.0f, 0.5f);
+        w.puddle_scale = 2.0f;
+        SnowCover snow = snow_plaza_snow(1.0f);
+        snow.noise_enabled = false;
+        snow.coverage = 0.6f;
+        snow.wind_dir = {-1.0f, 0.0f};
+        snow_plaza_scene(s, snow, w);
+    });
+    check_golden("snow_plaza_west", f);
+}
+
+// ---- M-CLOUDS 9b: the cloud layer ---------------------------------------------------------------------------------
+
+// Broken clouds (coverage 0.5, density 0.7, 900 m cells at 2000 m) over the default gradient sky, the camera looking
+// up, the sun just off the frame's right edge (the lit side of the clouds), 30 s into a drift toward +x.
+TEST_CASE("golden: cloud_sky: a broken cloud layer over the gradient sky, lit from the sun's side") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { cloud_sky_scene(s, cloud_sky_clouds(0.5f), 30.0f); });
+    check_golden("cloud_sky", f);
+}
+
+// ---- M-CIRRUS 53b: the high cirrus streaks -----------------------------------------------------------------------------
+
+// The default streaks (coverage 0.55, density 0.35, 3000 m cells stretched 6:1 at 9000 m, speed 2) combed along a
+// wind toward +x and the camera, over the default gradient sky with no low layer, the camera looking up, the sun
+// (33 degrees up) just off the frame's right edge (cirrus_sky_scene).
+TEST_CASE("golden: cirrus_sky: fibrous cirrus streaks over the day sky") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { cirrus_sky_scene(s, cirrus_carrier()); });
+    check_golden("cirrus_sky", f);
+}
+
+// The same streaks at dusk, the sun 3 degrees under the horizon ahead and to the right, under a low layer (coverage
+// 0.4): the cirrus still lit and pink, the low deck already dark in front of it (cirrus_dusk_scene).
+TEST_CASE("golden: cirrus_dusk: lit cirrus behind a darkened low layer after sunset") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { cirrus_dusk_scene(s, cirrus_carrier(), cloud_sky_clouds(0.4f)); });
+    check_golden("cirrus_dusk", f);
+}
+
+// ---- M-HALO 54b: the ice halo and sun dogs through the cirrus -----------------------------------------------------------
+
+// The default halo (strength 1, dogs 1, dispersion 1) through a thick cirrus deck (coverage 0.85, density 0.7) around a
+// low sun 12 degrees up straight ahead of the halo camera: the upper half of the 22 degree ring with its red inner edge
+// and both sun dogs on the sun's horizon line (halo_sky_scene).
+TEST_CASE("golden: halo_sky: a 22 degree halo and sun dogs around a low sun through cirrus") {
+    Fixture3D f;
+    halo_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { halo_sky_scene(s, halo_cirrus(), halo_carrier()); });
+    check_golden("halo_sky", f);
+}
+
+// The same deck by night around a full moon 15 degrees up straight ahead (moon ring 0.5, no stars): the faint lunar
+// halo (halo_night_scene).
+TEST_CASE("golden: halo_night: a faint 22 degree lunar halo through cirrus") {
+    Fixture3D f;
+    halo_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { halo_night_scene(s, halo_night_carrier(), halo_cirrus(), halo_carrier()); });
+    check_golden("halo_night", f);
+}
+
+// ---- M-NIGHTSKY 14d: the moon and the stars ------------------------------------------------------------------------
+
+// A full moon 25 degrees up on the right and the star field (density 0.6, twinkle 0.3 at 12.25 s) over a dark
+// gradient night sky, the camera looking up (night_sky_scene).
+TEST_CASE("golden: night_sky: a full moon and the star field over the night sky") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { night_sky_scene(s, night_sky_carrier(0.5f, 0.6f)); });
+    check_golden("night_sky", f);
+}
+
+// The same sky three days after the new moon (phase 0.1): a waxing crescent lit on the side the moon travels toward.
+TEST_CASE("golden: night_sky_crescent: a waxing crescent moon and the star field") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { night_sky_scene(s, night_sky_carrier(0.1f, 0.6f)); });
+    check_golden("night_sky_crescent", f);
+}
+
+// ---- M-WATER 15c: the water plane ----------------------------------------------------------------------------------
+
+// A calm sea (amplitude 0: a flat mirror of the sky) around the box, the ground slab 0.6 m under it (the shallow
+// tint over it, the deep one past its edge), shore foam at the box (water_day_scene, water_camera).
+TEST_CASE("golden: water_calm: a flat sea mirroring the day sky around the box") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { water_day_scene(s, water_carrier(0.0f)); });
+    check_golden("water_calm", f);
+}
+
+// The default waves (four Gerstner waves, 0.4 m, 24 m) at 12.5 s under the day sky, the sun's glint in front.
+TEST_CASE("golden: water_sea: the default waves under the day sky with the sun's glint") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { water_day_scene(s, water_carrier(0.4f)); });
+    check_golden("water_sea", f);
+}
+
+// The night sky's full moon and stars (night_sky_carrier) over a gentle swell (0.05 m): the moon, its glint and the
+// stars in the water.
+TEST_CASE("golden: water_night: the moon and the stars in a gentle swell") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true,
+             [&](Scene3D& s) { water_night_scene(s, night_sky_carrier(0.5f, 0.6f), water_carrier(0.05f)); });
+    check_golden("water_night", f);
+}
+
+// ---- M-AURORA 16c: the aurora curtains ---------------------------------------------------------------------------
+
+// The default curtains (level 1, three curtains across a 70 degree arc toward the camera's view) over the star field
+// of the night sky, the camera looking up (aurora_sky_scene).
+TEST_CASE("golden: aurora_sky: aurora curtains over the starry night sky") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { aurora_sky_scene(s, aurora_carrier()); });
+    check_golden("aurora_sky", f);
+}
+
+// The same curtains over a calm sea at night (a 0.05 m swell): the sky above the horizon and their reflection.
+TEST_CASE("golden: aurora_water: aurora curtains and their reflection on a night sea") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        water_night_scene(s, night_sky_carrier(0.5f, 0.6f, 0.0f), water_carrier(0.05f));
+        s.set_aurora(aurora_carrier());
+    });
+    check_golden("aurora_water", f);
+}
+
+// ---- M-RAINBOW 17c: the rainbow ----------------------------------------------------------------------------------
+
+// The default bows (level 1, band width 1, the full secondary) across the rain-washed sky, the sun low behind the
+// camera, the camera looking up (rainbow_sky_scene): the primary and the secondary cross the frame diagonally.
+TEST_CASE("golden: rainbow_sky: the primary and secondary bows over a rain-washed sky") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { rainbow_sky_scene(s, rainbow_carrier()); });
+    check_golden("rainbow_sky", f);
+}
+
+// The same bows over a calm sea (a 0.05 m swell): the sky above the horizon and their reflection.
+TEST_CASE("golden: rainbow_water: the bows and their reflection on a calm sea") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { rainbow_water_scene(s, rainbow_carrier(), water_carrier(0.05f)); });
+    check_golden("rainbow_water", f);
+}
+
+// ---- M-METEOR 18c: the meteors -----------------------------------------------------------------------------------
+
+// Three streaks in flight at once over the star field (meteor_sky_scene at the fixture's clock and seed: rate 30, slot
+// 8 1.938 s in), the camera looking up into the night.
+TEST_CASE("golden: meteor_sky: three meteor streaks over the night sky at a fixed clock") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { meteor_sky_scene(s, meteor_carrier()); });
+    check_golden("meteor_sky", f);
+}
+
+// One streak falling toward the horizon over a calm night sea (a 0.05 m swell), and its reflection.
+TEST_CASE("golden: meteor_water: a meteor streak and its reflection on a calm night sea") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        meteor_water_scene(s, meteor_carrier(1.0f, kMeteorWaterTime, kMeteorWaterSeed), water_carrier(0.05f));
+    });
+    check_golden("meteor_water", f);
+}
+
+// ---- M-LENSFLARE 38c: the sun lens flare --------------------------------------------------------------------------
+
+// The flare sky (lens_flare_scene): the sun on the upper left, its halo, four ghosts toward the lower right and a
+// six-ray starburst, with bloom.
+TEST_CASE("golden: lens_flare_sun: the sun's halo, ghosts and starburst over the sky, with bloom") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    LensFlare fl = lens_flare_setting();
+    fl.starburst = 1.0f;
+    f.render(0.0f, true, [&](Scene3D& s) { lens_flare_scene(s, lens_flare_toward(s.view(), kFlareSunU, kFlareSunV), &fl, true); });
+    CHECK(f.renderer.forward_3d().last_stats().lens_flare);
+    check_golden("lens_flare_sun", f);
+}
+
+// The same sun half behind a box facing the camera (its edge through the sun): the flare at about half strength.
+TEST_CASE("golden: lens_flare_occluded: a box over half the sun dims the flare") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    LensFlare fl = lens_flare_setting();
+    fl.starburst = 1.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        const vec3 d = lens_flare_toward(s.view(), kFlareSunU, kFlareSunV);
+        lens_flare_scene(s, d, &fl, true);
+        lens_flare_occluder(s, d, -0.5f);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().lens_flare);
+    check_golden("lens_flare_occluded", f);
+}
+
+// ---- M-OUTLINE 39c: edge outlines -------------------------------------------------------------------------------
+
+// The outline scene (outline_scene): the fixture's box on its slab and the small box in the upper left, the default
+// dark 1 px lines on their silhouettes and creases and on the slab's far edge against the sky.
+TEST_CASE("golden: edge_outline_boxes: ink lines on the boxes' silhouettes and creases") {
+    Fixture3D f;
+    upload_outline_box(f);
+    const EdgeOutline o = outline_setting();
+    f.render(0.0f, true, [&](Scene3D& s) { outline_scene(s, &o); });
+    CHECK(f.renderer.forward_3d().last_stats().edge_outline);
+    check_golden("edge_outline_boxes", f);
+}
+
+// The same lines under TAA, the eighth frame (the history settled): TAA resolves the half-resolution lines.
+TEST_CASE("golden: edge_outline_taa: the outline under TAA after 8 frames") {
+    Fixture3D f;
+    upload_outline_box(f);
+    const EdgeOutline o = outline_setting();
+    for (u32 i = 0; i < 8; ++i) f.render(0.0f, true, [&](Scene3D& s) { outline_scene(s, &o, true); });
+    CHECK(f.renderer.forward_3d().last_stats().edge_outline);
+    CHECK(f.renderer.forward_3d().last_stats().taa_history);
+    check_golden("edge_outline_taa", f);
+}
+
+// ---- M-LIGHTCOOKIE 40d: light cookies -------------------------------------------------------------------------------
+
+// A warm spot at night shining through a window-grid cookie (3 x 3 panes, 6-texel mullions, a 64-texel image with its
+// box mips) past the box onto the ground, with the box's local shadow, rolled 10 degrees; the mullions and the frame
+// are dark, the panes the plain light, the cookie's border fades (cookie_edge 0.2).
+TEST_CASE("golden: cookie_spot_window: a spot light through a window-grid cookie, with its shadow") {
+    Fixture3D f;
+    f.pitch_deg = 40.0f;
+    constexpr u32 kN = 64;
+    Array<Array<u8>> levels;
+    Array<u8> l0;
+    for (u32 y = 0; y < kN; ++y)
+        for (u32 x = 0; x < kN; ++x) {
+            const bool bar = x % 21 < 6 || y % 21 < 6 || x >= 63 - 6 || y >= 63 - 6;
+            for (u32 c = 0; c < 3; ++c) l0.push_back(bar ? 0 : 255);
+            l0.push_back(255);
+        }
+    levels.push_back(std::move(l0));
+    for (u32 w = kN / 2; w >= 1; w /= 2) {
+        const Array<u8>& p = levels.back();
+        Array<u8> n;
+        for (u32 y = 0; y < w; ++y)
+            for (u32 x = 0; x < w; ++x)
+                for (u32 c = 0; c < 4; ++c) {
+                    const u32 pw = w * 2;
+                    const u32 sum = p[((2 * y) * pw + 2 * x) * 4 + c] + p[((2 * y) * pw + 2 * x + 1) * 4 + c] +
+                                    p[((2 * y + 1) * pw + 2 * x) * 4 + c] + p[((2 * y + 1) * pw + 2 * x + 1) * 4 + c];
+                    n.push_back(static_cast<u8>((sum + 2) / 4));
+                }
+        levels.push_back(std::move(n));
+    }
+    Array<TextureMipUpload> mips;
+    for (u32 i = 0, w = kN; i < levels.size(); ++i, w /= 2) mips.push_back(TextureMipUpload{w, w, std::as_bytes(levels[i].span())});
+    TextureUpload up;
+    up.mips = mips.span();
+    const u32 key = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(key, 1, up).has_value());
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.03f, 0.03f, 0.05f};
+        s.set_light(sun);
+        Sky sky;
+        sky.enabled = false;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0.01f, 0.01f, 0.02f};
+        s.set_fog(fog);
+        LocalShadowSettings ls;
+        ls.tile = 256;
+        s.set_local_shadows(ls);
+        PointLight spot;
+        spot.position = {-2.0f, 3.4f, -1.8f};
+        spot.direction = {0.75f, -1.0f, 0.6f};
+        spot.radius = 12.0f;
+        spot.intensity = 40.0f;
+        spot.color = {1.0f, 0.8f, 0.55f};
+        spot.spot_inner = math::radians(30.0f);
+        spot.spot_outer = math::radians(36.0f);
+        spot.cast_shadows = true;
+        spot.cookie = key;
+        spot.cookie_roll = math::radians(10.0f);
+        spot.cookie_edge = 0.2f;
+        s.add_point_light(spot);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().cookie_lights == 1);
+    CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 1);
+    check_golden("cookie_spot_window", f);
+}
+
+namespace {
+
+// An n x n RGBA8 cookie from `texel` (0..255 grey per texel, row 0 at v = 0) with its box mips down to 1 x 1, under a
+// fresh key (cookie_spot_window's construction).
+u32 upload_grey_cookie(Fixture3D& f, u32 n, const std::function<u8(u32, u32)>& texel) {
+    Array<Array<u8>> levels;
+    Array<u8> l0;
+    for (u32 y = 0; y < n; ++y)
+        for (u32 x = 0; x < n; ++x) {
+            const u8 g = texel(x, y);
+            for (u32 c = 0; c < 3; ++c) l0.push_back(g);
+            l0.push_back(255);
+        }
+    levels.push_back(std::move(l0));
+    for (u32 w = n / 2; w >= 1; w /= 2) {
+        const Array<u8>& p = levels.back();
+        Array<u8> m;
+        for (u32 y = 0; y < w; ++y)
+            for (u32 x = 0; x < w; ++x)
+                for (u32 c = 0; c < 4; ++c) {
+                    const u32 pw = w * 2;
+                    const u32 sum = p[((2 * y) * pw + 2 * x) * 4 + c] + p[((2 * y) * pw + 2 * x + 1) * 4 + c] +
+                                    p[((2 * y + 1) * pw + 2 * x) * 4 + c] + p[((2 * y + 1) * pw + 2 * x + 1) * 4 + c];
+                    m.push_back(static_cast<u8>((sum + 2) / 4));
+                }
+        levels.push_back(std::move(m));
+    }
+    Array<TextureMipUpload> mips;
+    for (u32 i = 0, w = n; i < levels.size(); ++i, w /= 2) mips.push_back(TextureMipUpload{w, w, std::as_bytes(levels[i].span())});
+    TextureUpload up;
+    up.mips = mips.span();
+    const u32 key = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(key, 1, up).has_value());
+    return key;
+}
+
+}  // namespace
+
+// M-LIGHTCOOKIE 40e: leaf dapples. A seamless 64-texel pattern of soft bright blobs over leaf shade (a sum of cosines
+// whose periods divide the image), tiled every 3 m over the plane across a low sun, rolled 20 degrees and shifted, at
+// strength 0.9; the box keeps its cascade shadow (dark under the dapples too) and the ambient is untouched.
+TEST_CASE("golden: cookie_sun_dapple: the sun through a tiled leaf-dapple cookie, with the box's shadow") {
+    Fixture3D f;
+    f.pitch_deg = 40.0f;
+    const u32 key = upload_grey_cookie(f, 64, [](u32 x, u32 y) {
+        const f32 a = 6.2831853f * f32(x) / 64.0f, b = 6.2831853f * f32(y) / 64.0f;
+        const f32 g = std::cos(2.0f * a + b) * std::cos(a - 3.0f * b) + 0.5f * std::cos(5.0f * a + 2.0f * b);
+        const f32 t = std::clamp((g - 0.1f) * 2.5f, 0.0f, 1.0f);
+        return static_cast<u8>(std::lround((0.12f + 0.88f * t * t * (3.0f - 2.0f * t)) * 255.0f));
+    });
+    f.render(0.0f, true, [&](Scene3D& s) {
+        DirectionalLight sun;
+        sun.direction = math::normalize(vec3{-0.5f, -1.0f, -0.3f});
+        sun.intensity = 2.0f;
+        sun.shadows = true;
+        sun.cookie.texture = key;
+        sun.cookie.strength = 0.9f;
+        sun.cookie.size = 3.0f;
+        sun.cookie.offset = {0.4f, 1.1f};
+        sun.cookie.roll = math::radians(20.0f);
+        s.set_light(sun);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().sun_cookie);
+    CHECK(f.renderer.forward_3d().last_stats().cookie_layers == 1);
+    check_golden("cookie_sun_dapple", f);
+}
+
+// M-LIGHTCOOKIE 40f: light shafts through a window grid. cookie_spot_window's 3 x 3 window-grid image on a warm spot
+// straight down past the box at night, through a uniform volumetric fog (4-pixel froxel columns) against a dark sky: the
+// panes draw bright shafts and patches, the mullions dark lanes between them, the box its local shadow in the fog and on
+// the ground.
+TEST_CASE("golden: cookie_shafts: a window-grid spot light drawing light shafts in the volumetric fog") {
+    Fixture3D f;
+    f.pitch_deg = 15.0f;
+    const u32 key = upload_grey_cookie(f, 64, [](u32 x, u32 y) {
+        const bool bar = x % 21 < 6 || y % 21 < 6 || x >= 63 - 6 || y >= 63 - 6;
+        return static_cast<u8>(bar ? 0 : 255);
+    });
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.02f, 0.02f, 0.03f};
+        s.set_light(sun);
+        Sky sky;  // a dark sky without a sun disk: the shafts read against it (a cleared background gets no fog)
+        sky.zenith = sky.horizon = sky.ground = {0.01f, 0.01f, 0.02f};
+        sky.sun_intensity = 0.0f;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0.01f, 0.01f, 0.02f};
+        s.set_fog(fog);
+        LocalShadowSettings ls;
+        ls.tile = 256;
+        s.set_local_shadows(ls);
+        PointLight spot;
+        spot.position = {0.9f, 3.6f, 0.2f};
+        spot.direction = {-0.15f, -1.0f, 0.05f};
+        spot.radius = 9.0f;
+        spot.intensity = 45.0f;
+        spot.color = {1.0f, 0.85f, 0.6f};
+        spot.spot_inner = math::radians(30.0f);
+        spot.spot_outer = math::radians(33.0f);
+        spot.cast_shadows = true;
+        spot.cookie = key;
+        s.add_point_light(spot);
+        Volumetrics v;
+        v.enabled = true;
+        v.density = 0.1f;
+        v.height_falloff = 0.0f;
+        v.anisotropy = 0.2f;
+        v.max_distance = 16.0f;
+        v.tile = 4;
+        v.slices = 48;
+        s.set_volumetrics(v);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().cookie_lights == 1);
+    CHECK(f.renderer.forward_3d().last_stats().volumetrics);
+    check_golden("cookie_shafts", f);
+}
+
+// ---- M-LENSRAIN 42c: rain on the camera lens ------------------------------------------------------------------------
+
+// The fixture's box on the ground through a wet lens: still and falling drops of both grids (High), mirrored lookups
+// with their rims, trails behind the big falling drops and the softened glass between them, then bloom and FXAA as by
+// default. lens_rain_off is the same frame with the setting disabled (the pass not recorded): its PNG is byte-identical
+// to ibl_off.png in both linux-gl and linux-sdlgpu (the plain fixture frame; the scene time moves nothing in it), kept
+// under its own name so the pair documents the off path next to the drops.
+namespace {
+
+LensRain golden_lens_rain() {
+    LensRain r;
+    r.enabled = true;
+    r.amount = 0.8f;
+    r.size = 1.3f;
+    r.blur = 0.35f;
+    r.trail = 0.8f;
+    r.fall_speed = 1.0f;
+    r.seed = 3;
+    return r;
+}
+
+}  // namespace
+
+TEST_CASE("golden: lens_rain_drops: drops, trails and the wet glass over the box scene") {
+    Fixture3D f;
+    const LensRain r = golden_lens_rain();
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(7.25f, 1.0f / 60.0f);
+        PostFx post = s.post();
+        post.rain = r;
+        s.set_post(post);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().lens_rain);
+    check_golden("lens_rain_drops", f);
+}
+
+TEST_CASE("golden: lens_rain_off: the same frame with the lens rain disabled") {
+    Fixture3D f;
+    LensRain r = golden_lens_rain();
+    r.enabled = false;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(7.25f, 1.0f / 60.0f);
+        PostFx post = s.post();
+        post.rain = r;
+        s.set_post(post);
+    });
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().lens_rain);
+    check_golden("lens_rain_off", f);
+}
+
+// ---- M-HEATHAZE 43c: heat haze --------------------------------------------------------------------------------------
+
+// The fixture's box before the checker wall, a haze sphere over the box (a fire's hot air) bending the wall and the
+// box's top behind it at a fixed scene time, then bloom and FXAA as by default. heat_haze_off is the same frame with
+// count 0 (the pass not recorded), kept under its own name so the pair documents the off path next to the haze.
+namespace {
+
+void golden_heat_haze(Fixture3D& f, u32 count) {
+    upload_haze_wall(f, 70);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(4.5f, 1.0f / 60.0f);
+        PostFx post = s.post();
+        post.haze.count = count;
+        post.haze.volumes[0].center = {0.0f, 1.5f, -0.3f};
+        post.haze.volumes[0].radius = 1.5f;
+        post.haze.volumes[0].strength = 2.0f;
+        s.set_post(post);
+        MeshInstance w;
+        w.mesh = 70;
+        s.add(w);
+    });
+}
+
+}  // namespace
+
+TEST_CASE("golden: heat_haze_fire: a haze sphere over the box bends the checker wall behind it") {
+    Fixture3D f;
+    golden_heat_haze(f, 1);
+    CHECK(f.renderer.forward_3d().last_stats().heat_haze_volumes == 1);
+    check_golden("heat_haze_fire", f);
+}
+
+TEST_CASE("golden: heat_haze_off: the same frame without a haze volume") {
+    Fixture3D f;
+    golden_heat_haze(f, 0);
+    CHECK(f.renderer.forward_3d().last_stats().heat_haze_volumes == 0);
+    check_golden("heat_haze_off", f);
+}
+
+// ---- M-UNDERWATER 44c: the camera under water -----------------------------------------------------------------------
+
+// The camera 2 m under a calm sea, looking 10 degrees up past the fixture's box at three equal grey pillars at 3, 8 and
+// 20 m: red fades first and the far pillar sinks into the scatter colour, the lid fills the upper part of the frame, at
+// a fixed scene time (the wobble), then bloom and FXAA as by default. underwater_off is the same frame with
+// PostFx::underwater.enabled false (the pass not recorded: the plain water plane seen from below), kept under its own
+// name so the pair documents the off path next to the look.
+namespace {
+
+void golden_underwater(Fixture3D& f, bool enabled) {
+    upload_underwater_pillars(f, 76);
+    underwater_place_camera(f, {0.0f, 1.2f, 7.0f}, -10.0f);
+    const WaterSurface water = underwater_water();
+    Underwater uw;
+    uw.enabled = enabled;
+    f.render(0.0f, true, [&](Scene3D& s) { underwater_scene(s, &water, uw, 4.5f, 76, true); });
+}
+
+}  // namespace
+
+TEST_CASE("golden: underwater_deep: the camera under a calm sea, the pillars fading red first into the water") {
+    Fixture3D f;
+    golden_underwater(f, true);
+    CHECK(f.renderer.forward_3d().last_stats().underwater);
+    check_golden("underwater_deep", f);
+}
+
+TEST_CASE("golden: underwater_off: the same frame without the underwater look") {
+    Fixture3D f;
+    golden_underwater(f, false);
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().underwater);
+    check_golden("underwater_off", f);
+}
+
+// ---- M-SUNSHAFTS 45c: sun light shafts ----------------------------------------------------------------------------------
+
+// The shafts camera (raised, looking 15 degrees up) toward a low sun just right of the middle, a tall column over the left
+// half of the disk and a second, thinner one further left (two trunks): the rays fan out from the open half of the disk
+// and the column leaves its side dark, then bloom and FXAA as by default. sun_shafts_off is the same frame with
+// PostFx::shafts.enabled false (the pass not recorded), kept under its own name so the pair documents the off path next to
+// the look.
+namespace {
+
+void golden_sun_shafts(Fixture3D& f, bool enabled) {
+    sun_shafts_camera(f);
+    SunShafts sh = sun_shafts_setting();
+    sh.enabled = enabled;
+    f.render(0.0f, false, [&](Scene3D& s) {
+        const vec3 toward = lens_flare_toward(s.view(), kShaftsSunU, kShaftsSunV);
+        sun_shafts_scene(s, toward, &sh, true);
+        sun_shafts_column(s, toward);
+        sun_shafts_column(s, toward, -4.0f, 8.0f, 0.2f);
+    });
+}
+
+}  // namespace
+
+TEST_CASE("golden: sun_shafts_tree: rays from a low sun past a column over half of its disk") {
+    Fixture3D f;
+    golden_sun_shafts(f, true);
+    CHECK(f.renderer.forward_3d().last_stats().sun_shafts);
+    check_golden("sun_shafts_tree", f);
+}
+
+TEST_CASE("golden: sun_shafts_off: the same frame without the shafts") {
+    Fixture3D f;
+    golden_sun_shafts(f, false);
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().sun_shafts);
+    check_golden("sun_shafts_off", f);
+}
+
+// ---- M-CLOUDSHADOW 51c: cloud shadows on the ground ---------------------------------------------------------------------
+
+// The cloud shadow camera (raised 80 m, looking 10 degrees down over a 6 km ground) under a small, low cloud layer
+// (cloud_shadow_clouds(0.55): 60 m cells 150 m up) at scene time 3 s, the sun about 50 degrees up ahead and to the right,
+// three 20 m towers standing in the patches; bloom and FXAA as by default. Only the ground and the towers darken where a
+// cloud sits between them and the sun; the sky (with its own clouds) is the frame without the pass.
+TEST_CASE("golden: cloud_shadow: drifting cloud patches on the ground and the towers") {
+    Fixture3D f;
+    cloud_shadow_camera(f);
+    const CloudShadow cs = cloud_shadow_setting();
+    f.render(0.0f, false, [&](Scene3D& s) {
+        cloud_shadow_scene(s, cloud_shadow_clouds(0.55f), &cs, 3.0f, kCloudShadowToward, true, true);
+        const vec3 towers[3] = {{-60.0f, 0.0f, -180.0f}, {25.0f, 0.0f, -240.0f}, {90.0f, 0.0f, -330.0f}};
+        for (const vec3& t : towers) {
+            MeshInstance box;
+            box.mesh = 1;  // the fixture's 1 m box standing on the origin, scaled to 12 x 20 x 12 m
+            box.world = math::mat4::identity();
+            box.world.c[0][0] = 12.0f;
+            box.world.c[1][1] = 20.0f;
+            box.world.c[2][2] = 12.0f;
+            box.world.c[3][0] = t.x;
+            box.world.c[3][1] = t.y;
+            box.world.c[3][2] = t.z;
+            s.add(box);
+        }
+    });
+    CHECK(f.renderer.forward_3d().last_stats().cloud_shadow);
+    check_golden("cloud_shadow", f);
+}
+
+// ---- M-CAUSTICS 52b: caustics under water ----------------------------------------------------------------------------
+
+// The shallow pool (caustics_scene: the fixture's 12 m floor 0.6 m under calm water, its 1 m box crossing the surface)
+// seen from the orbit camera's default pose, a high sun behind the camera, the web at scene time 1.25 s (1.5 m cells, the
+// High tier's 3 octaves); bloom and FXAA as by default. The web lies on the floor and the box's submerged sides; the box's
+// top above the water, the water with nothing behind it and the sky are the frame without the pass.
+TEST_CASE("golden: caustics: the sun's web on a pool floor under calm water") {
+    Fixture3D f;
+    const WaterSurface w = caustics_water();
+    const Caustics c = caustics_setting();
+    f.render(0.0f, false, [&](Scene3D& s) { caustics_scene(s, &w, &c, 1.25f, kCausticsToward, true); });
+    CHECK(f.renderer.forward_3d().last_stats().caustics);
+    check_golden("caustics", f);
+}
+
+// ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
+
+TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {
+    Fixture3D f;
+    upload_wet_plaza(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        WetSurfaces w = wet_plaza_wet(1.0f, 0.5f);
+        w.puddle_scale = 2.0f;
+        Ripples r = ripple_plaza_ripples(1.0f);
+        r.density = 0.8f;
+        r.ring_width = 0.4f;
+        ripple_plaza_scene(s, r, w, 1.5f);
+    });
+    check_golden("ripple_plaza", f);
+}
+
+// ---- M-VISUAL3 4: HDR sky -----------------------------------------------------------------------
+
+TEST_CASE("golden: a cooked .hdr sky with a 200x hot spot lights a white sphere, a box and the ground") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    // A 64x32 Radiance file written here, cooked by the texture importer (RGBA16F, mips), uploaded as the asset
+    // system would: base 0.25, a 50 patch on the horizon toward +Z and +X (equirect u = 0.5625): the light comes from the camera's right and lights the
+    // faces it sees.
+    std::vector<float> grey(64 * 32, 0.25f);
+    for (unsigned y = 14; y < 18; ++y)
+        for (unsigned x = 32; x < 40; ++x) grey[y * 64 + x] = 50.0f;
+    const std::string hdr = hdr_fixtures::make_rgbe_hdr(64, 32, grey);
+    const auto importer = cook::make_texture_importer();
+    cook::ImportInput in;
+    in.guid = asset::Guid{1, 2};
+    in.display_path = "hdr_sky.hdr";
+    in.source_path = "hdr_sky.hdr";
+    in.source = Span<const byte>(reinterpret_cast<const byte*>(hdr.data()), hdr.size());
+    cook::DiagList diags;
+    asset::ContainerWriter writer;
+    REQUIRE(importer->cook(in, writer, diags));
+    Array<byte> packed;
+    writer.finish(packed);
+    auto view = asset::ContainerView::open(packed.span());
+    REQUIRE(view.has_value());
+    const u32 chunk = view.value().find(asset::ChunkType::Texture);
+    REQUIRE(chunk < view.value().chunk_count());
+    const u32 tex = f.renderer.textures().allocate_key();
+    REQUIRE(upload_cooked_texture(f.renderer.textures(), tex, 1, view.value().payload(chunk)).has_value());
+    upload_sphere(f, 40, {-1.8f, 1.0f, 0.6f}, 0.8f);
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        Sky sky = constant_sky(0.0f, true);
+        sky.texture = tex;
+        sky.texture_intensity = 0.1f;
+        s.set_sky(sky);
+        MeshInstance m;
+        m.mesh = 40;
+        s.add(m);
+    });
+    check_golden("hdr_sky", f);
+}
+
+// ---- M-VISUAL3 3: the camera's look ---------------------------------------------------------------
+
+TEST_CASE("golden: filmic_lens: vignette, chromatic aberration and grain on the ground, the box and the sky at a fixed time") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.lens.vignette = 0.7f;
+        p.lens.chromatic_aberration = 0.8f;
+        p.lens.grain = 0.25f;
+        s.set_post(p);
+        s.set_time(2.0f, 1.0f / 60.0f);
+    });
+    check_golden("filmic_lens", f);
+}
+
+TEST_CASE("golden: tonemap_agx: the same scene through the AgX curve") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.tonemapper = Tonemapper::AgX;
+        s.set_post(p);
+    });
+    check_golden("tonemap_agx", f);
+}
+
+TEST_CASE("golden: tonemap_neutral: the same scene through Khronos PBR Neutral") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.tonemapper = Tonemapper::PbrNeutral;
+        s.set_post(p);
+    });
+    check_golden("tonemap_neutral", f);
+}
+
+// ---- M-VISUAL3 5a: automatic instancing ----------------------------------------------------------
+
+TEST_CASE("golden: instanced_props: a grid of identical crates under three cascades, drawn as instanced runs") {
+    Fixture3D f;
+    f.pitch_deg = 30.0f;
+    upload_crate(f, 60);
+    f.render(0.0f, true, [](Scene3D& s) {
+        s.set_sky(gradient_sky());
+        add_crate_grid(s, 60);
+    });
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.cascades == 3);
+    CHECK(st.runs_instanced >= 2);
+    CHECK(st.shadow_runs_instanced >= 2);
+    check_golden("instanced_props", f);
+}
+
+// ---- M-VISUAL3 5b: static merge ------------------------------------------------------------------------------------
+
+TEST_CASE("golden: static_merge_kit: a modular kit of 32 pieces merged into two cells, one draw per material and cell") {
+    Fixture3D f;
+    f.pitch_deg = 30.0f;
+    MergeKit kit;
+    upload_merge_kit(f, kit);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_sky(gradient_sky());
+        add_merge_kit(s, kit, true);
+    });
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.cascades == 3);
+    CHECK(st.main_draws == 2 + kit.materials * kit.cells);  // the fixture's ground and box, then the kit
+    check_golden("static_merge_kit", f);
+}
+
+// ---- M-TRANSLUCENT 41d / 41e: thin-surface translucency and wrap -----------------------------------------------------
+
+// A low sun behind a row of leaf cards (a low camera looking into it): a plain card on the left (dark but for the
+// ambient), a translucent one (0.8) glowing green in the middle, and on the right a translucent card behind a second
+// one, dark where the front card shadows its back.
+TEST_CASE("golden: translucency_leaf_backlit: leaf cards lit from behind by a low sun, one behind another") {
+    Fixture3D f;
+    f.pitch_deg = 5.0f;
+    f.look_at = {0.0f, 1.0f, 0.0f};
+    upload_card(f, 60, 0.55f);
+    const vec3 cam = orbit_camera(f.look_at, 0.0f, math::radians(f.pitch_deg), 7.0f).position;
+    const vec3 sun = math::normalize(vec3{0.25f, -0.3f, 1.0f});
+    const vec3 leaf_color{0.25f, 0.6f, 0.12f};
+    const MaterialOverride plain = thin_material(leaf_color, 0.0f, 0.0f);
+    const MaterialOverride leaf = thin_material(leaf_color, 0.8f, 0.0f);
+    const MaterialOverride yellow = thin_material({0.6f, 0.5f, 0.1f}, 0.8f, 0.0f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        DirectionalLight light;
+        light.direction = sun;
+        s.set_light(light);
+        s.set_sky(gradient_sky());
+        const vec3 at[3] = {{-2.2f, 1.2f, 2.2f}, {-0.8f, 1.3f, 2.6f}, {0.9f, 1.25f, 2.4f}};
+        const MaterialOverride* m[3] = {&plain, &leaf, &leaf};
+        for (int i = 0; i < 3; ++i) {
+            MeshInstance c;
+            c.mesh = 60;
+            c.world = card_world(at[i], math::normalize(cam - at[i]));
+            c.material = m[i];
+            s.add(c);
+        }
+        MeshInstance front;  // between the right card and the sun, a little higher: it shades the card's upper part
+        front.mesh = 60;
+        const vec3 p = at[2] - sun * 0.6f + vec3{0.25f, 0.35f, 0.0f};
+        front.world = card_world(p, math::normalize(cam - p));
+        front.material = &yellow;
+        s.add(front);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().translucent_draws == 2);  // the two green cards draw as one instanced run
+    check_golden("translucency_leaf_backlit", f);
+}
+
+// Two white spheres under a side sun with its cascades: plain on the left, wrap 0.6 on the right (a soft terminator).
+TEST_CASE("golden: translucency_wrap: a plain and a wrapped sphere under a side sun") {
+    Fixture3D f;
+    f.pitch_deg = 20.0f;
+    upload_sphere(f, 61, {-1.4f, 0.8f, 0.8f}, 0.8f);
+    upload_sphere(f, 62, {1.4f, 0.8f, 0.8f}, 0.8f);
+    const MaterialOverride plain = thin_material({0.85f, 0.85f, 0.85f}, 0.0f, 0.0f, 0.0f, 0.7f, 0);
+    const MaterialOverride wax = thin_material({0.9f, 0.75f, 0.6f}, 0.0f, 0.6f, 0.0f, 0.7f, 0);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        DirectionalLight light;
+        light.direction = math::normalize(vec3{1.0f, -0.35f, -0.15f});
+        s.set_light(light);
+        s.set_sky(gradient_sky());
+        for (u32 k : {61u, 62u}) {
+            MeshInstance m;
+            m.mesh = k;
+            m.material = k == 61u ? &plain : &wax;
+            s.add(m);
+        }
+    });
+    CHECK(f.renderer.forward_3d().last_stats().translucent_draws == 1);
+    check_golden("translucency_wrap", f);
+}
+
+// At night: a paper lantern (the fixture's box at 0.6 scale, translucency 0.7) around a warm point light that casts
+// shadows, beside the fixture's box, and a spot behind a translucent leaf card lighting it within its cone.
+TEST_CASE("golden: translucency_lantern: a paper lantern around a shadowed point light and a spot behind a leaf") {
+    Fixture3D f;
+    upload_card(f, 60, 0.6f);
+    const vec3 cam = orbit_camera(f.look_at, 0.0f, math::radians(f.pitch_deg), 7.0f).position;
+    const MaterialOverride paper = thin_material({0.9f, 0.8f, 0.6f}, 0.7f, 0.0f, 0.0f, 0.9f, 0);
+    const MaterialOverride leaf = thin_material({0.25f, 0.6f, 0.12f}, 0.9f, 0.0f);
+    const vec3 card_at{1.7f, 0.9f, 1.6f};
+    const vec3 card_n = math::normalize(cam - card_at);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        no_sun(s);
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.03f, 0.03f, 0.05f};
+        s.set_light(sun);
+        Sky sky;
+        sky.enabled = false;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0.01f, 0.01f, 0.02f};
+        s.set_fog(fog);
+        MeshInstance box;
+        box.mesh = 1;
+        box.world = math::translation({-1.6f, 0.0f, 1.4f}) * math::scaling({0.6f, 0.6f, 0.6f});
+        box.material = &paper;
+        s.add(box);
+        PointLight lamp;
+        lamp.position = {-1.6f, 0.3f, 1.4f};
+        lamp.radius = 4.0f;
+        lamp.intensity = 0.12f;
+        lamp.color = {1.0f, 0.8f, 0.5f};
+        lamp.cast_shadows = true;
+        s.add_point_light(lamp);
+        LocalShadowSettings ls;
+        ls.tile = 256;  // six cube faces fit the 1024 atlas
+        s.set_local_shadows(ls);
+        MeshInstance c;
+        c.mesh = 60;
+        c.world = card_world(card_at, card_n);
+        c.material = &leaf;
+        s.add(c);
+        PointLight spot;
+        spot.position = card_at - card_n * 1.0f;
+        spot.direction = card_n;
+        spot.radius = 4.0f;
+        spot.intensity = 3.0f;
+        spot.spot_inner = math::radians(14.0f);
+        spot.spot_outer = math::radians(18.0f);
+        s.add_point_light(spot);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().translucent_draws == 2);
+    CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 6);
+    check_golden("translucency_lantern", f);
 }

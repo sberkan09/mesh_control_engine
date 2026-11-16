@@ -1,0 +1,1 @@
+- `mce inspect <project> --component Type`, M-SCRIPT3 step 12: the live component values of entities after a headless run, as JSON, with no agent (the MCP `run_headless` inspect from a terminal).

@@ -1,0 +1,1 @@
+- Tests: the 2D skeleton editor's `new_text`, bone selection range, preview time clamp and `animation_length` now have a case.

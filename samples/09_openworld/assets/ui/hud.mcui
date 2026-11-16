@@ -1,0 +1,1270 @@
+{
+ "format": "mce-ui",
+ "version": 1,
+ "guid": "ecad21b6-7694-5060-85fb-dd1becae38f0",
+ "modal": false,
+ "widgets": [
+  {
+   "name": "health",
+   "kind": "Text",
+   "text": "HEALTH 100",
+   "style": {
+    "text_size": 28,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.45,
+     1.0,
+     0.5,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     1
+    ],
+    "max": [
+     0,
+     1
+    ],
+    "offset_min": [
+     24,
+     -64
+    ],
+    "offset_max": [
+     280,
+     -24
+    ]
+   },
+   "bind": "Health3D/current",
+   "format": "HEALTH %.0f"
+  },
+  {
+   "name": "crosshair",
+   "kind": "Text",
+   "text": "+",
+   "text_align": "Center",
+   "anchors": {
+    "min": [
+     0.5,
+     0.5
+    ],
+    "max": [
+     0.5,
+     0.5
+    ],
+    "offset_min": [
+     -20,
+     -20
+    ],
+    "offset_max": [
+     20,
+     20
+    ]
+   },
+   "style": {
+    "text_size": 34,
+    "text_color": [
+     1,
+     1,
+     1,
+     0.85
+    ],
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "name": "hit_marker",
+   "kind": "Text",
+   "text": "x",
+   "text_align": "Center",
+   "visible": false,
+   "range": [
+    0.001,
+    10,
+    0
+   ],
+   "value": 0.001,
+   "bind": "HitMarker3D/timer",
+   "anchors": {
+    "min": [
+     0.5,
+     0.5
+    ],
+    "max": [
+     0.5,
+     0.5
+    ],
+    "offset_min": [
+     -20,
+     -20
+    ],
+    "offset_max": [
+     20,
+     20
+    ]
+   },
+   "style": {
+    "text_size": 44,
+    "text_color": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "name": "kill_marker",
+   "kind": "Text",
+   "text": "X",
+   "text_align": "Center",
+   "visible": false,
+   "range": [
+    0.001,
+    10,
+    0
+   ],
+   "value": 0.001,
+   "bind": "HitMarker3D/kill_timer",
+   "anchors": {
+    "min": [
+     0.5,
+     0.5
+    ],
+    "max": [
+     0.5,
+     0.5
+    ],
+    "offset_min": [
+     -20,
+     -20
+    ],
+    "offset_max": [
+     20,
+     20
+    ]
+   },
+   "style": {
+    "text_size": 54,
+    "text_color": [
+     1.0,
+     0.2,
+     0.15,
+     1
+    ],
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "name": "speed",
+   "kind": "Text",
+   "text": "0 KM/H",
+   "style": {
+    "text_size": 40,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -214
+    ],
+    "offset_max": [
+     -24,
+     -160
+    ]
+   },
+   "bind": "DriveReadout3D/kmh",
+   "format": "%.0f KM/H",
+   "visible": false,
+   "range": [
+    -0.5,
+    1000,
+    0
+   ],
+   "value": 0
+  },
+  {
+   "name": "gear",
+   "kind": "Text",
+   "text": "GEAR 1",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.8,
+     0.9,
+     1.0,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -246
+    ],
+    "offset_max": [
+     -24,
+     -216
+    ]
+   },
+   "bind": "DriveReadout3D/gear",
+   "format": "GEAR %.0f",
+   "visible": false,
+   "range": [
+    -1.5,
+    20,
+    0
+   ],
+   "value": 0
+  },
+  {
+   "name": "kills",
+   "kind": "Text",
+   "text": "KILLS 0",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.6,
+     0.45,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     1
+    ],
+    "max": [
+     0,
+     1
+    ],
+    "offset_min": [
+     24,
+     -96
+    ],
+    "offset_max": [
+     280,
+     -68
+    ]
+   },
+   "bind": "Wanted3D/kills",
+   "format": "KILLS %.0f"
+  },
+  {
+   "name": "goals",
+   "kind": "Text",
+   "text": "GOALS 0 / 5",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.9,
+     0.5,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     1
+    ],
+    "max": [
+     0,
+     1
+    ],
+    "offset_min": [
+     24,
+     -126
+    ],
+    "offset_max": [
+     280,
+     -98
+    ]
+   },
+   "bind": "Progress3D/goals_done",
+   "format": "GOALS %.0f / 5"
+  },
+  {
+   "name": "grenades",
+   "kind": "Text",
+   "text": "GRENADES 3",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.8,
+     1.0,
+     0.6,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     1
+    ],
+    "max": [
+     0,
+     1
+    ],
+    "offset_min": [
+     24,
+     -156
+    ],
+    "offset_max": [
+     280,
+     -128
+    ]
+   },
+   "bind": "Grenade3D/count",
+   "format": "GRENADES %.0f"
+  },
+  {
+   "name": "wanted",
+   "kind": "Text",
+   "text": "WANTED",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.85,
+     0.25,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     224
+    ],
+    "offset_max": [
+     -16,
+     248
+    ]
+   }
+  },
+  {
+   "name": "star1",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    1,
+    5,
+    1
+   ],
+   "value": 1,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -186,
+     248
+    ],
+    "offset_max": [
+     -152,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "star2",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    2,
+    5,
+    1
+   ],
+   "value": 2,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -152,
+     248
+    ],
+    "offset_max": [
+     -118,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "star3",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    3,
+    5,
+    1
+   ],
+   "value": 3,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -118,
+     248
+    ],
+    "offset_max": [
+     -84,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "star4",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    4,
+    5,
+    1
+   ],
+   "value": 4,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -84,
+     248
+    ],
+    "offset_max": [
+     -50,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "star5",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    5,
+    5,
+    1
+   ],
+   "value": 5,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -50,
+     248
+    ],
+    "offset_max": [
+     -16,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "cash",
+   "kind": "Text",
+   "text": "$ 0",
+   "style": {
+    "text_size": 30,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.6,
+     1.0,
+     0.6,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     292
+    ],
+    "offset_max": [
+     -16,
+     332
+    ]
+   },
+   "bind": "Wallet3D/cash",
+   "format": "$ %.0f"
+  },
+  {
+   "name": "bag",
+   "kind": "Text",
+   "text": "BAG  (H to use)",
+   "style": {
+    "text_size": 20,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.8,
+     0.8,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     338
+    ],
+    "offset_max": [
+     -16,
+     362
+    ]
+   }
+  },
+  {
+   "name": "slot_1",
+   "kind": "Text",
+   "text": "",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.7,
+     1.0,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     364
+    ],
+    "offset_max": [
+     -16,
+     390
+    ]
+   }
+  },
+  {
+   "name": "slot_2",
+   "kind": "Text",
+   "text": "",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.7,
+     1.0,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     392
+    ],
+    "offset_max": [
+     -16,
+     418
+    ]
+   }
+  },
+  {
+   "name": "slot_3",
+   "kind": "Text",
+   "text": "",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.7,
+     1.0,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     420
+    ],
+    "offset_max": [
+     -16,
+     446
+    ]
+   }
+  },
+  {
+   "name": "objective",
+   "kind": "Text",
+   "text": "Walk onto a yellow pad to start a mission",
+   "style": {
+    "text_size": 24,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     0
+    ],
+    "max": [
+     0,
+     0
+    ],
+    "offset_min": [
+     24,
+     16
+    ],
+    "offset_max": [
+     560,
+     52
+    ]
+   }
+  },
+  {
+   "name": "weapon_0",
+   "kind": "Text",
+   "text": "PISTOL",
+   "style": {
+    "text_size": 26,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.9,
+     0.5,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -152
+    ],
+    "offset_max": [
+     -24,
+     -116
+    ]
+   },
+   "bind": "Loadout3D/current",
+   "visible": false,
+   "range": [
+    0,
+    0,
+    0
+   ],
+   "value": 0
+  },
+  {
+   "name": "weapon_1",
+   "kind": "Text",
+   "text": "SMG",
+   "style": {
+    "text_size": 26,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.9,
+     0.5,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -152
+    ],
+    "offset_max": [
+     -24,
+     -116
+    ]
+   },
+   "bind": "Loadout3D/current",
+   "visible": false,
+   "range": [
+    1,
+    1,
+    0
+   ],
+   "value": 1
+  },
+  {
+   "name": "weapon_2",
+   "kind": "Text",
+   "text": "SHOTGUN",
+   "style": {
+    "text_size": 26,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.9,
+     0.5,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -152
+    ],
+    "offset_max": [
+     -24,
+     -116
+    ]
+   },
+   "bind": "Loadout3D/current",
+   "visible": false,
+   "range": [
+    2,
+    2,
+    0
+   ],
+   "value": 2
+  },
+  {
+   "name": "ammo",
+   "kind": "Text",
+   "text": "AMMO 15",
+   "style": {
+    "text_size": 30,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -112
+    ],
+    "offset_max": [
+     -24,
+     -72
+    ]
+   },
+   "bind": "Weapon3D/ammo",
+   "format": "AMMO %.0f"
+  },
+  {
+   "name": "reserve",
+   "kind": "Text",
+   "text": "/ 150",
+   "style": {
+    "text_size": 24,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.8,
+     0.8,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -66
+    ],
+    "offset_max": [
+     -24,
+     -30
+    ]
+   },
+   "bind": "Weapon3D/reserve",
+   "format": "RESERVE %.0f"
+  },
+  {
+   "name": "mini",
+   "kind": "Minimap",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -216,
+     16
+    ],
+    "offset_max": [
+     -16,
+     216
+    ]
+   },
+   "minimap": {
+    "track": "Player",
+    "radius": 60,
+    "zoom": 1,
+    "rotate_with_heading": false,
+    "clamp_to_rim": true,
+    "background": [
+     0.05,
+     0.07,
+     0.06,
+     0.75
+    ]
+   }
+  }
+ ]
+}

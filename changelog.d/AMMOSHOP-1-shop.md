@@ -1,0 +1,1 @@
+- Kit (M-AMMOSHOP 1): `AmmoShop3D` sells ammo for cash to a buyer with a `Weapon3D` and a `Wallet3D` standing near it. Record: `docs/milestones/M-AMMOSHOP.md`.

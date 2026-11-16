@@ -1,0 +1,1 @@
+- Kit (M-PEDFLEE): a hurt pedestrian runs from its attacker for 5 s (`PedestrianMode::Flee`, 2.5x speed, ignores lights). Record: `docs/milestones/M-PEDFLEE.md`.

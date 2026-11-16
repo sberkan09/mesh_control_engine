@@ -1,0 +1,1 @@
+- Test: MeshView::read refuses a forged skin table (257 joints, joints past the table, bad node, bad skin index, vertex joint out of range, cut payloads); no code change.

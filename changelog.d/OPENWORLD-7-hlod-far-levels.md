@@ -1,0 +1,1 @@
+- Cook: the `hlod` importer takes `lod_levels`, `lod_ratio` and `lod_error` like the model importers and adds simplified far levels to the proxy's submeshes that have none (M-OPENWORLD A3); `hlod_bake` writes new sidecars with `"lod_levels": 2`, so a distant area's proxy draws a fraction of its triangles. Without the setting the proxy cooks as baked.

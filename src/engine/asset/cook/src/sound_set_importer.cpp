@@ -79,13 +79,7 @@ public:
             detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-sound\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kSoundFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported sound set version (this cook reads version %u)", kSoundFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kSoundFormatVersion, "sound set", file, kStage, diags)) return false;
 
         asset::SoundSetHeader h{};
         h.pick = asset::SoundSetPick::Random;

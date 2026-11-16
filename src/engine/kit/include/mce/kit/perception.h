@@ -72,7 +72,7 @@ MCE_COMPONENT(Perceiver, (sight_range, Range{0, 1000}, Help{"metres"}), (sight_a
               space, (interval, Range{1, 60}, Help{"ticks between sight checks"}),
               (target_key, Help{"entity key: the target"}), (sees_key, Help{"bool key: in sight now"}),
               (last_seen_key, Help{"vec3 key: where it was last seen"}), (heard_key, Help{"vec3 key: the last noise heard"}),
-              (target, Save, ReadOnly), (last_seen, Save, ReadOnly), (heard_at, Save, ReadOnly), (since_seen, Save, ReadOnly),
+              (target, Save, ReadOnly), (last_seen, Save, ReadOnly, WorldPoint), (heard_at, Save, ReadOnly, WorldPoint), (since_seen, Save, ReadOnly),
               (awareness, Save, ReadOnly), (sees, Save, ReadOnly), (heard, ReadOnly, Transient), (sightings, Save, ReadOnly),
               (hearings, Save, ReadOnly))
 
@@ -123,5 +123,16 @@ struct PerceptionLine {
     math::Color color;
 };
 void perception_debug_lines(World& world, Array<PerceptionLine>& out);
+
+// Where one perceiver looks, in world space: its eye and its forward direction, the entity's world
+// rotation applied to -Z (3D) or +X (2D). The entity that holds the Perceiver turns it: a Perceiver on
+// a child follows the child's world yaw, so a parent that already faces its motion (NavAgent3D
+// `face_motion`) and a second system that turns the child add up.
+struct PerceiverView {
+    Entity entity;
+    math::vec3 eye;
+    math::vec3 forward;
+};
+void perceiver_views(World& world, Array<PerceiverView>& out);
 
 }  // namespace mce::kit

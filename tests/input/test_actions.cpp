@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 #include "input_test_util.h"
 #include "mce/input/ecs.h"
@@ -327,4 +328,72 @@ TEST_CASE("app::run samples InputSystem once per tick through IInputSource") {
     d.input_source = &in;
     CHECK(app::run(a, d) == 0);
     CHECK(a.ticks_with_actions == 30);
+}
+
+TEST_CASE("the map stack holds kMaxMapStack maps and refuses one more; text input carries 3- and 4-byte characters") {
+    InputSystem in;
+    test::setup_default(in);
+    // The default map is already on the stack; the rest fills up and the next push is refused.
+    u32 pushed = 0;
+    while (in.push_map(MCE_SID("UI"))) ++pushed;
+    CHECK(pushed > 0);
+    CHECK(pushed < InputSystem::kMaxMapStack);
+    CHECK_FALSE(in.push_map(MCE_SID("UI")));  // still full
+    for (u32 i = 0; i < pushed; ++i) in.pop_map();
+    CHECK(in.push_map(MCE_SID("UI")));  // room again
+    in.pop_map();
+
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 100), 0x20AC));   // euro sign, 3 bytes
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 200), 0x1F600));  // an emoji, 4 bytes
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 300), 'x'));
+    const InputState& s = in.sample_for_tick(1);
+    CHECK(s.text() == StringView("\xE2\x82\xAC\xF0\x9F\x98\x80x"));
+}
+
+TEST_CASE("M-HARDEN4: text input fills kMaxTextBytes exactly, then drops what does not fit") {
+    InputSystem in;
+    test::setup_default(in);
+    for (u32 i = 0; i < kMaxTextBytes - 1; ++i)
+        in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 100 + i), 'a'));
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 400), 0x00FC));  // 2 bytes: 65, refused
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 410), 'b'));     // 1 byte: 64, fits
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 420), 'c'));     // full: dropped
+    const InputState& s = in.sample_for_tick(1);
+    REQUIRE(s.text().size() == kMaxTextBytes);
+    CHECK(s.text()[kMaxTextBytes - 2] == 'a');
+    CHECK(s.text()[kMaxTextBytes - 1] == 'b');
+
+    // The next tick starts empty and accepts text again.
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(2, 100), 'z'));
+    CHECK(in.sample_for_tick(2).text() == StringView("z"));
+}
+
+TEST_CASE("input events with a non-finite coordinate are dropped, the mouse and pads keep reading sanely") {
+    InputSystem in;
+    test::setup_default(in);
+    const f32 nan = std::numeric_limits<f32>::quiet_NaN();
+    const f32 inf = std::numeric_limits<f32>::infinity();
+
+    in.push_event(test::mouse_move(10.f, 10.f, in_tick(1)));
+    in.push_event(test::mouse_move(nan, 20.f, in_tick(1) + 1));  // a bad driver report
+    in.push_event(test::mouse_move(14.f, 13.f, in_tick(1) + 2));
+    const InputState s1 = in.sample_for_tick(1);
+    CHECK(s1.mouse_pos_px().x == 14.f);
+    CHECK(s1.mouse_pos_px().y == 13.f);
+
+    platform::Event axis = test::simple_event(platform::EventType::GamepadAxis, in_tick(2), 0);
+    axis.x = inf;
+    in.push_event(axis);
+    in.push_event(test::simple_event(platform::EventType::MouseWheel, in_tick(2) + 1));
+    platform::Event wheel = test::simple_event(platform::EventType::MouseWheel, in_tick(2) + 2);
+    wheel.y = nan;
+    in.push_event(wheel);
+    platform::Event rs = test::simple_event(platform::EventType::Resized, in_tick(2) + 3);
+    rs.x = inf;
+    rs.y = 600.f;
+    in.push_event(rs);
+    const InputState s2 = in.sample_for_tick(2);
+    CHECK(std::isfinite(s2.mouse_wheel().y));
+    CHECK(in.gamepad_axis(0, platform::GamepadAxis::LeftX) == 0.f);
+    CHECK(in.stats().events_ignored == 4);
 }

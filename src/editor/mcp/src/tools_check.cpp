@@ -84,7 +84,7 @@ bool is_text_asset(StringView rel) {
 // Media that needs a credits row (code-made data files do not).
 bool is_media(StringView rel) {
     const cook::String ext = cook::lower_extension(rel);
-    for (const char* e : {".png", ".jpg", ".jpeg", ".wav", ".ogg", ".mp3", ".flac", ".ttf", ".otf", ".glb", ".gltf", ".hdr"})
+    for (const char* e : {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".wav", ".ogg", ".mp3", ".flac", ".ttf", ".otf", ".glb", ".gltf", ".obj", ".fbx", ".hdr", ".exr"})
         if (ext.view() == e) return true;
     return false;
 }
@@ -449,10 +449,11 @@ bool project_check(ToolCall& c) {
             cook::String text;
             if (cook::fs::read_text(cook::path_join(project.root(), v).view(), text)) code.push_back(static_cast<cook::String&&>(text));
         }
-        // Models name their textures by file name (glTF uri).
+        // Models name their textures by file name (glTF uri, an OBJ's .mtl, the paths stored in an FBX).
         Array<cook::String> models;
         for (const cook::String& f : files) {
-            if (!ends_with(f.view(), ".glb") && !ends_with(f.view(), ".gltf")) continue;
+            const bool model = ends_with(f.view(), ".glb") || ends_with(f.view(), ".gltf") || ends_with(f.view(), ".obj") || ends_with(f.view(), ".mtl") || ends_with(f.view(), ".fbx");
+            if (!model) continue;
             cook::String bytes;
             if (cook::fs::read_text(project.asset_path(f.view()).view(), bytes)) models.push_back(static_cast<cook::String&&>(bytes));
         }
@@ -513,6 +514,8 @@ bool project_check(ToolCall& c) {
     if (opt.enabled("srgb")) {
         for (const editor::ProjectAsset& a : project.assets()) {
             if (StringView(editor::asset_type_name(a.type)) != "Texture") continue;
+            const cook::String ext = cook::lower_extension(a.path.view());
+            if (ext.view() == ".hdr" || ext.view() == ".exr") continue;  // linear float data, never sRGB
             cook::String side = project.asset_path(a.path.view());
             side += ".mceasset";
             cook::String side_text;
@@ -677,7 +680,7 @@ bool project_check(ToolCall& c) {
         if (opt.budget.texture_size > 0)
             for (const cook::String& f : files) {
                 const cook::String ext = cook::lower_extension(f.view());
-                if (ext.view() != ".png" && ext.view() != ".jpg" && ext.view() != ".jpeg") continue;
+                if (ext.view() != ".png" && ext.view() != ".jpg" && ext.view() != ".jpeg" && ext.view() != ".tga" && ext.view() != ".bmp") continue;
                 cook::String bytes;
                 u32 w = 0, h = 0;
                 if (!cook::fs::read_text(project.asset_path(f.view()).view(), bytes) ||

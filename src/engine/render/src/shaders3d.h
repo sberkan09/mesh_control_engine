@@ -47,7 +47,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_probe_min[4];   // box, w: blend distance
     vec4 p_probe_max[4];   // box, w: first u_env layer (sharp capture, then the pre-filtered layers)
     vec4 p_ao;             // x: screen-space ambient occlusion on (M-VISUAL 3), y: contact shadows on (u_ao.g, M-VISUAL2 3)
-    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4), y: u_shadow layer of cascade 0
+    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4), y: u_shadow layer of cascade 0, z: light cookies on (M-LIGHTCOOKIE 40d: a spot's or the sun's)
     vec4 p_gi;             // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
     vec4 p_gi_min;         // xyz: volume box
     vec4 p_gi_max;
@@ -59,6 +59,41 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_vol_scale;      // x: local light scale, y: ambient scale
     vec4 p_decals;         // x: decals to apply (M-VISUAL 9)
     vec4 p_ssr;            // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
+    vec4 p_sky_rot;        // M-VISUAL3 4: x cos, y sin of the sky texture's yaw about +Y (y = 0: no rotation)
+    vec4 p_wet;            // M-WETSURFACE 5b: x wetness (0 = off), y puddle coverage, z 1 / puddle cell (m), w darken
+    vec4 p_wet2;           // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on (0 on Low)
+    vec4 p_snow;           // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise, Low), w wind bias
+    vec4 p_ripple;         // M-RAINFX 7b: x strength (0 = off), y density, z ring width (>= 0.01), w speed-scaled time mod 60 s
+    vec4 p_snow2;          // M-WINDDIR 8c: xy the snow wind direction (xz unit vector the wind blows toward), zw 0
+    vec4 p_cloud;          // M-CLOUDS 9b: x coverage (0 = off), y density, z 1 / noise cell (1/m), w plane height (m)
+    vec4 p_cloud2;         // xy: the drift in noise cells mod 64 (wind_dir * speed * time), zw 0
+    vec4 p_night;          // M-NIGHTSKY 14d: x moon cos size, y moon intensity (0 = no moon), z phase, w night fade
+    vec4 p_night2;         // x star density (0 = no stars), y star brightness, z twinkle, w star time mod 60 s
+    vec4 p_moon;           // xyz the unit direction toward the moon, w cos(2 pi phase)
+    vec4 p_moon2;          // rgb the moon's tint, w sin(2 pi phase)
+    vec4 p_water;          // M-WATER 15c: x level (local y), y wave count (0 = flat), z steepness, w half extent (m)
+    vec4 p_water2;         // rgb the shallow tint, w depth scale (m)
+    vec4 p_water3;         // rgb the deep tint, w reflectivity
+    vec4 p_water4;         // x roughness, y foam amount, z foam width (m), w 1 = the opaque depth is bound (u_water_depth)
+    vec4 p_water5;         // xy the two detail ripples' phases (rad), z detail slope (0 = none), w 0
+    vec4 p_wave[8];        // per Gerstner wave: xy the wave vector k * dir on xz (rad/m), z amplitude (m), w phase (rad)
+    vec4 p_aurora;         // M-AURORA 16c: x level (0 = off), y base height, z height span (sines), w time mod 64 s
+    vec4 p_aurora2;        // xy the arc centre (xz unit vector), z cos of the arc's half-width, w curtain count (1..6)
+    vec4 p_aurora3;        // rgb the low (base) colour, w 0
+    vec4 p_aurora4;        // rgb the high (top) colour, w speed (0..4)
+    vec4 p_rainbow;        // M-RAINBOW 17c: x level (0 = off), y band width (0.5..2), z secondary (0..1), w 0
+    vec4 p_rainbow2;       // xyz the anti-solar direction (unit), w 0
+    vec4 p_meteor;         // M-METEOR 18c: x level (0 = off), y brightness (0..4), z length (0.5..2), w speed (0.5..2)
+    vec4 p_meteor2;        // x rate (0..30 per minute), y the wrapped time (0..60 s), z seed (0..65535), w 0
+    vec4 p_sun_cookie;     // M-LIGHTCOOKIE 40e: x atlas layer, y strength (0..1), z size (m per repeat), w 1 = the sun has a cookie
+    vec4 p_sun_cookie2;    // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
+    vec4 p_translucency;   // M-TRANSLUCENT: x back ambient, y scatter lobe
+    vec4 p_ssr2;           // M-REFLECT2 48c: x 1 = the SSR roughness blur (r.ssr.blur; 0 = one sharp tap), yzw 0
+    vec4 p_water6;         // M-WATER2: x 1 = trace, y 1 = refract, z 1 = copy at bank 7
+    vec4 p_cirrus;         // M-CIRRUS 53b: x coverage (0 = off), y density, z 1 / cell (1/m), w height (m)
+    vec4 p_cirrus2;        // xy the wind (xz unit), z stretch, w drift along it (cells mod 64)
+    vec4 p_halo;           // M-HALO 54b: x strength (0 = off), y sun dogs, z moon, w dispersion; the last vec4 of the
+                           // 1536-byte block (96 vec4, a whole number of 256-byte slots, forward3d.cpp): 0 free
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -71,7 +106,9 @@ vec3 sky_gradient(vec3 d) {
 // Sky radiance along d; `lod` blurs the texture path (roughness), the gradient is smooth already.
 vec3 sky_radiance(vec3 d, float lod) {
     if (p_sky_ground.w < 0.0) return sky_gradient(d);
-    vec3 tex = textureLod(u_sky, vec3(equirect_uv(d), 0.0), min(lod, p_sky_ground.w)).rgb * p_sun.z;
+    vec3 dt = d;  // the direction in the texture's frame: yaw by -rotation, once, here (the gradient ignores it)
+    if (p_sky_rot.y != 0.0) dt = vec3(p_sky_rot.x * d.x - p_sky_rot.y * d.z, d.y, p_sky_rot.y * d.x + p_sky_rot.x * d.z);
+    vec3 tex = textureLod(u_sky, vec3(equirect_uv(dt), 0.0), min(lod, p_sky_ground.w)).rgb * p_sun.z;
     return p_sun.w > 0.5 ? sky_gradient(d) + tex : tex;  // additive: a star field over a gradient
 }
 )"
@@ -86,11 +123,12 @@ layout(std140, binding = 3) uniform ObjectU {
     vec4 o_params;     // x: alpha cutoff (0 = no mask), y: unlit, z: roughness, w: metallic
     vec4 o_maps;       // x: normal map, y: ORM map, z: occlusion in ORM.r, w: occlusion-only map
     mat4 o_dequant;    // skinned draws: quantized -> bind space (o_model is then the instance's world)
-    vec4 o_skin;       // x: first joint in the palette, -1 = rigid; instanced draws: y first visible slot, z time
+    vec4 o_skin;       // x: first joint in the palette, -1 = rigid; instanced draws: y first visible slot, z time; w: t8 + 256 w8
     vec4 o_inst;       // instanced draws (M-VISUAL 9): x wind amplitude, y wind frequency, zw wind direction (xz)
     vec4 o_coat;       // M-VISUAL2 4: x clear coat, y its alpha (roughness²), z anisotropy, w its rotation (radians)
     vec4 o_sheen;      // rgb sheen color, w its alpha (roughness², at least 0.0078)
     vec4 o_ext;        // x: any of the lobes above on, y: index of refraction (0 = 1.5), z: transmission
+    vec4 o_pom;        // M-VISUAL3 2: x parallax height scale (texture repeats; 0 = off), y/z min/max march steps, w fade-out view depth (m)
 };
 )"
 // clang-format on
@@ -104,6 +142,7 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 0) out vec3 v_world;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec2 v_uv;
+layout(location = 3) flat out vec4 v_tint;  // M-VISUAL3 6: per-copy colour variation (vec4(1) except batches)
 out gl_PerVertex { vec4 gl_Position; };
 vec3 oct_decode(vec2 e) {
     vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
@@ -115,6 +154,38 @@ void main() {
     v_world = w.xyz;
     v_normal = mat3(o_normal) * oct_decode(a_oct);
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    v_tint = vec4(1.0);
+    gl_Position = u_view_proj * w;
+}
+)";
+
+// Automatic instancing (M-VISUAL3 5a): a run of draws of one rigid submesh with one material reads its
+// per-draw matrices from a transient storage block at bank 13 (Forward3D uploads it per pass); slot
+// o_skin.y + gl_InstanceID is this copy's. kMeshVS's math with o_model / o_normal read per instance, so a
+// run's pixels equal the single draws' bit for bit. Feeds kMeshFS and kAoPrepassFS (ObjectU carries the rest).
+constexpr const char* kDrawInstancedVS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_OBJECT_U R"(
+struct DrawInst { mat4 model; mat4 normal; };
+layout(std430, binding = 13) readonly buffer DrawInstances { DrawInst d_inst[]; };
+layout(location = 0) in vec4 a_pos;
+layout(location = 1) in vec2 a_oct;
+layout(location = 2) in vec2 a_uv;
+layout(location = 0) out vec3 v_world;
+layout(location = 1) out vec3 v_normal;
+layout(location = 2) out vec2 v_uv;
+layout(location = 3) flat out vec4 v_tint;  // M-VISUAL3 6: per-copy colour variation (vec4(1) except batches)
+out gl_PerVertex { vec4 gl_Position; };
+vec3 oct_decode(vec2 e) {
+    vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
+    if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    return normalize(n);
+}
+void main() {
+    uint k = uint(o_skin.y) + uint(gl_InstanceID);
+    vec4 w = d_inst[k].model * vec4(a_pos.xyz, 1.0);
+    v_world = w.xyz;
+    v_normal = mat3(d_inst[k].normal) * oct_decode(a_oct);
+    v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    v_tint = vec4(1.0);
     gl_Position = u_view_proj * w;
 }
 )";
@@ -143,6 +214,7 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 0) out vec3 v_world;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec2 v_uv;
+layout(location = 3) flat out vec4 v_tint;  // M-VISUAL3 6: per-copy colour variation (vec4(1) except batches)
 out gl_PerVertex { vec4 gl_Position; };
 vec3 oct_decode(vec2 e) {
     vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
@@ -155,6 +227,7 @@ void main() {
     v_world = w.xyz;
     v_normal = mat3(o_normal) * (mat3(s) * oct_decode(a_oct));
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    v_tint = vec4(1.0);
     gl_Position = u_view_proj * w;
 }
 )";
@@ -306,21 +379,278 @@ vec4 vol_fog(vec2 uv, float depth) {
 }
 )"
 
-// The forward material shader. kTerrainFS is the same with MCE_TERRAIN: the surface comes from the
-// splat layers (terrain_surface) instead of the material's maps.
-#define MCE_GLSL_MESH_FS R"(
-layout(binding = 6) uniform sampler2DArray u_albedo;
-layout(binding = 7) uniform sampler2DArray u_normal_map;
-layout(binding = 8) uniform sampler2DArray u_orm;
-layout(binding = 13) uniform sampler2DArray u_emissive;
-layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility, g = the sun's contact visibility
-layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
-layout(location = 0) in vec3 v_world;
-layout(location = 1) in vec3 v_normal;
-layout(location = 2) in vec2 v_uv;
-layout(location = 0) out vec4 o_color;
+// Light cookies (M-LIGHTCOOKIE 40c / 40d): a texture a spot light projects through its cone. There is no free sampler
+// bank in the lit shader (all 16 are taken, and Metal and WebGPU stop at 16), so the cookie atlas shares bank 2 with the
+// third decal texture: one variable, u_slot2, read by decal_texture() (p_local.z == 0, the frame's decal texture 2) and
+// by cookie_sample() (p_local.z > 0, the atlas; the frame then draws at most two decal textures). Two variables on one
+// binding do not compile for Vulkan.
+//
+// The atlas (Forward3D::record_cookie_bake) is a 2D array, one layer per distinct cookie texture, of 1.5 S x S texels for
+// the tier's cookie size S and one mip: the RHI renders into a layer of an array (PassAttachment::layer) and a viewport,
+// not into a mip, so the mip chain is packed into the layer (level 0 at texel (0, 0), S wide; level k >= 1, S / 2^k wide,
+// at (S, S - 2 S / 2^k), rows counted from v = 0) and filtered here: two bilinear fetches at lod 0, each clamped half a
+// texel inside its level, mixed by the fraction of the lod. Records (LightCookies, storage bank 2, GpuCookieRecord in
+// light_cookie.h): vp = spot_cookie_matrix, params = {layer, strength, edge, 2 tan(spot_outer)}; Light.shadow.z is the
+// record index + 1 (0 = no cookie). cookie_edge and cookie_lod mirror spot_cookie_edge and cookie_lod literally.
+#define MCE_GLSL_COOKIE R"(
+layout(binding = 2) uniform sampler2DArray u_slot2;
+struct CookieRec { mat4 vp; vec4 params; };
+layout(std430, binding = 2) readonly buffer LightCookies { CookieRec l_cookies[]; };
+float cookie_smooth_step(float a, float b, float x) {  // b > a in every call (edge > 0)
+    float t = clamp((x - a) / (b - a), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+float cookie_edge(vec2 uv, float edge) {
+    if (!(edge > 0.0)) return 1.0;
+    float fx = uv.x < 1.0 - uv.x ? uv.x : 1.0 - uv.x;
+    float fy = uv.y < 1.0 - uv.y ? uv.y : 1.0 - uv.y;
+    return cookie_smooth_step(0.0, edge * 0.5, fx < fy ? fx : fy);
+}
+// log2(max(footprint / texel, 1)) clamped to 0..log2(size), texel = distance * width / size (width = 2 tan(outer)).
+float cookie_lod(float footprint, float distance, float width, float size) {
+    float texel = distance * width / size;
+    if (!(footprint > 0.0) || !(texel > 0.0)) return 0.0;
+    return clamp(log2(max(footprint / texel, 1.0)), 0.0, log2(size));
+}
+vec3 cookie_level(vec2 uv, float layer, float k, float size) {
+    float s = float(max(int(size) >> int(k), 1));  // exact level sizes (S a power of two)
+    vec2 o = k < 0.5 ? vec2(0.0) : vec2(size, size - 2.0 * s);
+    vec2 t = o + clamp(uv * s, vec2(0.5), vec2(s - 0.5));
+    return textureLod(u_slot2, vec3(t / vec2(1.5 * size, size), layer), 0.0).rgb;
+}
+// size: the atlas's S (its height, textureSize(u_slot2, 0).y).
+vec3 cookie_sample(vec2 uv, float layer, float lod, float size) {
+    float k0 = floor(lod);
+    float f = lod - k0;
+    vec3 c = cookie_level(uv, layer, k0, size);
+    if (f > 0.0) c += (cookie_level(uv, layer, min(k0 + 1.0, float(findMSB(int(size)))), size) - c) * f;  // equal levels: c exactly
+    return c;
+}
+// ---- the sun's cookie (M-LIGHTCOOKIE 40e): the texture tiled over the ground plane, each point carried there along the
+// sun's direction. PassU p_sun_cookie = {layer, strength, size, on}, p_sun_cookie2 = {offset (the camera's absolute
+// position folded in, light_cookie.h's "an offset of the world adds its own p"), cos, sin of the roll}; the caller
+// passes the point relative to the camera, so the fract below keeps its precision far from the origin. sun_cookie_uv
+// and cookie_lod_sun mirror light_cookie.cpp literally (p_light_dir is unit: bind_main_state; kSunCookieMinDy 0.05).
+vec2 sun_cookie_uv(vec3 rel) {
+    vec3 d = p_light_dir.xyz;
+    float dy = d.y <= 0.0 ? (d.y < -0.05 ? d.y : -0.05) : (d.y > 0.05 ? d.y : 0.05);
+    float px = rel.x - rel.y * d.x / dy, py = rel.z - rel.y * d.z / dy;
+    float c = p_sun_cookie2.z, s = p_sun_cookie2.w, size = p_sun_cookie.z;
+    return vec2((c * px + s * py) / size + p_sun_cookie2.x / size, (-s * px + c * py) / size + p_sun_cookie2.y / size);
+}
+// log2(max(footprint / texel, 1)) clamped to 0..log2(texels), texel = size_m / texels (texels: S, a power of two).
+float cookie_lod_sun(float footprint, float size_m, float texels) {
+    float texel = size_m / texels;
+    if (!(footprint > 0.0) || !(texel > 0.0)) return 0.0;
+    return clamp(log2(max(footprint / texel, 1.0)), 0.0, float(findMSB(int(texels))));
+}
+// The tiling needs the repeat inside one packed level, which the sampler cannot give (its REPEAT wraps the whole
+// 1.5 S x S layer): where the bilinear's 2x2 lies inside the level one hardware fetch reads it, and only in the one-texel
+// band along the level's border a bilinear of four texelFetch whose indices wrap inside the level does (the record's
+// decision 40e (b)); seam-free for a seamless texture, and the packing and the spot path stay as they are.
+vec3 cookie_level_wrap(vec2 uv, float layer, float k, float size) {
+    int si = max(int(size) >> int(k), 1);
+    float s = float(si);
+    vec2 o = k < 0.5 ? vec2(0.0) : vec2(size, size - 2.0 * s);
+    vec2 w = fract(uv) * s;  // texels into the level
+    vec2 t = w - 0.5;
+    vec2 b = floor(t);  // -1 .. s - 1
+    if (all(greaterThanEqual(b, vec2(0.0))) && all(lessThan(b + 1.0, vec2(s))))
+        return textureLod(u_slot2, vec3((o + w) / vec2(1.5 * size, size), layer), 0.0).rgb;
+    vec2 f = t - b;
+    ivec2 n = ivec2(si);
+    ivec2 i0 = ivec2(b) + ivec2(lessThan(b, vec2(0.0))) * n;
+    ivec2 i1 = ivec2(b) + 1 - ivec2(greaterThanEqual(b + 1.0, vec2(s))) * n;
+    ivec2 base = ivec2(o);
+    int l = int(layer);
+    vec3 c00 = texelFetch(u_slot2, ivec3(base + ivec2(i0.x, i0.y), l), 0).rgb;
+    vec3 c10 = texelFetch(u_slot2, ivec3(base + ivec2(i1.x, i0.y), l), 0).rgb;
+    vec3 c01 = texelFetch(u_slot2, ivec3(base + ivec2(i0.x, i1.y), l), 0).rgb;
+    vec3 c11 = texelFetch(u_slot2, ivec3(base + ivec2(i1.x, i1.y), l), 0).rgb;
+    vec3 c0 = c00 + (c10 - c00) * f.x, c1 = c01 + (c11 - c01) * f.x;  // equal texels: exactly that texel
+    return c0 + (c1 - c0) * f.y;
+}
+// The sun's light multiplier at `rel` (the point minus the camera): mix(1, the trilinear wrapped sample, strength).
+// size: the atlas's S.
+vec3 sun_cookie(vec3 rel, float lod, float size) {
+    vec2 uv = sun_cookie_uv(rel);
+    float k0 = floor(lod);
+    float f = lod - k0;
+    vec3 c = cookie_level_wrap(uv, p_sun_cookie.x, k0, size);
+    if (f > 0.0) c += (cookie_level_wrap(uv, p_sun_cookie.x, min(k0 + 1.0, float(findMSB(int(size)))), size) - c) * f;
+    return 1.0 + (c - 1.0) * p_sun_cookie.y;  // exactly 1 for a white texel
+}
+)"
 
+// The lit stage's weather pieces, spliced into MCE_GLSL_MESH_FS where they stood (M-TRANSLUCENT 41d moved their comments
+// out of the GLSL: kMeshFS / kTerrainFS stay under 65535 bytes, the longest literal MSVC takes and clang's
+// -Woverlength-strings bound; check with strlen when the lit shader grows).
+//
+// ---- wet surfaces (M-WETSURFACE 5b), behind p_wet.x > 0. Value noise on integer lattice hashes (no sin():
+// its precision differs across GPUs), periodic over 256 m: each octave fits a whole number of cells into that
+// span, so the floating origin enters mod 256 m and the puddles stay put across a rebase.
+// q: meters in 0..256; `cells`: lattice cells across 256 m (a whole number, >= 1).
+// Puddle cover 0..1 at world point p: two octaves (1 and 2.03 per puddle cell, each rounded to whole cells per
+// 256 m), crevices (low ao) fill first,
+// only on up-facing surfaces (`ng`: the geometric normal). The threshold falls as wetness and coverage rise.
+// Darker porous albedo and lower roughness; puddles (standing water) darken the dielectric surface under them once
+// more, ask for roughness 0.03 (the lighting's clamp to 0.045 below wins, so they draw at 0.045) and flatten the
+// normal map (`fill`). Metals neither darken (their albedo is their F0) nor smooth: water beads on them, and the
+// gate holds a wet metal sphere's look within 1%. Returns the puddle cover (the rain ripples' mask).
+#define MCE_GLSL_WET R"(
+uint wet_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), one lane
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    return v.x;
+}
+float wet_lattice(uvec2 c, uint seed) { return float(wet_hash(c + uvec2(seed, 0u)) >> 8u) * (1.0 / 16777216.0); }
+float wet_value(vec2 q, float cells, uint seed) {
+    vec2 g = max(q * (cells / 256.0), vec2(0.0));
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    f = f * f * (3.0 - 2.0 * f);
+    uint m = uint(cells);
+    uvec2 c0 = uvec2(i) % m;  // g may round up to `cells`: it wraps to cell 0
+    uvec2 c1 = (c0 + 1u) % m;
+    float a = wet_lattice(c0, seed), b = wet_lattice(uvec2(c1.x, c0.y), seed);
+    float c = wet_lattice(uvec2(c0.x, c1.y), seed), d = wet_lattice(c1, seed);
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+float wet_puddle(vec3 p, vec3 ng, float ao) {
+    float up = smoothstep(0.9, 0.98, ng.y);
+    if (up <= 0.0) return 0.0;
+    vec2 q = mod(p.xz + p_wet2.xy, 256.0);
+    float c1 = max(floor(256.0 * p_wet.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_wet.z + 0.5), 1.0);
+    float h = wet_value(q, c1, 0u) * 0.65 + wet_value(q, c2, 0x9E3779B9u) * 0.35 + (1.0 - ao) * 0.25;
+    float t = 1.0 - 0.8 * p_wet.y * p_wet.x;
+    return smoothstep(t - 0.03, t + 0.03, h) * up;
+}
+float apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, float metallic, inout float fill) {
+    float w = p_wet.x;
+    float pud = (p_wet2.w > 0.5 && p_wet.y > 0.0) ? wet_puddle(p, ng, ao) : 0.0;
+    float dielectric = 1.0 - clamp(metallic, 0.0, 1.0);
+    float porosity = dielectric * clamp(rough * 1.25, 0.0, 1.0);
+    albedo *= mix(1.0, 1.0 - p_wet.w, w * porosity) * mix(1.0, 1.0 - p_wet.w, pud * dielectric);
+    rough = mix(rough, min(rough, p_wet2.z), w * dielectric);
+    rough = mix(rough, 0.03, pud);
+    fill = max(fill, pud);
+    return pud;
+}
+)"
+
+// ---- snow cover (M-SNOWCOVER 6b), behind p_snow.x > 0, after apply_wet: the snow's values replace whatever the
+// water did under it, so snow wins over puddles where its mask is high. The mask, at world point p with geometric
+// normal ng (the interpolated vertex normal, the puddles' stand-in: a sphere's cap is up-facing and collects snow):
+// up  = smoothstep(0.55, 0.85, ng.y)                     slopes up to ~32 degrees fully, none past ~57
+// c   = clamp(cover * coverage * (1 + wind_bias * dot(ng.xz, wind_dir)), 0, 1)
+//       the share of the surface to whiten; the wind blows toward wind_dir (p_snow2.xy, M-WINDDIR 8c; +x by
+//       default), so slopes facing that way (lee) take up to 1 + wind_bias times the share and those facing into
+//       it (windward) down to 1 - wind_bias; flat ground (ng.xz = 0) is unchanged. With wind_dir (1, 0) the dot
+//       is ng.x exactly (ng.x * 1 + ng.z * 0), so the default frame is the pre-8c one bit for bit.
+// noise (p_snow.z > 0): h = the two-octave value noise of the puddles (1 and 2.03 per cell, other seeds),
+//       s = c - 0.5, t = 0.5 - s (0.48 + 2.55 s^4) (a fit of the noise's quantiles: about the share c of points
+//       has h > t), mask = smoothstep(t - 0.04, t + 0.04, h) * min(4 c, 1) (the factor fades the last
+//       percent in from cover 0) * up
+// no noise (Low): mask = c * up, an even layer of the same mean whiteness.
+// Under the mask: albedo toward 0.9 white, roughness toward 0.8, metallic toward 0 (snow on metal is snow), and
+// the normal map flattens (`fill`: the layer hides the surface's relief). Snow over a puddle stills it: `pud`, the
+// rain ripples' mask, keeps only the uncovered share. `snow` receives the mask (M-TRANSLUCENT 41d: a snowed-on
+// translucent surface lets through only its uncovered share).
+#define MCE_GLSL_SNOW R"(
+float snow_mask(vec3 p, vec3 ng) {
+    float up = smoothstep(0.55, 0.85, ng.y);
+    if (up <= 0.0) return 0.0;
+    float c = clamp(p_snow.x * p_snow.y * (1.0 + p_snow.w * dot(ng.xz, p_snow2.xy)), 0.0, 1.0);
+    if (p_snow.z <= 0.0) return c * up;
+    vec2 q = mod(p.xz + p_wet2.xy, 256.0);
+    float c1 = max(floor(256.0 * p_snow.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_snow.z + 0.5), 1.0);
+    float h = wet_value(q, c1, 0x85EBCA6Bu) * 0.65 + wet_value(q, c2, 0xC2B2AE35u) * 0.35;
+    float s = c - 0.5;
+    float t = 0.5 - s * (0.48 + 2.55 * s * s * s * s);
+    return smoothstep(t - 0.04, t + 0.04, h) * min(4.0 * c, 1.0) * up;
+}
+void apply_snow(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout float fill,
+                inout float pud, inout float snow) {
+    float m = snow_mask(p, ng);
+    snow = m;
+    albedo = mix(albedo, vec3(0.9), m);
+    rough = mix(rough, 0.8, m);
+    metallic = mix(metallic, 0.0, m);
+    fill = max(fill, m);
+    pud *= 1.0 - m;
+}
+)"
+
+// ---- rain ripples (M-RAINFX 7b), behind p_ripple.x > 0 and only where a puddle lies (`pud`, apply_wet's cover
+// after the snow): a frame with no wetness, no puddles or no ripples is the ripple-less one bit for bit, and ground
+// outside the puddles never changes. Drops land on a grid of 0.5 m cells, 512 across the puddles' 256 m period (the
+// same origin p_wet2.xy, so a floating-origin rebase keeps them in place). Cell c holds a drop when its hash is
+// below the density; its period is 3..6 quarter seconds and its phase hashed. In each cycle the drop lands at a
+// hashed point of its cell (the cycle index wraps with the clock: p_ripple.w is the speed-scaled time mod 60 s,
+// which every period divides) and two concentric rings grow from it, radius u * 0.8 and u * 0.44 cells for the
+// cycle's age u = 0..1, fading in over the first tenth and out as (1 - u)^2. A ring is the slope of a smooth bump
+// (1 - y^2)^2, y = (distance - radius) / (half width), half width ring_width * 0.3 cells: the longest reach,
+// 0.9 + 0.8 + 0.3 cells from a cell's corner, stays inside the 3 x 3 cells searched. No derivatives: the branch is
+// not uniform.
+// The rings tilt the water's normal by up to ~0.4 rad per ring and roughen it a little at their crests.
+#define MCE_GLSL_RIPPLES R"(
+float ripple_ring(float x, float hw) {
+    float y = x / hw;
+    return abs(y) < 1.0 ? y * (1.0 - y * y) * 2.598 : 0.0;  // the outward slope, peak 1 at y = 1 / sqrt(3)
+}
+vec2 ripple_tilt(vec3 p) {
+    vec2 g = mod(p.xz + p_wet2.xy, 256.0) * 2.0;  // cells
+    vec2 i = floor(g);
+    float t4 = p_ripple.w * 4.0;  // quarter seconds, 0..240
+    float hw = p_ripple.z * 0.3;
+    vec2 tilt = vec2(0.0);
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+            vec2 cell = i + vec2(float(dx), float(dy));
+            uvec2 c = uvec2(mod(cell, 512.0));
+            uint h = wet_hash(c + uvec2(0x68E31DA4u, 0xB5297A4Du));
+            if (float(h & 0xFFFFu) * (1.0 / 65536.0) >= p_ripple.y) continue;
+            uint k = 3u + ((h >> 16u) & 3u);
+            float tp = t4 / float(k) + float(h >> 18u) * (1.0 / 16384.0);  // cycles
+            float cyc = floor(tp);
+            float u = tp - cyc;
+            uint cy = uint(cyc) % (240u / k);
+            uint h2 = wet_hash(uvec2(c.x ^ (cy * 0x27D4EB2Du), c.y + 0x165667B1u));
+            vec2 drop = cell + 0.1 + 0.8 * vec2(float(h2 & 0xFFFFu), float(h2 >> 16u)) * (1.0 / 65536.0);
+            vec2 d = g - drop;
+            float dist = length(d);
+            if (dist < 1e-4) continue;
+            float a = smoothstep(0.0, 0.1, u) * (1.0 - u) * (1.0 - u);
+            float s = ripple_ring(dist - 0.8 * u, hw) + 0.5 * ripple_ring(dist - 0.44 * u, hw);
+            tilt += d * (a * s / dist);
+        }
+    return tilt;
+}
+void apply_ripples(vec3 p, float pud, inout vec3 n, inout float rough) {
+    vec2 t = ripple_tilt(p) * (p_ripple.x * pud);
+    n = normalize(n + vec3(t.x, 0.0, t.y) * 0.4);
+    rough += 0.04 * min(length(t), 1.0);
+}
+)"
+
+// M-GI2 50d moved the GLSL comments of the six pieces below out of the literal (as M-TRANSLUCENT 41d did for the
+// weather pieces): kMeshFS / kTerrainFS must stay under 65535 bytes. The comments are kept here, next to their code.
+
+// The lit stage's BRDF pieces (MCE_GLSL_MESH_FS splices them where they stood):
 // ---- Cook-Torrance GGX (Karis 2013 / Filament): D_GGX, V_SmithGGXCorrelated, F_Schlick
+// Radiance reflected toward v from a light of radiance-scale `e` along l. The engine convention
+// (ADR-0024): a white Lambert surface facing a light of intensity I reflects I, so the BRDF is
+// scaled by PI.
+// ---- M-VISUAL2 4 lobes (Filament's forms): anisotropic GGX along the UV tangent frame, the Charlie
+// sheen with Neubelt's visibility (no energy compensation of the base), and a clear coat: a second
+// GGX layer of F0 0.04 over the geometric normal that takes its Fresnel share from the base.
+// M-TRANSLUCENT: mirrors of translucency.h
+#define MCE_GLSL_BRDF R"(
 float D_GGX(float NoH, float a) {
     float a2 = a * a;
     float f = (NoH * a2 - NoH) * NoH + 1.0;
@@ -336,9 +666,6 @@ vec3 F_Schlick(vec3 f0, float VoH) {
     float f = pow(1.0 - VoH, 5.0);
     return f + f0 * (1.0 - f);
 }
-// Radiance reflected toward v from a light of radiance-scale `e` along l. The engine convention
-// (ADR-0024): a white Lambert surface facing a light of intensity I reflects I, so the BRDF is
-// scaled by PI.
 vec3 direct(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) {
     float NoL = clamp(dot(n, l), 0.0, 1.0);
     if (NoL <= 0.0) return vec3(0.0);
@@ -350,9 +677,6 @@ vec3 direct(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) {
     vec3 spec = D_GGX(NoH, a) * V_SmithGGXCorrelated(NoV, NoL, a) * F;
     return (diffuse * (1.0 - F) / PI + spec) * (PI * NoL) * e;
 }
-// ---- M-VISUAL2 4 lobes (Filament's forms): anisotropic GGX along the UV tangent frame, the Charlie
-// sheen with Neubelt's visibility (no energy compensation of the base), and a clear coat: a second
-// GGX layer of F0 0.04 over the geometric normal that takes its Fresnel share from the base.
 vec3 g_tangent = vec3(1.0, 0.0, 0.0), g_bitangent = vec3(0.0, 0.0, 1.0), g_coat_n = vec3(0.0, 1.0, 0.0);  // set by main() when o_ext.x is on
 float D_GGX_Aniso(float NoH, float ToH, float BoH, float at, float ab) {
     float a2 = at * ab;
@@ -406,8 +730,29 @@ vec3 direct_ext(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) 
 vec3 shade(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) {
     return o_ext.x > 0.5 ? direct_ext(n, v, l, diffuse, f0, a, e) : direct(n, v, l, diffuse, f0, a, e);
 }
+const float kTranslucencyDistortion = 0.2;
+const float kTranslucencyPower = 4.0;
+const float kTranslucencyScatter = 0.5;
+float wrap_diffuse(float n_dot_l, float wrap) { return max(n_dot_l + wrap, 0.0) / ((1.0 + wrap) * (1.0 + wrap)); }
+float wrap_extra(float n_dot_l, float wrap) { return wrap_diffuse(n_dot_l, wrap) - max(n_dot_l, 0.0); }
+float translucency_back(float n_dot_l, float v_dot_t, bool scatter) {
+    return max(-n_dot_l, 0.0) + (scatter ? kTranslucencyScatter * pow(max(v_dot_t, 0.0), kTranslucencyPower) : 0.0);
+}
+vec3 thin_terms(vec3 n, vec3 v, vec3 l, vec3 diffuse_f, vec3 tcol, float wr, vec3 e, vec3 eb) {
+    float nl = dot(n, l);
+    return diffuse_f * wrap_extra(nl, wr) * e +
+           tcol * translucency_back(nl, dot(v, -normalize(l + n * kTranslucencyDistortion)), p_translucency.y > 0.5) * eb;
+}
+)"
 
+// The lit stage's surface helpers (spliced into MCE_GLSL_MESH_FS where they stood):
 // Split-sum environment BRDF, analytic fit (Karis, "Physically Based Shading on Mobile").
+// Normal-map decode (M-CONTENT 1b). BC5 samples as (x, y, 0, 1): z is rebuilt from x and y. Only a texel with
+// b == 0.0 takes that path; RGBA8 maps (b >= 128 in practice) return t.xyz * 2 - 1 with the same bits as before. (That holds for blue > 0; a blue == 0 texel,
+// RGBA8 or BC5, gets its z rebuilt.)
+// Normal mapping without stored tangents: the cotangent frame from screen derivatives (Schüler).
+// glTF normal maps are +Y up in the image while UV v grows downward: B points along -v.
+#define MCE_GLSL_SURFACE R"(
 vec3 env_brdf(vec3 f0, float rough, float NoV) {
     const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
     const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
@@ -416,7 +761,11 @@ vec3 env_brdf(vec3 f0, float rough, float NoV) {
     vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
     return f0 * ab.x + ab.y;
 }
-// Normal mapping without stored tangents: the cotangent frame from screen derivatives (Schüler).
+vec3 unpack_normal(vec4 t) {
+    vec3 n = t.xyz * 2.0 - 1.0;
+    if (t.b == 0.0) n.z = sqrt(max(1.0 - dot(n.xy, n.xy), 0.0));
+    return n;
+}
 vec3 perturb_normal(vec3 n, vec3 p, vec2 uv, vec3 ts) {
     vec3 dp1 = dFdx(p), dp2 = dFdy(p);
     vec2 duv1 = dFdx(uv), duv2 = dFdy(uv);
@@ -426,63 +775,135 @@ vec3 perturb_normal(vec3 n, vec3 p, vec2 uv, vec3 ts) {
     float m = max(dot(t, t), dot(b, b));
     if (m <= 1e-20) return n;
     float s = inversesqrt(m);
-    // glTF normal maps are +Y up in the image while UV v grows downward: B points along -v.
     return normalize(mat3(t * s, -b * s, n) * ts);
 }
+)"
 
+// M-GI2 50e: the visibility factor of one probe, the GPU twin of gi_visibility_weight (gi_probes.h; a GL test runs
+// this text alone against it). v = pb - the probe's position, dm = dmax, mp / mn = the record's mean axial distances in
+// the lobes around +x +y +z / -x -y -z (texels 4, 5; normalised by dmax), sp / sn = the mean squares (texels 6, 7), bf =
+// the back-face share (texel 9 r). Per axis, the point's distance along it (|v_i|) against the lobe on v's side
+// (step(0, v) picks the + lobe for v_i >= 0, as the CPU does): 1 at or in front of the mean, else Chebyshev's bound
+// cubed, the variance at least kGiMinVariance (1e-3 m^2); the smallest of the three; a factor under kGiCrush (0.2)
+// crushed to vis^3 / 0.04; a share at or above kGiBackfaceOff (0.25) gives 0, and so does an all-zero record (a probe
+// of a cleared volume not captured yet: every captured probe has positive means). v = 0 (pb on the probe) gives 1; the
+// denominators are at least 1e-3.
+#define MCE_GLSL_GI_VIS R"(
+float gi_vis(vec3 v, float dm, vec3 mp, vec3 mn, vec3 sp, vec3 sn, float bf) {
+    vec3 a = abs(v), s = step(0.0, v), mu = mix(mn, mp, s) * dm;
+    vec3 va = max(mix(sn, sp, s) * dm * dm - mu * mu, 1e-3), t = va / (va + (a - mu) * (a - mu));
+    t = mix(t * t * t, vec3(1.0), step(a, mu));
+    float vis = min(min(t.x, t.y), t.z);
+    return bf >= 0.25 || dot(mp + mn, vec3(1.0)) <= 0.0 ? 0.0 : vis < 0.2 ? vis * vis * vis / 0.04 : vis;
+}
+)"
+
+// The lit stage's irradiance-volume lookup (spliced into MCE_GLSL_MESH_FS where it stood):
 // ---- the irradiance volume (M-VISUAL 6): 4 texels per probe, the probe's light at the tetrahedron
 // directions kGiTetra (each the sphere integral of L * (1 + w.d) / 4pi). E(n) / pi = sum V_k (1/4 + 3/2 d_k.n)
 // is the L1 irradiance of the probe's view; the 8 probes around a point blend by trilinear weight
 // times a smooth backface term (a probe behind the surface counts little).
+// M-GI2 50d: bit 1 of p_gi_counts.w (kGiFlagRecord, gi_probes.h) is the 10-texel layout (texels 4..9 the probe's
+// record): the probe's first texel is c.x * T. Without the flag T = 4, today's index.
+// M-GI2 50e: bit 2 (kGiFlagVisibility) multiplies each probe's weight by gi_vis (MCE_GLSL_GI_VIS, above) of the
+// normal-biased lookup point pb (the point the cell is chosen from) seen from the probe, with p_gi_max.w = dmax. "No
+// probe left": when no probe with a positive trilinear weight has a factor of at least kGiNoProbe (1e-4; vm, the
+// largest), the lookup returns a = 0 and the sky's ambient applies there, as outside the box. The rule reads the
+// factors, not the summed weights, so it does not depend on the cell size; otherwise the sums are divided by wsum
+// itself (at least the surviving probe's weight, > 0), so a small surviving weight is not dimmed. Without the flag the
+// statements give today's values: wsum >= 0.05 there, so dividing by it equals today's max(wsum, 1e-6).
+// M-GI2 50f: bit 4 (kGiFlagRelocate) moves each probe by its offset (texel 8, gi_offset_decode: (t * 2 - 1) * 0.45 *
+// cell; kGiMaxOffsetLimit): q is added to the backface term's direction and subtracted from the visibility's v. Without
+// the bit q stays 0 and is never added (to is today's expression; v - 0 is exact).
+// M-GI2 50g: so = the toroidal slot offset (gi_min.w = ox + 32 oy + 1024 oz, gi_slot_offset_pack); probe c of the box
+// lives in slot s = (c + so) % counts (gi_slot_of; 0 for every other volume, so s = c). Bit 8 (kGiFlagFollow): a probe
+// whose texel 9 r is above 0.5 (kGiInvalidShare: scrolled in, not captured yet) weighs 0, and "no probe left" applies to
+// it as to the visibility weight (bits 2 or 8: the same vm rule; bit 8 alone gives each probe 1 or 0).
+// gi_irradiance: rgb = irradiance / pi at p along n; a: how much of it applies (1 inside the box, 0 past the fade).
+#define MCE_GLSL_GI_LOOKUP R"(
 layout(binding = 5) uniform sampler2D u_gi;
 const vec3 kGiTetra[4] = vec3[4](vec3(0.57735027, 0.57735027, 0.57735027), vec3(0.57735027, -0.57735027, -0.57735027),
                                  vec3(-0.57735027, 0.57735027, -0.57735027), vec3(-0.57735027, -0.57735027, 0.57735027));
-vec3 gi_probe(ivec3 c, vec3 n) {
-    ivec2 t = ivec2(c.x * 4, c.y + int(p_gi_counts.y) * c.z);
-    vec3 e = vec3(0.0);
-    for (int k = 0; k < 4; ++k) e += texelFetch(u_gi, t + ivec2(k, 0), 0).rgb * (0.25 + 1.5 * dot(kGiTetra[k], n));
-    return max(e, vec3(0.0));
+void sh_irradiance2(vec3 n, out vec3 front, out vec3 back) {
+    vec3 odd = texelFetch(u_env_sh, ivec2(1, 0), 0).rgb * (0.488603 * n.y);
+    odd += texelFetch(u_env_sh, ivec2(2, 0), 0).rgb * (0.488603 * n.z);
+    odd += texelFetch(u_env_sh, ivec2(3, 0), 0).rgb * (0.488603 * n.x);
+    vec3 even = texelFetch(u_env_sh, ivec2(0, 0), 0).rgb * 0.282095;
+    even += texelFetch(u_env_sh, ivec2(4, 0), 0).rgb * (1.092548 * n.x * n.y);
+    even += texelFetch(u_env_sh, ivec2(5, 0), 0).rgb * (1.092548 * n.y * n.z);
+    even += texelFetch(u_env_sh, ivec2(6, 0), 0).rgb * (0.315392 * (3.0 * n.z * n.z - 1.0));
+    even += texelFetch(u_env_sh, ivec2(7, 0), 0).rgb * (1.092548 * n.x * n.z);
+    even += texelFetch(u_env_sh, ivec2(8, 0), 0).rgb * (0.546274 * (n.x * n.x - n.y * n.y));
+    front = max(even + odd, vec3(0.0));
+    back = max(even - odd, vec3(0.0));
 }
-// rgb: irradiance / pi at p along n; a: how much of it applies (1 inside the box, 0 past the fade).
-vec4 gi_irradiance(vec3 p, vec3 n) {
+)" MCE_GLSL_GI_VIS R"(
+vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
+    back = vec3(0.0);
     vec3 bmin = p_gi_min.xyz, bmax = p_gi_max.xyz;
     vec3 inside = min(p - bmin, bmax - p);
     float fade = clamp(1.0 + min(min(inside.x, inside.y), inside.z) / max(p_gi.w, 1e-3), 0.0, 1.0);
     if (fade <= 0.0) return vec4(0.0);
     ivec3 counts = ivec3(p_gi_counts.xyz);
+    int fl = int(p_gi_counts.w), T = (fl & 1) != 0 ? 10 : 4;
+    ivec3 so = ivec3(int(p_gi_min.w)) >> ivec3(0, 5, 10) & 31;
     vec3 cell = (bmax - bmin) / vec3(counts - 1);
-    vec3 g = (clamp(p + n * p_gi.z, bmin, bmax) - bmin) / cell;
+    vec3 pb = clamp(p + n * p_gi.z, bmin, bmax), g = (pb - bmin) / cell;
     ivec3 base = clamp(ivec3(floor(g)), ivec3(0), counts - 2);
     vec3 f = clamp(g - vec3(base), 0.0, 1.0);
-    vec3 sum = vec3(0.0);
-    float wsum = 0.0;
+    vec3 sum = vec3(0.0), bsum = vec3(0.0);
+    float wsum = 0.0, vm = 0.0;
     for (int i = 0; i < 8; ++i) {
         ivec3 o = ivec3(i & 1, (i >> 1) & 1, i >> 2);
         vec3 tw = mix(1.0 - f, f, vec3(o));
         float w = tw.x * tw.y * tw.z;
-        vec3 to = bmin + vec3(base + o) * cell - p;
+        ivec3 c = base + o, s = (c + so) % counts;
+        ivec2 t = ivec2(s.x * T, s.y + counts.y * s.z);
+        vec3 to = bmin + vec3(c) * cell - p, q = vec3(0.0);
+        if ((fl & 4) != 0) {
+            q = (texelFetch(u_gi, t + ivec2(8, 0), 0).rgb * 2.0 - 1.0) * 0.45 * cell;
+            to += q;
+        }
         float d2 = dot(to, to);
         float b = d2 > 1e-8 ? (dot(to * inversesqrt(d2), n) + 1.0) * 0.5 : 1.0;
         w *= b * b + 0.05;
-        sum += gi_probe(base + o, n) * w;
+        if ((fl & 10) != 0) {
+            float bf = texelFetch(u_gi, t + ivec2(9, 0), 0).r;
+            float v = (fl & 8) != 0 && bf > 0.5 ? 0.0 : (fl & 2) == 0 ? 1.0 :
+                gi_vis(pb - bmin - vec3(c) * cell - q, p_gi_max.w, texelFetch(u_gi, t + ivec2(4, 0), 0).rgb,
+                       texelFetch(u_gi, t + ivec2(5, 0), 0).rgb, texelFetch(u_gi, t + ivec2(6, 0), 0).rgb,
+                       texelFetch(u_gi, t + ivec2(7, 0), 0).rgb, bf);
+            vm = w > 0.0 ? max(vm, v) : vm;
+            w *= v;
+        }
+        vec3 e = vec3(0.0), eb = vec3(0.0);
+        for (int k = 0; k < 4; ++k) {
+            vec3 q = texelFetch(u_gi, t + ivec2(k, 0), 0).rgb;
+            float d = 1.5 * dot(kGiTetra[k], n);
+            e += q * (0.25 + d);
+            eb += q * (0.25 - d);
+        }
+        sum += max(e, vec3(0.0)) * w;
+        bsum += max(eb, vec3(0.0)) * w;
         wsum += w;
     }
-    return vec4(sum / max(wsum, 1e-6), fade);
+    if ((fl & 10) != 0 && vm < 1e-4) return vec4(0.0);
+    back = bsum / wsum;
+    return vec4(sum / wsum, fade);
 }
-
-uint cluster_of(float depth) {
-    uvec3 g = uvec3(u_cluster.xyz);
-    uint tx = min(uint(gl_FragCoord.x * u_viewport.z * u_cluster.x), g.x - 1u);
-    uint ty = min(uint(gl_FragCoord.y * u_viewport.w * u_cluster.y), g.y - 1u);
-    int s = int(floor(log(max(depth, 1e-4)) * u_cluster_z.x + u_cluster_z.y));
-    uint tz = uint(clamp(s, 0, int(g.z) - 1));
-    return tx + g.x * (ty + g.y * tz);
+vec4 gi_irradiance(vec3 p, vec3 n) {
+    vec3 b;
+    return gi_irradiance2(p, n, b);
 }
+)"
 
+// The lit stage's projected decals (spliced into MCE_GLSL_MESH_FS where they stood):
 // ---- projected decals (M-VISUAL 9): up to p_decals.x boxes in submission order, each blending its
 // color over the surface's base color and its roughness / metallic over the surface's, before lighting.
 // A smooth decal also fills the surface's normal-map bumps (`fill`: a puddle over paving is a flat
 // mirror; without it a low roughness lights each bump's rim as a dotted pattern).
+// `ng`: the geometric normal; derivatives come from outside the loop (its branches diverge).
+#define MCE_GLSL_DECALS R"(
 struct DecalRec {
     mat4 inv_world;  // world -> the unit box
     vec4 uv_rect;
@@ -494,13 +915,11 @@ struct DecalRec {
 layout(std430, binding = 15) readonly buffer Decals { DecalRec d_decals[]; };
 layout(binding = 0) uniform sampler2DArray u_decal0;
 layout(binding = 1) uniform sampler2DArray u_decal1;
-layout(binding = 2) uniform sampler2DArray u_decal2;
-vec4 decal_texture(int slot, vec2 uv, vec2 gx, vec2 gy) {
+vec4 decal_texture(int slot, vec2 uv, vec2 gx, vec2 gy) {  // slot 2 is u_slot2 (MCE_GLSL_COOKIE)
     if (slot == 0) return textureGrad(u_decal0, vec3(uv, 0.0), gx, gy);
     if (slot == 1) return textureGrad(u_decal1, vec3(uv, 0.0), gx, gy);
-    return textureGrad(u_decal2, vec3(uv, 0.0), gx, gy);
+    return textureGrad(u_slot2, vec3(uv, 0.0), gx, gy);
 }
-// `ng`: the geometric normal; derivatives come from outside the loop (its branches diverge).
 void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout vec3 emit, inout float fill) {
     vec3 dpx = dFdx(p), dpy = dFdy(p);
     int count = int(p_decals.x);
@@ -528,7 +947,163 @@ void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout f
         emit += c * (q.w * a);
     }
 }
+)"
 
+// The lit stage's material-map fetch (spliced into MCE_GLSL_MESH_FS where it stood):
+// A material map at the surface's uv. Where parallax moved it, the uv steps from march layer to march layer, so
+// its own screen derivatives (what texture() takes) are noise: the maps there take the mesh uv's footprint, and
+// filter it anisotropically here rather than in the sampler. The sampler's anisotropic filter (max_aniso 4) is
+// implementation-defined: on the grazing, high-contrast surfaces parallax is for, llvmpipe and an RTX 3070 differed
+// by 1.8% of full scale (a 4x vs 16x setting moves llvmpipe as far). Up to 4 trilinear taps along the footprint's
+// major axis, at the level of its width over the tap count: the same shape, the same result on every GPU.
+// Elsewhere (no parallax, or faded out) texture() as ever; both are read so the implicit-derivative one stays in
+// uniform control flow.
+#define MCE_GLSL_MAP_ANISO R"(
+vec2 g_uv_dx, g_uv_dy;
+bool g_pom_moved = false;
+vec4 map_aniso(sampler2DArray s, vec2 at, vec2 dx, vec2 dy) {  // dx, dy: the uv's screen gradients
+    vec2 size = vec2(textureSize(s, 0).xy);
+    float lx = length(dx * size), ly = length(dy * size);
+    vec2 major = lx > ly ? dx : dy;
+    float lmaj = max(lx, ly), lmin = max(min(lx, ly), 1e-6);
+    float taps = clamp(ceil(lmaj / lmin), 1.0, 4.0);
+    float lod = max(0.0, log2(lmaj / taps));
+    vec4 sum = vec4(0.0);
+    for (int i = 0; i < 4; ++i) {
+        if (float(i) >= taps) break;
+        sum += textureLod(s, vec3(at + major * ((float(i) + 0.5) / taps - 0.5), 0.0), lod);
+    }
+    return sum / taps;
+}
+#define MCE_MAP(s, at) (o_pom.x > 0.0 ? mix(texture(s, vec3(at, 0.0)), map_aniso(s, at, g_uv_dx, g_uv_dy), bvec4(g_pom_moved)) : texture(s, vec3(at, 0.0)))
+)"
+
+// The lit stage's parallax march (spliced into MCE_GLSL_MESH_FS inside its #ifndef MCE_TERRAIN):
+// Parallax occlusion mapping (M-VISUAL3 2): the height map is layer 1 of u_normal_map (white = high). The
+// view ray is marched through o_pom.y..z layers of the height field in the surface's uv frame, then the last
+// two layers are intersected linearly. The tangent frame solves the uv Jacobian from screen derivatives, so
+// anisotropic uv scales and mirrored uvs shift correctly. No self-shadowing, no depth offset.
+// The height field at one isotropic level (the footprint's longer axis): textureGrad here took the sampler's
+// anisotropic filter, which is the driver's own (see map_aniso), and costs taps in a loop of up to 64.
+#define MCE_GLSL_PARALLAX R"(
+vec2 parallax_uv(vec3 p, vec3 n, vec2 uv, float view_depth) {
+    float scale = o_pom.x * (1.0 - smoothstep(0.75 * o_pom.w, o_pom.w, view_depth));
+    if (scale <= 0.0) return uv;
+    vec3 dp1 = dFdx(p), dp2 = dFdy(p);
+    vec2 duv1 = dFdx(uv), duv2 = dFdy(uv);
+    float det = duv1.x * duv2.y - duv1.y * duv2.x;
+    if (abs(det) < 1e-20) return uv;
+    vec3 t = (dp1 * duv2.y - dp2 * duv1.y) / det;  // d p / d u
+    vec3 b = (dp2 * duv1.x - dp1 * duv2.x) / det;  // d p / d v
+    float tt = dot(t, t), bb = dot(b, b), tb = dot(t, b);
+    float gram = tt * bb - tb * tb;
+    if (gram < 1e-20) return uv;
+    vec3 v = normalize(u_camera_pos.xyz - p);
+    float vn = dot(v, n);
+    if (vn <= 0.0) return uv;
+    vec3 vt = v - n * vn;
+    float vu = dot(vt, t), vv = dot(vt, b);
+    vec2 dir = vec2(vu * bb - vv * tb, vv * tt - vu * tb) / gram;  // uv displacement per meter along the view's tangential part
+    float depth_m = scale * 0.5 * (sqrt(tt) + sqrt(bb));              // the deepest point, in meters
+    vec2 total = dir * depth_m / max(vn, 0.05);
+    float layers = floor(mix(o_pom.z, o_pom.y, vn) + 0.5);
+    vec2 step_uv = total / layers;
+    float step_d = 1.0 / layers;
+    vec2 hsize = vec2(textureSize(u_normal_map, 0).xy);
+    float h_lod = max(0.0, log2(max(length(duv1 * hsize), length(duv2 * hsize))));
+    vec2 cur = uv, prev = uv;
+    float cur_d = 0.0, prev_d = 0.0;
+    float tex_d = 1.0 - textureLod(u_normal_map, vec3(cur, 1.0), h_lod).r;
+    float prev_tex_d = tex_d;
+    for (int i = 0; i < 64; ++i) {
+        if (cur_d >= tex_d || float(i) >= layers) break;
+        prev = cur;
+        prev_d = cur_d;
+        prev_tex_d = tex_d;
+        cur -= step_uv;
+        cur_d += step_d;
+        tex_d = 1.0 - textureLod(u_normal_map, vec3(cur, 1.0), h_lod).r;
+    }
+    float after = tex_d - cur_d, before = prev_tex_d - prev_d;
+    float w = (after - before) != 0.0 ? clamp(after / (after - before), 0.0, 1.0) : 0.0;
+    g_pom_moved = true;
+    return mix(cur, prev, w);
+}
+)"
+
+// The forward material shader. kTerrainFS is the same with MCE_TERRAIN: the surface comes from the
+// splat layers (terrain_surface) instead of the material's maps.
+//
+// M-TRANSLUCENT 41d / 41e (thin-surface translucency and wrap; docs/milestones/M-TRANSLUCENT.md). ObjectU::o_skin.w =
+// t8 + 256 * w8 (translucency_object; 0 = off: `thin` false, today's statements, untouched). A per-draw value, so `thin`
+// is uniform across the draw. tr: the share of the diffuse let through (none on metal or under snow), wr: the wrap;
+// diffuse_f: what the surface still reflects (KHR_materials_diffuse_transmission's mix); tcol: what its back lets
+// through, tinted by its own colour (diffuse = base * (1 - metallic), after the transmission's share). wrap_diffuse,
+// wrap_extra, translucency_back and the constants mirror mce/render/translucency.h literally (n_dot_l = dot(n, l), l
+// toward the light); thin_terms is one light's wrap extra plus its back term (`eb`: the light behind its back shadow).
+// The sun: the front shadow where the wrap reaches (n.l > -wr), the back shadow where light comes through (tr > 0,
+// n.l < 0) with the geometric normal flipped for the normal offset, so the receiver sits on the leaf's lit side: the
+// leaf does not shadow its own back and a second leaf between it and the sun does (one cascade lookup per pixel, two
+// only in a translucent surface's wrap band); no contact shadow on the back; the cookie multiplies all three terms. A
+// local light: its one local_shadow lookup takes the flipped offset where it lights the back, and its back term only
+// where it lights the back (`eb` 0 when n.l >= 0, as the sun's shb). Snow damps tr by the mask of the surface's
+// upward face (a leaf seen from below under snow does not glow). Clear coat and sheen act on shade() and the front
+// ambient only, not on the wrap extra, the back term or the back ambient. The ambient (Medium and High,
+// p_translucency.x): the front reflects diffuse_f, the back lets tcol of the irradiance along -n through:
+// sh_irradiance2 (the nine SH texels once; the odd band flips its sign under -n; equal to two sh_irradiance calls within
+// rounding) or the hemisphere gradient at -n, and in the irradiance volume gi_irradiance2's back sum (the same probe
+// texels and the front's weights); SSAO darkens it, the sky's sun-side factor does not. Low: the full diffuse, as today.
+#define MCE_GLSL_MESH_FS R"(
+layout(binding = 6) uniform sampler2DArray u_albedo;
+layout(binding = 7) uniform sampler2DArray u_normal_map;
+layout(binding = 8) uniform sampler2DArray u_orm;
+layout(binding = 13) uniform sampler2DArray u_emissive;
+layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility, g = the sun's contact visibility
+layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
+// M-REFLECT2 48c: SSR roughness blur (CPU twin: ssr_blur.h)
+const float kSsrBlurMinRough = 0.1, kSsrBlurScale = 24.0, kSsrBlurMax = 8.0, kSsrBumpGain = 3.0;
+const int kSsrTaps = 8;
+float ssr_blur_radius(float rough, float bump) {  // half-size texels; 0 = the single sharp tap
+    if (!(rough > kSsrBlurMinRough)) return 0.0;
+    float r = min(rough, 1.0);
+    return min(kSsrBlurScale * (r * r - kSsrBlurMinRough * kSsrBlurMinRough + max(bump, 0.0)), kSsrBlurMax);
+}
+vec4 ssr_gather(vec2 uv, float radius) {
+    vec2 size = vec2(textureSize(u_ssr, 0));
+    vec2 texel = 1.0 / size;
+    float rot = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    vec3 rgb = vec3(0.0);
+    float aw = 0.0, kw = 0.0;
+    for (int i = 0; i < kSsrTaps; ++i) {
+        float t = (float(i) + 0.5) / float(kSsrTaps);  // radius^2 of the tap, 0..1: an even disc
+        float th = float(i) * 2.39996323 + rot;
+        vec2 o = vec2(cos(th), sin(th)) * (sqrt(t) * radius);
+        float k = 1.0 - 0.75 * t * t;  // smooth radial falloff
+        vec4 s = textureLod(u_ssr, clamp(uv + o * texel, 0.5 * texel, 1.0 - 0.5 * texel), 0.0);
+        rgb += s.rgb * (s.a * k);
+        aw += s.a * k;
+        kw += k;
+    }
+    return vec4(rgb / max(aw, 1e-4), aw / kw);
+}
+layout(location = 0) in vec3 v_world;
+layout(location = 1) in vec3 v_normal;
+layout(location = 2) in vec2 v_uv;
+layout(location = 3) flat in vec4 v_tint;
+layout(location = 0) out vec4 o_color;
+
+)" MCE_GLSL_BRDF MCE_GLSL_SURFACE MCE_GLSL_GI_LOOKUP R"(
+
+uint cluster_of(float depth) {
+    uvec3 g = uvec3(u_cluster.xyz);
+    uint tx = min(uint(gl_FragCoord.x * u_viewport.z * u_cluster.x), g.x - 1u);
+    uint ty = min(uint(gl_FragCoord.y * u_viewport.w * u_cluster.y), g.y - 1u);
+    int s = int(floor(log(max(depth, 1e-4)) * u_cluster_z.x + u_cluster_z.y));
+    uint tz = uint(clamp(s, 0, int(g.z) - 1));
+    return tx + g.x * (ty + g.y * tz);
+}
+
+)" MCE_GLSL_DECALS MCE_GLSL_WET MCE_GLSL_SNOW MCE_GLSL_RIPPLES R"(
 #ifdef MCE_TERRAIN
 // ---- splat-layered terrain (M-TERRAIN 2): the layers' maps are layers of u_albedo / u_normal_map /
 // u_orm, the weights two RGBA layers of u_emissive (no emissive on a terrain), the parameters TerrainU.
@@ -553,15 +1128,15 @@ vec4 terrain_fetch(sampler2DArray t, vec3 p, vec3 dx, vec3 dy, float layer, floa
 vec3 terrain_normal(vec3 p, vec3 dx, vec3 dy, float layer, float s, vec3 bw, vec3 n) {
     vec3 r = vec3(0.0);
     if (bw.y > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s));
         r += vec3(t.x + n.x, abs(t.z) * n.y, n.z - t.y) * bw.y;
     }
     if (bw.x > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s));
         r += vec3(abs(t.z) * n.x, n.y - t.y, t.x + n.z) * bw.x;
     }
     if (bw.z > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s));
         r += vec3(t.x + n.x, n.y - t.y, abs(t.z) * n.z) * bw.z;
     }
     return r;
@@ -627,9 +1202,18 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
 }
 #endif
 
+)" MCE_GLSL_MAP_ANISO R"(
+
+#ifndef MCE_TERRAIN
+)" MCE_GLSL_PARALLAX R"(
+#endif
+
 void main() {
     vec3 n = normalize(v_normal);
     if (!gl_FrontFacing) n = -n;
+    vec2 uv = v_uv;
+    g_uv_dx = dFdx(v_uv);
+    g_uv_dy = dFdy(v_uv);
 #ifdef MCE_TERRAIN
     vec4 base = vec4(1.0);
     vec3 t_n;
@@ -637,7 +1221,8 @@ void main() {
     terrain_surface(v_world, n, base.rgb, t_n, t_rough, t_metallic, t_ao);
     base *= o_base_color;
 #else
-    vec4 base = texture(u_albedo, vec3(v_uv, 0.0)) * o_base_color;
+    if (o_pom.x > 0.0) uv = parallax_uv(v_world, n, v_uv, -(u_view * vec4(v_world, 1.0)).z);  // uniform branch: it takes derivatives
+    vec4 base = MCE_MAP(u_albedo, uv) * o_base_color * v_tint;
     if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
 #endif
     vec3 color;
@@ -655,29 +1240,44 @@ void main() {
         float rough = o_params.z, metallic = o_params.w, ao = 1.0;
 #endif
         if (o_maps.y > 0.5) {
-            vec3 orm = texture(u_orm, vec3(v_uv, 0.0)).rgb;
+            vec3 orm = MCE_MAP(u_orm, uv).rgb;
             if (o_maps.z > 0.5) ao = orm.r;
             if (o_maps.w < 0.5) {
                 rough *= orm.g;
                 metallic *= orm.b;
             }
         }
-        float fill = 0.0;
+        float fill = 0.0, pud = 0.0, snow = 0.0, bump = 0.0;  // bump: the map's tilt (48d)
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
+        if (p_wet.x > 0.0) pud = apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
+        if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill, pud, snow);  // after the water: snow wins
 #ifdef MCE_TERRAIN
+        bump = (1.0 - fill) * (1.0 - dot(t_n, n));
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
         if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
-            vec3 nb = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
+            vec3 nb = perturb_normal(n, v_world, v_uv, unpack_normal(MCE_MAP(u_normal_map, uv)));
+            bump = (1.0 - fill) * (1.0 - dot(nb, n));
             n = normalize(mix(nb, n, fill));
         }
 #endif
+        if (p_ripple.x > 0.0 && pud > 0.0) apply_ripples(v_world, pud, n, rough);  // on the water the snow left
         rough = clamp(rough, 0.045, 1.0);
         metallic = clamp(metallic, 0.0, 1.0);
         float a = rough * rough;
         vec3 diffuse = base.rgb * (1.0 - metallic);
         float trans = o_ext.w > 0.5 ? o_ext.z * (1.0 - metallic) : 0.0;  // transmission takes the diffuse's place
         diffuse *= 1.0 - trans;
+        bool thin = o_skin.w > 0.0;
+        float tr = 0.0, wr = 0.0;
+        if (thin) {
+            vec3 gn = normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0);
+            float sd = p_snow.x > 0.0 && gn.y < 0.0 ? snow_mask(v_world, -gn) : snow;
+            tr = mod(o_skin.w, 256.0) / 255.0 * (1.0 - metallic) * (1.0 - sd);
+            wr = floor(o_skin.w * (1.0 / 256.0)) / 255.0;
+        }
+        vec3 diffuse_f = thin ? diffuse * (1.0 - tr) : diffuse;
+        vec3 tcol = diffuse * tr;
         float ior_f0 = o_ext.y > 0.0 ? ((o_ext.y - 1.0) / (o_ext.y + 1.0)) * ((o_ext.y - 1.0) / (o_ext.y + 1.0)) : 0.04;
         vec3 f0 = mix(vec3(ior_f0), base.rgb, metallic);
         vec3 v = normalize(u_camera_pos.xyz - v_world);
@@ -696,12 +1296,47 @@ void main() {
 
         // The sun, shadowed.
         vec3 l = -p_light_dir.xyz;
-        float sh = dot(n, l) > 0.0 ? shadow_term(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), l, depth) : 0.0;
-        if (p_ao.y > 0.5 && o_ext.w < 0.5 && sh > 0.0) {  // contact shadows: what the cascades are too coarse to see
+        float sh, shb = 0.0;
+        if (thin) {
+            vec3 ng = normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0);
+            float nl = dot(n, l);
+            sh = nl > -wr ? shadow_term(v_world, ng, l, depth) : 0.0;
+            if (tr > 0.0 && nl < 0.0) shb = shadow_term(v_world, -ng, l, depth);
+        } else {
+            sh = dot(n, l) > 0.0 ? shadow_term(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), l, depth) : 0.0;
+        }
+        if (p_ao.y > 0.5 && o_ext.w < 0.5 && sh > 0.0 && dot(n, l) > 0.0) {  // contact shadows: what the cascades are too coarse to see
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             sh *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).g;
         }
-        color = shade(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
+        // M-LIGHTCOOKIE 40d / 40e: the pixel's world footprint for the cookies' mips (the sun's and the spots'), taken
+        // here in uniform control flow (the loop's branches diverge, and derivatives there are undefined); the cookies
+        // themselves are read with an explicit lod.
+        float cookie_px = 0.0;
+        if (p_local.z > 0.5) cookie_px = max(length(dFdx(v_world)), length(dFdy(v_world)));
+        if (thin) {
+            vec3 Lc = p_light_color.rgb;
+            vec3 sun = shade(n, v, l, diffuse_f, f0, a, Lc) * sh + thin_terms(n, v, l, diffuse_f, tcol, wr, Lc * sh, Lc * shb);
+            if (p_sun_cookie.w > 0.5) {
+                vec3 sc = vec3(0.0);
+                if (sh > 0.0 || shb > 0.0) {
+                    float size = float(textureSize(u_slot2, 0).y);
+                    sc = sun_cookie(v_world - u_camera_pos.xyz, cookie_lod_sun(cookie_px, p_sun_cookie.z, size), size);
+                }
+                color = max(sc.r, max(sc.g, sc.b)) > 0.0 ? sun * sc : vec3(0.0);
+            } else {
+                color = sun;
+            }
+        } else if (p_sun_cookie.w > 0.5) {  // the sun's cookie multiplies its direct term only (after the shadows; sh stays for the ambient)
+            vec3 sc = vec3(0.0);
+            if (sh > 0.0) {
+                float size = float(textureSize(u_slot2, 0).y);
+                sc = sun_cookie(v_world - u_camera_pos.xyz, cookie_lod_sun(cookie_px, p_sun_cookie.z, size), size);
+            }
+            color = max(sc.r, max(sc.g, sc.b)) > 0.0 ? shade(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh * sc : vec3(0.0);
+        } else {
+            color = shade(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
+        }
 
         // Forward+ point and spot lights of this fragment's cluster.
         uvec2 range = c_ranges[cluster_of(depth)];
@@ -716,11 +1351,35 @@ void main() {
             float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);  // point lights: 0·x + 1
             att *= cone * cone;
             if (att <= 0.0) continue;
+            // The light's cookie (a spot's record, before the shadow: a black texel skips its taps). lc multiplies the
+            // light's colour; a light without one keeps today's expression.
+            bool cookied = p_local.z > 0.5 && L.shadow.z > 0.0;
+            vec3 lc = vec3(1.0);
+            if (cookied) {
+                CookieRec c = l_cookies[int(L.shadow.z) - 1];
+                vec4 q = c.vp * vec4(v_world, 1.0);
+                vec3 tint = vec3(0.0);
+                if (q.w > 0.0) {
+                    vec2 cuv = q.xy / q.w * 0.5 + 0.5;
+                    if (all(greaterThanEqual(cuv, vec2(0.0))) && all(lessThanEqual(cuv, vec2(1.0)))) {
+                        float size = float(textureSize(u_slot2, 0).y);
+                        tint = cookie_sample(cuv, c.params.x, cookie_lod(cookie_px, q.w, c.params.w, size), size) * cookie_edge(cuv, c.params.z);
+                    }
+                }
+                lc = 1.0 + (tint - 1.0) * c.params.y;  // mix(1, tint, strength), exactly 1 for a white texel or strength 0
+                if (max(lc.r, max(lc.g, lc.b)) <= 0.0) continue;
+            }
             if (L.shadow.x >= 0.0 && p_local.x > 0.5) {
-                att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), ld);
+                float side = (gl_FrontFacing ? 1.0 : -1.0) * (thin && tr > 0.0 && dot(n, ld) < 0.0 ? -1.0 : 1.0);
+                att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * side, ld);
                 if (att <= 0.0) continue;
             }
-            color += shade(n, v, ld, diffuse, f0, a, L.color.rgb * att);
+            if (thin) {
+                vec3 E = cookied ? L.color.rgb * att * lc : L.color.rgb * att;
+                color += shade(n, v, ld, diffuse_f, f0, a, E) + thin_terms(n, v, ld, diffuse_f, tcol, wr, E, dot(n, ld) < 0.0 ? E : vec3(0.0));
+            } else {
+                color += shade(n, v, ld, diffuse, f0, a, cookied ? L.color.rgb * att * lc : L.color.rgb * att);
+            }
         }
 
         // Ambient: hemisphere diffuse + sky reflections through the analytic split-sum, or with
@@ -733,17 +1392,40 @@ void main() {
             r = reflect(-v, normalize(mix(n, an, abs(o_coat.z) * clamp(5.0 * rough, 0.0, 1.0))));
         }
         float horizon = clamp(1.0 + dot(r, normalize(v_normal)), 0.0, 1.0);
-        vec3 amb_diffuse = p_ibl.x > 0.5 ? sh_irradiance(n) * diffuse * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
+        bool thin_amb = thin && p_translucency.x > 0.5;
+        vec3 amb_diffuse, amb_back = vec3(0.0);
+        if (thin_amb) {
+            vec3 irr_f, irr_b;
+            if (p_ibl.x > 0.5) {
+                sh_irradiance2(n, irr_f, irr_b);
+                irr_f *= p_ibl.y;
+                irr_b *= p_ibl.y;
+            } else {
+                irr_f = mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5);
+                irr_b = mix(p_amb_ground.rgb, p_amb_sky.rgb, -n.y * 0.5 + 0.5);
+            }
+            amb_diffuse = irr_f * diffuse_f;
+            amb_back = irr_b * tcol;
+        } else {
+            amb_diffuse = p_ibl.x > 0.5 ? sh_irradiance(n) * diffuse * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
+        }
         vec3 amb_spec, spec_brdf;
         // The irradiance volume: its light in place of the sky's, and the sky's reflections dimmed by how
         // much of the sky's irradiance reaches this point (rooms do not mirror the open sky).
         float gi_w = 0.0, sky_vis = 1.0;
         if (p_gi.x > 0.5) {
-            vec4 gi = gi_irradiance(v_world, n);
+            vec4 gi;
+            if (thin_amb) {
+                vec3 gi_back;
+                gi = gi_irradiance2(v_world, n, gi_back);
+                amb_back = mix(amb_back, gi_back * p_gi.y * tcol, gi.a);
+            } else {
+                gi = gi_irradiance(v_world, n);
+            }
             gi_w = gi.a;
             vec3 irr = gi.rgb * p_gi.y;
             vec3 sky_irr = p_ibl.x > 0.5 ? sh_irradiance(n) * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5);
-            amb_diffuse = mix(amb_diffuse, irr * diffuse, gi_w);
+            amb_diffuse = mix(amb_diffuse, irr * (thin_amb ? diffuse_f : diffuse), gi_w);
             const vec3 kLuma = vec3(0.2126, 0.7152, 0.0722);
             sky_vis = mix(1.0, clamp(dot(irr, kLuma) / max(dot(sky_irr, kLuma), 1e-4), 0.0, 1.0), gi_w);
         }
@@ -759,8 +1441,11 @@ void main() {
         }
         if (p_ssr.x > 0.5) {  // what the screen saw along r, over the probes, by confidence and roughness
             vec4 c = u_view_proj * vec4(v_world, 1.0);
-            vec4 s = textureLod(u_ssr, c.xy / c.w * 0.5 + 0.5, 0.0);
-            float w = s.a * clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
+            vec2 suv = c.xy / c.w * 0.5 + 0.5;
+            float rfade = clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
+            float br = p_ssr2.x > 0.5 && rfade > 0.0 ? ssr_blur_radius(rough, kSsrBumpGain * bump) : 0.0;
+            vec4 s = br > 0.0 ? ssr_gather(suv, br) : textureLod(u_ssr, suv, 0.0);
+            float w = s.a * rfade;
             amb_spec = mix(amb_spec, s.rgb * spec_brdf * p_ssr.w, w);
         }
         if (p_ao.x > 0.5 && o_ext.w < 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
@@ -786,6 +1471,7 @@ void main() {
             }
         }
         color += (amb_diffuse * sun_side + amb_spec) * ao;
+        if (thin_amb) color += amb_back * ao;
         if (trans > 0.0) {  // thin-walled refraction: the opaque frame (bank kAo), shifted by the view normal, tinted
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             float ior = o_ext.y > 0.0 ? o_ext.y : 1.5;
@@ -796,7 +1482,7 @@ void main() {
         }
     }
     vec3 emissive = o_emissive.rgb;
-    if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(v_uv, 0.0)).rgb;
+    if (o_emissive.w > 0.5) emissive *= MCE_MAP(u_emissive, uv).rgb;
     color += emissive + decal_emit;
     if (p_vol.x > 0.5) {  // volumetric fog in place of the exp² fog
         vec4 c = u_view_proj * vec4(v_world, 1.0);
@@ -810,8 +1496,8 @@ void main() {
     o_color = vec4(color, base.a);
 }
 )"
-constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_MESH_FS;
-constexpr const char* kTerrainFS = "#version 450 core\n#define MCE_TERRAIN 1\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_MESH_FS;
+constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_COOKIE MCE_GLSL_MESH_FS;
+constexpr const char* kTerrainFS = "#version 450 core\n#define MCE_TERRAIN 1\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_COOKIE MCE_GLSL_MESH_FS;
 
 constexpr const char* kShadowVS = R"(#version 450 core
 layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; };
@@ -826,6 +1512,16 @@ layout(location = 0) in vec4 a_pos;
 )" MCE_GLSL_SKIN R"(
 out gl_PerVertex { vec4 gl_Position; };
 void main() { gl_Position = s_mvp * (skin_matrix(s_skin.x) * (s_dequant * vec4(a_pos.xyz, 1.0))); }
+)";
+
+// Automatic instancing (M-VISUAL3 5a): per copy the premultiplied cascade or tile MVP the CPU computes for
+// a single draw (not view_proj x model on the GPU), slot s_skin.y + gl_InstanceID, so the depth is the same.
+constexpr const char* kShadowInstancedVS = R"(#version 450 core
+layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; mat4 s_dequant; vec4 s_skin; };
+layout(std430, binding = 13) readonly buffer ShadowInstances { mat4 d_mvp[]; };
+layout(location = 0) in vec4 a_pos;
+out gl_PerVertex { vec4 gl_Position; };
+void main() { gl_Position = d_mvp[uint(s_skin.y) + uint(gl_InstanceID)] * vec4(a_pos.xyz, 1.0); }
 )";
 
 constexpr const char* kShadowFS = R"(#version 450 core
@@ -861,6 +1557,19 @@ void main() {
     gl_Position = vp_jittered * w;
     v_current = vp_current * w;
     v_previous = vp_previous * (m_previous * (skin_matrix(m_skin.y) * p));
+}
+)";
+// Automatic instancing (M-VISUAL3 5a): the model of each copy at slot m_skin.z + gl_InstanceID. Runs never
+// hold a moving draw, so last frame's model is this frame's.
+constexpr const char* kVelocityInstancedVS = "#version 450 core\n" MCE_GLSL_VELOCITY_U R"(
+layout(std430, binding = 13) readonly buffer VelocityInstances { mat4 d_model[]; };
+void main() {
+    vec4 p = vec4(a_pos.xyz, 1.0);
+    mat4 m = d_model[uint(m_skin.z) + uint(gl_InstanceID)];
+    vec4 w = m * p;
+    gl_Position = vp_jittered * w;
+    v_current = vp_current * w;
+    v_previous = vp_previous * (m * p);
 }
 )";
 #undef MCE_GLSL_VELOCITY_U
@@ -1068,10 +1777,11 @@ layout(std140, binding = 1) uniform SsrU {
     mat4 r_proj;       // this frame's projection, unjittered
     mat4 r_reproject;  // view space -> last frame's clip space
     vec4 r_params;     // x: max distance (m), y: thickness (m), z: steps, w: edge fade (uv)
-    vec4 r_misc;       // x: last frame valid
+    vec4 r_misc;       // x: last frame valid, y: read u_vel at the hit (M-REFLECT2 48e), zw: last frame's jitter (uv)
 };
 layout(binding = 6) uniform sampler2D u_gbuf;  // view normal (xyz), view depth (w; 0 = nothing drawn)
 layout(binding = 7) uniform sampler2D u_prev;  // last frame's HDR color
+layout(binding = 8) uniform sampler2D u_vel;   // this frame's velocity (rg uv motion, b drawn, a view depth)
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_ssr;
 vec3 view_pos(vec2 uv, float z) {
@@ -1137,6 +1847,11 @@ void main() {
     vec4 c = r_reproject * vec4(view_pos(huv, hg.w), 1.0);
     if (c.w <= 1e-4) return;
     vec2 puv = c.xy / c.w * 0.5 + 0.5;
+    if (r_misc.y > 0.5) {  // where the hit surface was, its own motion included; same surface by depth, else the camera's
+        ivec2 vs = textureSize(u_vel, 0);
+        vec4 v = texelFetch(u_vel, min(ivec2(huv * vec2(vs)), vs - 1), 0);
+        if (v.b > 0.5 && v.x < 8.0 && abs(v.a - hg.w) < 0.1 * hg.w) puv = huv - v.xy + r_misc.zw;
+    }
     if (any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) return;
     vec2 edge = min(min(huv, 1.0 - huv), min(puv, 1.0 - puv));
     float fade = r_params.w > 0.0 ? clamp(min(edge.x, edge.y) / r_params.w, 0.0, 1.0) : 1.0;
@@ -1232,9 +1947,640 @@ void main() {
 }
 )";
 
+// The sky's layers over sky_radiance(), shared by the sky pass (kSkyFS) and the water's reflection (kWaterFS, M-WATER
+// 15c): the cloud layer, the stars and the moon, the aurora (M-AURORA 16c), the rainbow (M-RAINBOW 17c) and the meteors
+// (M-METEOR 18c). Functions of a direction (and, for the night layer, the aurora, the rainbow and the meteors, the
+// angular size of a pixel along it), so the water reflects them through the same code rather than a copy.
+// M-CLOUDSHADOW 51c: the cloud noise (cloud_hash, cloud_lattice, cloud_value) is its own macro so the cloud shadow pass
+// (kCloudShadowFS) reads the sky's noise through the same code; MCE_GLSL_SKY_LAYERS starts with it, so the sky and
+// water shaders' text is byte for byte what it was.
+#define MCE_GLSL_CLOUD_NOISE \
+    R"(
+// ---- the cloud layer (M-CLOUDS 9b), behind p_cloud.x > 0 (coverage; 0 = the cloudless frame bit for bit). The view
+// ray meets a plane p_cloud.w meters above the camera (up-going rays only), camera-relative: the camera's xz and the
+// floating origin never enter, only the drift p_cloud2.xy (noise cells, wrapped on the CPU to the 64-cell period).
+// Three octaves of value noise on integer lattice hashes (pcg2d, the puddle and snow noise's family; no sin()), at
+// 1, 2 and 4 times the cell rate, each a whole lattice per period, so the pattern is seamless and precision-stable.
+uint cloud_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), one lane
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    return v.x;
+}
+float cloud_lattice(uvec2 c, uint seed) { return float(cloud_hash(c + uvec2(seed, 0u)) >> 8u) * (1.0 / 16777216.0); }
+// g: noise coordinates in 0..m cells (m: lattice cells per period).
+float cloud_value(vec2 g, uint m, uint seed) {
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    f = f * f * (3.0 - 2.0 * f);
+    uvec2 c0 = uvec2(max(i, vec2(0.0))) % m;  // g may round up to m: it wraps to cell 0
+    uvec2 c1 = (c0 + 1u) % m;
+    float a = cloud_lattice(c0, seed), b = cloud_lattice(uvec2(c1.x, c0.y), seed);
+    float c = cloud_lattice(uvec2(c0.x, c1.y), seed), e = cloud_lattice(c1, seed);
+    return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
+}
+)"
+// ---- the ice halo (M-HALO 54b), behind p_halo.x > 0 (strength; 0 = the frame without it bit for bit) and inside the
+// cirrus layer (cirrus_layer adds halo_term after the streak composite, so it is behind p_cirrus.x > 0 too, drawn by
+// kSkyFS's apply_cirrus and reflected by water_sky; the low layer and the fog cover it, the IBL does not see it). The
+// comments live here, outside the literal. The CPU twin is mce/render/halo.h (halo.cpp): a change here goes there too,
+// and test_render3d_halo_gl runs this text alone against it. Notation: s the unit direction toward the light
+// (-p_light_dir), d the unit view ray, cs = dot(d, s), a the cirrus opacity at the pixel (0..0.5), pix its radians per
+// pixel (cirrus_layer's).
+//   amp    p_halo.x * veil * (1 - smoothstep(0.01, 0.03, pix)), veil = clamp(2 a / smoothstep(0.02, 0.2, d.y), 0, 1)
+//          * smoothstep(0.02, 0.1, d.y): only through the streaks (a clear sky, a gap or coverage 0 shows none), the
+//          streaks' own horizon fade (which hides their pattern) swapped for a shorter one so the dogs of a low sun
+//          still show; faded on a very coarse render.
+//   ring   x = theta - 22 deg (0.38397244 rad): smoothstep(-wi, 0, x) * exp(-max(x, 0) / 0.035), wi = max(0.004,
+//          1.5 pix): a sharp inner edge never thinner than 1.5 pixels (no crawl), a soft outer glow about 2 degrees
+//          wide. Per channel x is shifted by the dispersion p_halo.w: red 0.004 rad inside, blue 0.006 outside,
+//          weighted (1, 0.9, 0.8): warm white, a red inner and a blue outer fringe.
+//   dogs   on the sun's horizon circle at cos dphi = (cos 22 deg - sin^2 e) / cos^2 e from the sun's azimuth (exactly
+//          22 degrees from the sun): a blob exp(-along^2 / w^2 - across^2 / 0.022^2), w = max(0.008, 1.5 pix) toward
+//          the sun and 0.045 away (a sharp red inner edge, a tail outward), the same channel shifts; gain p_halo.y *
+//          mix(1, 0.25, smoothstep(0, 0.8, s.y)) * (1 - smoothstep(0.7, 0.87, s.y)) (brightest at a low sun, none
+//          above about 60 degrees), 5 x the ring's.
+//   sun    gate smoothstep(0.1, 0.2, s.y), 0 without a sun disk (p_sun.y 0). The kit hands the one directional light
+//          to the moon at night (M-NIGHTSKY 14b) and drops the disk exactly then (14e: the Sky copy's sun_intensity
+//          0), whatever the night sky's uniforms say (r.nightsky 0, a moon without a disk, a night fade of 0, a sky
+//          texture: p_night may be zero while the light is the moon), so the disk is the signal: no sun ring or dogs
+//          around the moon. The hand-off can happen at any sun elevation under 0.10 (the kit's weight
+//          smoothstep(-0.05, 0.10, elevation) is under 1 there), so the sun term is 0 there and fades in above it:
+//          it never pops at the switch, at the cost of no sun halo for a sun under 5.7 degrees. acos only for
+//          cs > 0.6; the ring times
+//          smoothstep(0.1, 0.4, theta) (none in the sun's own glow); added as p_light_color times the profile times
+//          0.4 (dogs 2.0), capped at 0.6 (dogs 2.0) of p_light_color per channel: it never outshines the disk.
+//   moon   the ring alone around p_moon.xyz, half the dispersion, M = p_moon2.rgb * p_night.y (the disk's tint and
+//          intensity) times 0.006 * p_halo.z * p_night.w, capped at 0.08 M; none with no moon or by day (fade 0).
+#define MCE_GLSL_HALO \
+    R"(
+float halo_ring(float x, float pix) {
+    float wi = max(0.004, 1.5 * pix);
+    return smoothstep(-wi, 0.0, x) * exp(-max(x, 0.0) / 0.035);
+}
+vec3 halo_ring_rgb(float theta, float pix, float disp) {
+    float x = theta - 0.38397244;
+    return vec3(halo_ring(x + 0.004 * disp, pix), 0.9 * halo_ring(x, pix), 0.8 * halo_ring(x - 0.006 * disp, pix));
+}
+vec3 halo_dog_center(vec3 s, float side) {
+    float se = clamp(s.y, -1.0, 1.0);
+    float ce2 = max(1.0 - se * se, 1e-6);
+    float cp = clamp((0.92718385 - se * se) / ce2, -1.0, 1.0);
+    float sp = sqrt(max(1.0 - cp * cp, 0.0));
+    float hl = length(s.xz);
+    vec2 h = hl > 1e-6 ? s.xz / hl : vec2(1.0, 0.0);
+    vec2 xz = sqrt(ce2) * (cp * h + side * sp * vec2(-h.y, h.x));
+    return vec3(xz.x, se, xz.y);
+}
+float halo_dog_profile(float along, float across2, float pix) {
+    float w = along < 0.0 ? max(0.008, 1.5 * pix) : 0.045;
+    return exp(-(along * along) / (w * w) - across2 / (0.022 * 0.022));
+}
+vec3 halo_dog_rgb(vec3 d, vec3 dog, vec3 s, float pix, float disp) {
+    vec3 r = dog - s * dot(dog, s);
+    r *= 1.0 / sqrt(max(dot(r, r), 1e-12));
+    vec3 o = d - dog;
+    float al = dot(o, r);
+    float ac2 = max(dot(o, o) - al * al, 0.0);
+    return vec3(halo_dog_profile(al + 0.004 * disp, ac2, pix), 0.9 * halo_dog_profile(al, ac2, pix),
+                0.8 * halo_dog_profile(al - 0.006 * disp, ac2, pix));
+}
+vec3 halo_term(vec3 d, vec3 s, float cs, float a, float pix) {
+    vec3 h = vec3(0.0);
+    float veil = clamp(2.0 * a / max(smoothstep(0.02, 0.2, d.y), 1e-3), 0.0, 1.0) * smoothstep(0.02, 0.1, d.y);
+    float amp = p_halo.x * veil * (1.0 - smoothstep(0.01, 0.03, pix));
+    if (amp <= 0.0) return h;
+    float gate = p_sun.y > 0.0 ? smoothstep(0.1, 0.2, s.y) : 0.0;  // no disk: the moon holds the light
+    if (gate > 0.0 && cs > 0.6) {
+        float th = acos(min(cs, 1.0));
+        vec3 L = p_light_color.rgb;
+        h += min(L * (halo_ring_rgb(th, pix, p_halo.w) * (0.4 * amp * gate * smoothstep(0.1, 0.4, th))), 0.6 * L);
+        float g = p_halo.y * (mix(1.0, 0.25, smoothstep(0.0, 0.8, s.y)) * (1.0 - smoothstep(0.7, 0.87, s.y)));
+        if (g > 0.0) {
+            for (int i = 0; i < 2; ++i) {
+                vec3 dog = halo_dog_center(s, i == 0 ? -1.0 : 1.0);
+                if (dot(d, dog) > 0.98)
+                    h += min(L * (halo_dog_rgb(d, dog, s, pix, p_halo.w) * (2.0 * g * amp * gate)), 2.0 * L);
+            }
+        }
+    }
+    if (p_halo.z > 0.0 && p_night.y > 0.0 && p_night.w > 0.0) {
+        float cm = dot(d, p_moon.xyz);
+        if (cm > 0.6) {
+            float th = acos(min(cm, 1.0));
+            vec3 M = p_moon2.rgb * p_night.y;
+            float k = 0.006 * amp * p_halo.z * p_night.w * smoothstep(0.1, 0.4, th);
+            h += min(M * (halo_ring_rgb(th, pix, 0.5 * p_halo.w) * k), 0.08 * M);
+        }
+    }
+    return h;
+}
+)"
+// ---- the cirrus layer (M-CIRRUS 53b), behind p_cirrus.x > 0 (coverage; 0 = the frame without it bit for bit, the
+// same off-check as the low layer). High, thin ice cloud combed out along the wind, composited right before the low
+// layer (apply_clouds draws over it) in the sky pass and in the water's reflection (water_sky). The comments live here,
+// outside the literal, so kSkyFS / kWaterFS grow by the code only. The CPU twin is mce/render/cirrus.h (cirrus.cpp):
+// a change here goes there too, and test_render3d_cirrus_gl runs this text alone against it.
+//   rays   up-going only (d.y > kCirrusMinUp = 0.02); the ray meets a plane p_cirrus.w m above the camera,
+//          camera-relative (the camera's xz and the floating origin never enter).
+//   coords p = d.xz * h / d.y / cell (cells across the wind), w = p_cirrus2.xy the wind's xz unit vector, w' = (-w.y,
+//          w.x): q = (dot(p, w) / stretch - drift, dot(p, w')) mod 64, so a cell is `stretch` times longer along the
+//          wind than across it; the drift (p_cirrus2.w, cells along the wind) is wrapped on the CPU in f64 to 64.
+//   noise  two octaves on cloud_lattice (the pcg2d cloud_hash; no sin()), each a whole lattice per 64-cell period
+//          (cirrus_value: the low layer's cloud_value with a per-axis period), with their own seeds so the streaks do
+//          not repeat the low layer's pattern: a broad one b = v(2 q.x, q.y) (128 x 64 cells: patches half a cell
+//          long, so the streaks break up along the wind), and a fibre one at the cell's full length along the wind and
+//          6x across it, its cross coordinate bent by 3 b (s = v(q.x, 6 q.y + 3 b), 64 x 384 cells), so the fibres
+//          curve with the broad pattern rather than run as straight bands. The fibres fade to their mean 0.5 where a
+//          fibre cell (cell / 6 across the wind) spans few pixels, so they neither alias nor shimmer: `pix` the radians
+//          per pixel along d (the sky pass: the neighbouring pixel's ray, apply_cirrus; the water: the reflected ray's
+//          screen derivative), the fibre cell's angular size cell / 6 * sqrt(1 - dot(d.xz, w')^2) * d.y / h (its
+//          extent across the wind seen along d at the slant distance h / d.y), fine = smoothstep(1.5, 4, that / pix).
+//          n = 0.55 b + 0.45 mix(0.5, s, fine).
+//   cover  t = 0.8 - 0.6 coverage, mask = smoothstep(t, t + 0.2, n) (a wider, softer edge than the low layer's 0.12),
+//          a = mask * density * 0.5 * smoothstep(0.02, 0.2, d.y): never above 0.5, faded into the horizon haze.
+//   light  the frame's light (p_light_color, the sun's or the moon's colour times intensity) and sky ambient
+//          (p_amb_sky). At 9 km the sun sets later: sun_up = smoothstep(-0.16, 0.04, sun.y) (the low layer's is
+//          smoothstep(-0.1, 0.1, sun.y)), so the streaks still catch light when the low deck is dark. A DayCycle's
+//          light is still its warm dusk key there (p_light_color is not dark just under the horizon: checked, the
+//          18:00 key's (1, 0.5, 0.25) x 1 fades toward the 21:00 night key over hours), so the afterglow takes it, not
+//          p_sky_horizon, warmed and lifted as the sun sets (the streaks see the sun the ground no longer does):
+//          warm = sun_up (1 - smoothstep(-0.04, 0.3, sun.y)), tint = mix(1, (1, 0.55, 0.35), warm), gain 1 + warm.
+//          Ice scatters forward: a silver term 1.5 pow(max(cs, 0), 8) (wider than the low layer's lining), on a side
+//          term 0.7 + 0.3 cs; thin, so no self-shadowing:
+//          colour = p_amb_sky + 0.5 p_light_color tint sun_up (1 + warm) (0.7 + 0.3 cs + 1.5 silver),
+//          c' = mix(c, colour, a). A deck in front of the sun dims the disk by a, as the low layer does.
+#define MCE_GLSL_CIRRUS \
+    R"(
+float cirrus_value(vec2 g, uvec2 m, uint seed) {  // cloud_value with a period of m.x by m.y cells
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    f = f * f * (3.0 - 2.0 * f);
+    uvec2 c0 = uvec2(max(i, vec2(0.0))) % m;
+    uvec2 c1 = (c0 + 1u) % m;
+    float a = cloud_lattice(c0, seed), b = cloud_lattice(uvec2(c1.x, c0.y), seed);
+    float c = cloud_lattice(uvec2(c0.x, c1.y), seed), e = cloud_lattice(c1, seed);
+    return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
+}
+float cirrus_alpha(vec3 d, float pix) {
+    if (d.y <= 0.02) return 0.0;
+    vec2 p = d.xz * (p_cirrus.w / d.y) * p_cirrus.z;
+    vec2 w = p_cirrus2.xy;
+    vec2 wc = vec2(-w.y, w.x);
+    vec2 q = mod(vec2(dot(p, w) / p_cirrus2.z - p_cirrus2.w, dot(p, wc)), 64.0);
+    float b = cirrus_value(vec2(q.x * 2.0, q.y), uvec2(128u, 64u), 0x68E31DA4u);
+    float s = cirrus_value(vec2(q.x, q.y * 6.0 + 3.0 * b), uvec2(64u, 384u), 0xB5297A4Du);
+    float k = dot(d.xz, wc);
+    float fibre = sqrt(max(1.0 - k * k, 0.0)) * d.y / (6.0 * p_cirrus.w * p_cirrus.z * pix);
+    float n = 0.55 * b + 0.45 * mix(0.5, s, smoothstep(1.5, 4.0, fibre));
+    float t = 0.8 - 0.6 * p_cirrus.x;
+    return smoothstep(t, t + 0.2, n) * p_cirrus.y * 0.5 * smoothstep(0.02, 0.2, d.y);
+}
+vec3 cirrus_color(vec3 sun, float cs) {
+    float sun_up = smoothstep(-0.16, 0.04, sun.y);
+    float warm = sun_up * (1.0 - smoothstep(-0.04, 0.3, sun.y));
+    vec3 tint = mix(vec3(1.0), vec3(1.0, 0.55, 0.35), warm);
+    float silver = pow(max(cs, 0.0), 8.0);
+    return p_amb_sky.rgb + p_light_color.rgb * tint * (0.5 * sun_up * (1.0 + warm) * (0.7 + 0.3 * cs + 1.5 * silver));
+}
+vec3 cirrus_layer(vec3 c, vec3 d, vec3 sun, float cs, float pix) {
+    float a = cirrus_alpha(d, pix);
+    if (a <= 0.0) return c;
+    c = mix(c, cirrus_color(sun, cs), a);
+    if (p_halo.x > 0.0) c += halo_term(d, sun, cs, a, pix);  // the ice halo through the streaks (M-HALO 54b)
+    return c;
+}
+)"
+#define MCE_GLSL_SKY_LAYERS \
+    MCE_GLSL_CLOUD_NOISE MCE_GLSL_HALO MCE_GLSL_CIRRUS R"(// The cloud over sky color `c` along view direction d (y > 0): returns c with the cloud composited, its opacity a.
+// q    = d.xz * height / d.y * (1 / cell) - drift, mod 64 cells
+// n    = 0.55 v(q) + 0.30 v(2q) + 0.15 v(4q)                       (0..1, mean 0.5)
+// t    = 0.78 - 0.6 coverage                                        (coverage 1 covers the whole sky)
+// mask = smoothstep(t, t + 0.12, n), thick = clamp((n - t) / 0.3, 0, 1) * density
+// a    = mask * (0.55 + 0.45 density) * smoothstep(0.03, 0.25, d.y)  (fades into the horizon haze)
+// Lit by the sun (brighter on the sun side, a silver lining on thin edges near the disk, a darker base under a thick
+// deck) and the sky ambient, both from the frame's light, so night and dusk follow; the sun disk behind dims by a.
+vec3 apply_clouds(vec3 c, vec3 d, vec3 sun, float cs) {
+    if (d.y <= 0.03) return c;
+    vec2 q = mod(d.xz * (p_cloud.w / d.y) * p_cloud.z - p_cloud2.xy, 64.0);
+    float n = cloud_value(q, 64u, 0x27D4EB2Fu) * 0.55 + cloud_value(q * 2.0, 128u, 0x165667B1u) * 0.30 +
+              cloud_value(q * 4.0, 256u, 0xD3A2646Cu) * 0.15;
+    float t = 0.78 - 0.6 * p_cloud.x;
+    float mask = smoothstep(t, t + 0.12, n);
+    if (mask <= 0.0) return c;
+    float thick = clamp((n - t) / 0.3, 0.0, 1.0) * p_cloud.y;
+    float a = mask * (0.55 + 0.45 * p_cloud.y) * smoothstep(0.03, 0.25, d.y);
+    float sun_up = smoothstep(-0.1, 0.1, sun.y);
+    float side = 0.55 + 0.45 * cs;
+    float lining = pow(max(cs, 0.0), 24.0) * 1.5 * (1.0 - thick);
+    vec3 direct = p_light_color.rgb * sun_up * (side * (1.0 - 0.65 * thick) + lining);
+    vec3 ambient = p_amb_sky.rgb * (1.0 - 0.4 * thick);
+    vec3 cloud = 0.9 * (ambient + 0.5 * direct);
+    return mix(c, cloud, a);
+}
+// ---- the night sky (M-NIGHTSKY 14d), behind p_night.y > 0 || p_night2.x > 0 (moon intensity, star density; both 0 =
+// the frame without it bit for bit). A function of the view direction only (no camera position, no floating origin)
+// and of the twinkle clock p_night2.w (wrapped on the CPU to 60 s). Up-going rays only, scaled by the night fade.
+// Stars: the direction is cut into an integer cell grid on the six cube faces (kStarCells cells per face edge; no
+// sin()), and each cell is hashed with cloud_hash: a star when its 24-bit hash is under the density times the cell's
+// solid angle relative to a face-centre cell ((1 + |c|^2)^-1.5, c the cell centre in -1..1 face coordinates; the
+// gnomonic cells shrink about 5x toward the cube corners, so this keeps the stars per steradian even), its position
+// (inset to the middle 70% of the cell), a magnitude (u^5: a few bright, many faint), a slight warm-to-cool colour,
+// a twinkle phase and rate. The point is a smoothstep blob 1.5 pixels in radius (the pixel footprint comes from the
+// neighbouring pixel's ray), never wider than 0.45 of a cell, so it neither aliases nor reaches past the 2 x 2
+// cells searched (a star sits at least 0.15 cells inside its cell); where the cells shrink under 4 pixels the layer
+// fades out instead of crawling. A star's blob does not cross a cube face's edge (the neighbour face is not searched):
+// at most its outer part is cut, and only where a cell is under ten pixels.
+const float kStarCells = 32.0;
+uint star_face(vec3 d, out vec2 uv) {  // the cube face (0..5: +x -x +y -y +z -z) and its -1..1 coordinates
+    vec3 a = abs(d);
+    if (a.x >= a.y && a.x >= a.z) { uv = d.yz / a.x; return d.x > 0.0 ? 0u : 1u; }
+    if (a.y >= a.z) { uv = d.xz / a.y; return d.y > 0.0 ? 2u : 3u; }
+    uv = d.xy / a.z;
+    return d.z > 0.0 ? 4u : 5u;
+}
+vec3 star_face_dir(uint face, vec2 uv) {  // star_face's inverse (unnormalized)
+    float s = (face & 1u) == 0u ? 1.0 : -1.0;
+    return face < 2u ? vec3(s, uv) : face < 4u ? vec3(uv.x, s, uv.y) : vec3(uv, s);
+}
+// The stars along d (y > 0), pix: radians per pixel. Twinkle: brightness * (1 - twinkle * 0.6 * w), w a smoothed
+// triangle wave of fract(t * rate + phase) with rate (30 + k) / 60 Hz, k 0..63 from the hash, so 60 s is a whole
+// number of cycles for every star and the CPU's wrap is seamless.
+vec3 night_stars(vec3 d, float pix) {
+    vec2 uv;
+    uint face = star_face(d, uv);
+    vec2 g = (uv * 0.5 + 0.5) * kStarCells;
+    vec2 i0 = clamp(floor(g), vec2(0.0), vec2(kStarCells - 1.0));
+    vec2 step_to = mix(vec2(-1.0), vec2(1.0), step(vec2(0.5), g - i0));  // toward the nearer neighbours
+    float cell = 2.0 / (kStarCells * (1.0 + dot(uv, uv)));  // a cell's angular size here (radians, conservative)
+    float lod = smoothstep(2.0, 4.0, cell / pix);
+    if (lod <= 0.0) return vec3(0.0);
+    float rad = min(1.5 * pix, 0.45 * cell);
+    vec3 sum = vec3(0.0);
+    for (int k = 0; k < 4; ++k) {
+        vec2 ic = i0 + vec2(float(k & 1), float(k >> 1)) * step_to;
+        if (any(lessThan(ic, vec2(0.0))) || any(greaterThan(ic, vec2(kStarCells - 1.0)))) continue;  // a face edge
+        uvec2 cc = uvec2(ic) + uvec2(face * 64u, 0u);
+        uint h0 = cloud_hash(cc + uvec2(0x9E3779B9u, 0u));
+        vec2 cuv = (ic + 0.5) * (2.0 / kStarCells) - 1.0;
+        if (float(h0 >> 8u) * (1.0 / 16777216.0) >= p_night2.x * pow(1.0 + dot(cuv, cuv), -1.5)) continue;
+        uint h1 = cloud_hash(uvec2(h0, cc.y ^ 0x85EBCA6Bu));
+        vec2 at = (ic + 0.15 + 0.7 * vec2(float(h1 & 0xFFFu), float((h1 >> 12u) & 0xFFFu)) * (1.0 / 4096.0)) /
+                  kStarCells * 2.0 - 1.0;
+        float dist = length(d - normalize(star_face_dir(face, at)));
+        if (dist >= rad) continue;
+        uint h2 = cloud_hash(uvec2(h1, h0));
+        float u = float(h2 & 0xFFFu) * (1.0 / 4096.0);
+        float mag = 0.06 + 0.94 * u * u * u * u * u;
+        vec3 col = mix(vec3(1.0, 0.8, 0.62), vec3(0.72, 0.84, 1.0), float((h2 >> 12u) & 0x3Fu) * (1.0 / 63.0));
+        col = mix(vec3(1.0), col, 0.45);
+        float x = fract(p_night2.w * (float(30u + (h2 >> 26u)) * (1.0 / 60.0)) +
+                        float((h2 >> 18u) & 0xFFu) * (1.0 / 256.0));
+        float tri = abs(2.0 * x - 1.0);
+        float tw = 1.0 - p_night2.z * 0.6 * tri * tri * (3.0 - 2.0 * tri);
+        sum += col * (mag * tw * (1.0 - smoothstep(0.0, rad, dist)));
+    }
+    return sum * (1.5 * p_night2.y * lod);
+}
+// The moon and the stars over sky colour c along d. Moon: a disk of cos size p_night.x around p_moon.xyz, shaded as a
+// sphere facing the camera: (q.x, q.y) the disk coordinates (1 at the rim) on the basis t (the moon's daily motion,
+// the sun's default arc's axis kMoonArc x moon) and b = moon x t, the normal (q, sqrt(1 - |q|^2)) toward the viewer,
+// and the sun at the elongation 2 pi phase ahead of the moon along t: s = (sin, 0, -cos) on (t, b, toward the
+// viewer) (p_moon2.w, p_moon.w), so phase 0.25 lights the +t half, 0.5 all of it. A soft terminator, a slight limb
+// darkening, a faint earthshine on the dark side, a limb 1.5 pixels soft, and a faint additive halo scaled by the
+// lit fraction (1 - cos) / 2. The disk hides the stars behind it. The moon is cut at the horizon, the stars fade
+// into its haze; both are scaled by the night fade p_night.w.
+const vec3 kMoonArc = vec3(0.0, 0.5, 0.8660254);  // render::sun_direction_at's default arc axis (noon elevation 60)
+// pix: radians per pixel along d (the sky pass: the neighbouring pixel's ray, apply_night; the water: the reflected
+// ray's screen derivative).
+vec3 apply_night_at(vec3 c, vec3 d, float pix) {
+    if (d.y <= 0.0) return c;
+    vec3 stars = p_night2.x > 0.0 ? night_stars(d, pix) * smoothstep(0.0, 0.25, d.y) : vec3(0.0);
+    vec3 moon = vec3(0.0);
+    float cover = 0.0;
+    if (p_night.y > 0.0) {
+        vec3 m = p_moon.xyz;
+        float cm = dot(d, m);
+        float sr = sqrt(1.0 - p_night.x * p_night.x);  // sin of the disk's angular radius
+        float hz = smoothstep(0.0, 0.02, d.y);
+        float lit_share = 0.5 - 0.5 * p_moon.w;
+        float a2 = (1.0 - cm) / (1.0 - p_night.x);  // ~ (angle / radius)^2
+        moon = p_moon2.rgb * (p_night.y * 0.02 * lit_share * exp2(-0.4 * a2) * hz);
+        if (cm > 0.0 && a2 < 1.5) {
+            vec3 t = cross(kMoonArc, m);
+            t = dot(t, t) > 1e-8 ? normalize(t) : normalize(cross(m, vec3(1.0, 0.0, 0.0)));
+            vec3 b = cross(m, t);
+            vec2 q = vec2(dot(d, t), dot(d, b)) / sr;
+            float rho2 = dot(q, q);
+            float e = clamp(1.5 * pix / sr, 0.02, 0.5);
+            cover = (1.0 - smoothstep(1.0 - e, 1.0, sqrt(rho2))) * hz;
+            if (cover > 0.0) {
+                float z = sqrt(max(1.0 - rho2, 0.0));
+                float lit = smoothstep(-0.08, 0.12, q.x * p_moon2.w - z * p_moon.w);
+                moon += p_moon2.rgb * (p_night.y * cover * (lit * (0.8 + 0.2 * z) + 0.005));
+            }
+        }
+    }
+    return c + (stars * (1.0 - cover) + moon) * p_night.w;
+}
+// ---- the aurora (M-AURORA 16c), behind p_aurora.x > 0 (level, with the kit's latitude gate and night fade folded in;
+// 0 = the frame without it bit for bit). A function of the view direction only (no camera position, no floating
+// origin, no parallax) and of the clock p_aurora.w (wrapped on the CPU to 64 s, every rate a whole number of cycles
+// per period). Up-going rays only; additive emission over the night sky, under the clouds and the fog.
+// u      the arc parameter 0..1: the azimuth of d from the arc centre p_aurora2.xy (xz; counter-clockwise from above,
+//        as the kit's azimuth_deg: u grows with the azimuth), over the arc's width 2 acos(p_aurora2.z); 0 outside.
+// edges  aurora_curtain_height: lower = min(base (1 + 0.2 sin(2 pi (T1 + 0.9 u))), 0.95), upper = min(lower + span
+//        (1 + 0.2 sin(2 pi (T3 + 1.3 u + 0.25))), 1), sines of the elevation; Tk the fractional turn of k * quarters
+//        cycles per 64 s (quarters = the speed in quarters, as the kit quantises it).
+// h01    (d.y - lower) / (upper - lower), sampled 4 times over the pixel's height (a short march in elevation, not in
+//        distance), each smoothstep(0, 0.08, h01) exp(-2.5 h01) times the band colour mix(low, high,
+//        smoothstep(0.55, 1, h01)) (aurora_band_color), averaged: the sharp lower edge does not alias.
+// rays   aurora_curtain_intensity's striations: 16 cells per curtain across the arc, a cell's value (0.4 + 0.6 r)
+//        (0.85 + 0.15 sin(2 pi (T5 + r))), r the cell's pcg2d hash (cloud_hash(cell, 7), the kit's aurora_hash),
+//        box-filtered over the pixel's width in cells and faded to their mean as a cell shrinks under about a
+//        pixel, so the rays neither alias nor crawl under a turn; times the end fade over 0.5 - 0.3 (width - 10) /
+//        170 of the arc at each end and the pulse 0.9 + 0.1 sin(2 pi T2).
+// total  c + level * kAuroraGain * the above, faded into the horizon haze by smoothstep(0, 0.25, d.y) as the stars.
+// The constants below are the kit's (mce/kit/aurora.h), copied as a block: a change there goes here too, and
+// test_render3d_aurora_gl compares the drawn edges and band colours with the kit's helpers at probe points.
+const float kAuroraPeriod = 64.0;        // kit::kAuroraPeriodSeconds
+const float kAuroraSway = 0.2;           // both edges sway by up to 20 percent
+const float kAuroraSwayLowU = 0.9;       // lower edge: phase offset 0.9 u, 1 cycle per quarter of speed per period
+const float kAuroraSwayHighU = 1.3;      // upper edge: phase offset 1.3 u + 0.25, 3 cycles
+const float kAuroraSwayHighOff = 0.25;
+const float kAuroraLowerMax = 0.95;      // the lower edge's cap
+const uint kAuroraCyclesLow = 1u, kAuroraCyclesHigh = 3u, kAuroraCyclesShimmer = 5u, kAuroraCyclesPulse = 2u;
+const float kAuroraEdge = 0.08;          // the lower edge's smoothstep, a share of the curtain's height
+const float kAuroraFall = 2.5;           // exp(-2.5 h01) toward the top
+const uint kAuroraRayCells = 16u;        // ray cells per curtain
+const uint kAuroraRaySeed = 7u;          // aurora_hash(cell, 7)
+const float kAuroraRayMin = 0.4;         // a ray's brightness 0.4 + 0.6 r
+const float kAuroraShimmer = 0.15;       // 0.85 + 0.15 sin(2 pi (T5 + r))
+const float kAuroraPulse = 0.1;          // 0.9 + 0.1 sin(2 pi T2)
+const float kAuroraBandLow = 0.55;       // the colour band: smoothstep(0.55, 1, h01) from low to high
+// Shader only (not in the kit): the emission at level 1 and full intensity, and the mean of a ray cell's value (what
+// the rays fade to under a pixel).
+const float kAuroraGain = 0.6;
+const float kAuroraRayMean = 0.595;
+float aurora_turns(uint cycles) {  // the fractional turn of cycles * quarters cycles per period at p_aurora.w
+    float quarters = floor(p_aurora4.w * 4.0 + 0.5);
+    return fract(p_aurora.w * (float(cycles) * quarters / kAuroraPeriod));
+}
+float aurora_sin_turns(float turns, float offset) { return sin(6.2831853 * fract(turns + offset)); }
+float aurora_ray(uint cell, float shimmer) {
+    float r = float(cloud_hash(uvec2(cell, kAuroraRaySeed)) >> 8u) * (1.0 / 16777216.0);
+    return (kAuroraRayMin + (1.0 - kAuroraRayMin) * r) *
+           (1.0 - kAuroraShimmer + kAuroraShimmer * aurora_sin_turns(shimmer, r));
+}
+// The aurora over sky colour c along d; pix: radians per pixel along d (the sky pass: the neighbouring pixel's ray,
+// apply_aurora; the water: the reflected ray's screen derivative).
+vec3 aurora_layer(vec3 c, vec3 d, float pix) {
+    if (d.y <= 0.0) return c;
+    float hl = length(d.xz);  // cos of the elevation
+    if (hl < 1e-4) return c;
+    vec2 e = d.xz / hl;
+    vec2 m = p_aurora2.xy;
+    float half_w = acos(clamp(p_aurora2.z, 0.0, 0.9962));  // the CPU keeps the width in 10..180 degrees
+    float u = 0.5 + atan(m.y * e.x - m.x * e.y, dot(m, e)) / (2.0 * half_w);
+    if (u <= 0.0 || u >= 1.0) return c;
+    float sway_lo = aurora_sin_turns(aurora_turns(kAuroraCyclesLow), kAuroraSwayLowU * u);
+    float sway_hi = aurora_sin_turns(aurora_turns(kAuroraCyclesHigh), kAuroraSwayHighU * u + kAuroraSwayHighOff);
+    float lower = min(p_aurora.y * (1.0 + kAuroraSway * sway_lo), kAuroraLowerMax);
+    float upper = min(lower + p_aurora.z * (1.0 + kAuroraSway * sway_hi), 1.0);
+    float pixy = pix * hl;  // the pixel's height in sines of the elevation
+    if (d.y + 0.5 * pixy <= lower || d.y - 0.5 * pixy > upper) return c;
+    float span = upper - lower;
+    vec3 band = vec3(0.0);
+    for (int k = 0; k < 4; ++k) {
+        float h = (d.y + pixy * (float(k) * 0.25 - 0.375) - lower) / span;
+        if (h <= 0.0 || h > 1.0) continue;
+        band += mix(p_aurora3.rgb, p_aurora4.rgb, smoothstep(kAuroraBandLow, 1.0, h)) *
+                (smoothstep(0.0, kAuroraEdge, h) * exp(-kAuroraFall * h));
+    }
+    float width = clamp(degrees(2.0 * half_w), 10.0, 180.0);
+    float fade_len = 0.5 - 0.3 * ((width - 10.0) / 170.0);
+    float ends = smoothstep(0.0, fade_len, u) * smoothstep(0.0, fade_len, 1.0 - u);
+    uint cells = kAuroraRayCells * uint(clamp(p_aurora2.w, 1.0, 6.0));
+    float g = u * float(cells);
+    uint i0 = min(uint(g), cells - 1u);
+    float fx = g - float(i0);
+    float w = pix * float(cells) / (2.0 * half_w * hl);  // the pixel's width in ray cells
+    float hw = 0.5 * min(w, 1.0);
+    float shimmer = aurora_turns(kAuroraCyclesShimmer);
+    float rays = aurora_ray(i0, shimmer);
+    if (fx < hw && i0 > 0u)  // the footprint reaches into the cell before (after): its share of the box
+        rays = mix(rays, aurora_ray(i0 - 1u, shimmer), (hw - fx) / (2.0 * hw));
+    else if (fx > 1.0 - hw && i0 + 1u < cells)
+        rays = mix(rays, aurora_ray(i0 + 1u, shimmer), (fx - 1.0 + hw) / (2.0 * hw));
+    rays = mix(rays, kAuroraRayMean, smoothstep(0.5, 1.5, w));
+    float pulse = 1.0 - kAuroraPulse + kAuroraPulse * aurora_sin_turns(aurora_turns(kAuroraCyclesPulse), 0.0);
+    return c + band * (0.25 * p_aurora.x * kAuroraGain * ends * rays * pulse * smoothstep(0.0, 0.25, d.y));
+}
+// ---- the rainbow (M-RAINBOW 17c), behind p_rainbow.x > 0 (level, with the kit's sun, wetness, rain and cloud gates
+// folded in; 0 = the frame without it bit for bit). A function of the view direction only (no camera position, no
+// floating origin, no parallax, no clock). Up-going rays only; additive emission over the day sky, under the clouds
+// and the fog.
+// a      the angle of d from the anti-solar point p_rainbow2.xyz, degrees: acos(dot(d, anti_solar)).
+// bows   rainbow_intensity: the primary (1 - x^2)^2 bump around 42 degrees, half-width 1.7 * band width, the
+//        secondary's around 51, half-width 2.8 * band width and peak 0.35 * p_rainbow.z; the side of each bow that
+//        faces the gap between them has its offset x scaled by 1.15 (the Alexander band: no emission between them).
+// colour rainbow_color on the angle mapped back to the default width, per bow: the seven-colour table linearly
+//        interpolated, s = 0.5 - 0.5 x (primary: red outside, violet inside) and 0.5 + 0.5 x (secondary,
+//        reversed), x the bow's unsteepened offset clamped to -1..1. The bows' supports never overlap (band width
+//        2: 44.96 against 46.13), so the sum of the two is the kit's intensity times its colour.
+// filter a box over the pixel's angular footprint pix (4 samples across it, in the radial direction, where the
+//        bands vary): the violet edge, under a degree wide at band width 0.5, neither aliases nor crawls.
+// total  c + level * kRainbowGain * the above, faded into the horizon by smoothstep(0, 0.1, d.y).
+// The constants below are the kit's (mce/kit/rainbow.h), copied as a block: a change there goes here too, and
+// test_render3d_rainbow_gl compares the drawn intensity and colour with kit::rainbow_intensity and
+// kit::rainbow_color at probe points.
+const float kRainbowPrimaryCenter = 42.0;    // kit::detail::kRainbowPrimaryCenter, degrees from the anti-solar point
+const float kRainbowPrimaryHalf = 1.7;       // kRainbowPrimaryHalf, times the band width
+const float kRainbowSecondaryCenter = 51.0;  // kRainbowSecondaryCenter
+const float kRainbowSecondaryHalf = 2.8;     // kRainbowSecondaryHalf, times the band width
+const float kRainbowSecondaryPeak = 0.35;    // kRainbowSecondaryPeak, times p_rainbow.z
+const float kRainbowGapSteepness = 1.15;     // kRainbowGapSteepness
+const vec3 kRainbowRamp[7] = vec3[7](vec3(1.00, 0.04, 0.02),   // red      (rainbow_color's kTable)
+                                     vec3(1.00, 0.30, 0.02),   // orange
+                                     vec3(1.00, 0.85, 0.05),   // yellow
+                                     vec3(0.10, 0.85, 0.10),   // green
+                                     vec3(0.05, 0.60, 0.90),   // cyan
+                                     vec3(0.10, 0.25, 1.00),   // blue
+                                     vec3(0.45, 0.10, 0.95));  // violet
+// Shader only (not in the kit): the emission at level 1 and full intensity.
+const float kRainbowGain = 0.3;
+float rainbow_bump(float x) {  // (1 - x^2)^2 for |x| < 1, else 0
+    float q = 1.0 - x * x;
+    return q > 0.0 ? q * q : 0.0;
+}
+vec3 rainbow_ramp(float s) {  // s 0 = red .. 1 = violet
+    float x = clamp(s, 0.0, 1.0) * 6.0;
+    int i = min(int(x), 5);
+    return clamp(mix(kRainbowRamp[i], kRainbowRamp[i + 1], x - float(i)), 0.0, 1.0);
+}
+// Intensity times colour of the two bows at `a` degrees (w the band width, sec the secondary's strength).
+vec3 rainbow_emission(float a, float w, float sec) {
+    float xp = (a - kRainbowPrimaryCenter) / (kRainbowPrimaryHalf * w);
+    vec3 e = rainbow_bump(xp > 0.0 ? xp * kRainbowGapSteepness : xp) * rainbow_ramp(0.5 - 0.5 * clamp(xp, -1.0, 1.0));
+    if (sec > 0.0) {
+        float xs = (a - kRainbowSecondaryCenter) / (kRainbowSecondaryHalf * w);
+        e += (kRainbowSecondaryPeak * sec * rainbow_bump(xs < 0.0 ? xs * kRainbowGapSteepness : xs)) *
+             rainbow_ramp(0.5 + 0.5 * clamp(xs, -1.0, 1.0));
+    }
+    return e;
+}
+// The rainbow over sky colour c along d; pix: radians per pixel along d (the sky pass: the neighbouring pixel's ray,
+// apply_rainbow; the water: the reflected ray's screen derivative).
+vec3 rainbow_layer(vec3 c, vec3 d, float pix) {
+    if (d.y <= 0.0) return c;
+    float w = clamp(p_rainbow.y, 0.5, 2.0);
+    float sec = clamp(p_rainbow.z, 0.0, 1.0);
+    float a = degrees(acos(clamp(dot(d, p_rainbow2.xyz), -1.0, 1.0)));
+    float pd = min(degrees(pix), 2.0);  // the pixel's footprint in degrees (capped: a far zoom-out keeps 4 samples)
+    float lo = kRainbowPrimaryCenter - kRainbowPrimaryHalf * w, hi = kRainbowSecondaryCenter + kRainbowSecondaryHalf * w;
+    if (a + 0.5 * pd <= lo || a - 0.5 * pd >= hi) return c;
+    vec3 e = vec3(0.0);
+    for (int k = 0; k < 4; ++k) e += rainbow_emission(a + pd * (float(k) * 0.25 - 0.375), w, sec);
+    return c + e * (0.25 * p_rainbow.x * kRainbowGain * smoothstep(0.0, 0.1, d.y));
+}
+// ---- the meteors (M-METEOR 18c), behind p_meteor.x > 0 (level, with the kit's night, cloud and rain gates folded in;
+// 0 = the frame without it bit for bit). A function of the view direction and of the wrapped clock p_meteor2.y only
+// (no camera position, no floating origin, no parallax). Up-going rays only; additive emission over the night sky,
+// under the clouds and the fog. The streaks are the kit's (mce/kit/meteor.h), re-derived per fragment from uniform
+// inputs only (the same for every pixel of a frame):
+// slot   the 5 s slot of the 60 s period holding the clock (meteor_slot) and the seconds into it; only its own
+//        candidates are evaluated: a streak starts in the first half of its slot and lasts at most 2.4 s (1.2 s /
+//        the smallest speed 0.5), so it ends inside its slot (2.5 + 2.4 = 4.9 s) and no previous slot is needed.
+// count  meteor_slot_count: floor(rate / 12) candidates plus one when the slot's hash draw (salt 0xC0FFEE ^ seed)
+//        is under the fractional part, at most 3 (kMeteorMaxPerSlot).
+// streak meteor_make: base = pcg2d(slot, index << 16 | seed); draws 0..4 from pcg2d(base, k) as uniforms of the top
+//        24 bits: azimuth, sine of the start elevation in [0.1, 0.95], travel angle in the start's tangent plane
+//        (from the horizontal tangent e = (z, 0, -x) / r toward n = start x e), start time 0..2.5 s, duration
+//        (0.4 .. 1.2 s) / speed; the head is the start rotated along the travel by 35 degrees per second times
+//        speed times the age (meteor_head), the tail 8 degrees times length behind it on the same great circle
+//        (meteor_tail); the envelope meteor_envelope: smoothstep(0, 0.15, x) (1 - smoothstep(0.15, 1, x)), x the
+//        age over the duration, 0 outside it.
+// glow   the distance from d to the head-tail segment in the gnomonic projection at the head (great circles are
+//        straight lines there, the arc behind the head the segment from 0 to tan(tail angle) on one axis: dot
+//        products only), exp2(-(dist / width)^2), width = max(0.15 degrees, pix): never thinner than the pixel's
+//        footprint, so a streak neither aliases nor crawls; the peak is not lowered as it widens (it stays visible).
+//        Times the tail fade along the segment: 1 at the head, linearly to 0 at the tail. A pixel farther from the
+//        head than the tail angle plus 4 widths is skipped before the segment maths.
+// total  c + level * brightness * kMeteorGain * kMeteorColor * the sum over the slot's streaks, faded into the
+//        horizon haze by smoothstep(0, 0.25, d.y) as the stars.
+// The hash and the constants below are the kit's, copied as a block (meteor_hash is pcg2d's one lane, cloud_hash
+// above, bit for bit): a change there goes here too, and test_render3d_meteor_gl compares the drawn heads, tails and
+// streak light with kit::meteor_make, kit::meteor_head, kit::meteor_tail and kit::meteor_envelope at probe times.
+const float kMeteorSlotSeconds = 5.0;                 // kit::kMeteorSlotSeconds
+const uint kMeteorSlotsPerPeriod = 12u;               // kit::kMeteorSlotsPerPeriod (the period is 60 s)
+const uint kMeteorMaxPerSlot = 3u;                    // kit::kMeteorMaxPerSlot
+const uint kMeteorCountSalt = 0xC0FFEEu;              // meteor_slot_count's draw: hash(slot, 0xC0FFEE ^ seed)
+const float kMeteorTwoPi = 6.2831853071795864769;     // kit::detail::kMeteorTwoPi
+const float kMeteorDegToRad = 0.017453292519943295769;
+const float kMeteorSpeedDegPerSec = 35.0;             // kMeteorSpeedDegPerSec, times speed
+const float kMeteorTailDeg = 8.0;                     // kMeteorTailDeg, times length
+const float kMeteorStartWindow = 0.5;                 // kMeteorStartWindow, of the slot
+const float kMeteorDurationMin = 0.4;                 // kMeteorDurationMin, seconds at speed 1
+const float kMeteorDurationSpan = 0.8;                // kMeteorDurationSpan
+const float kMeteorSinElMin = 0.1;                    // kMeteorSinElMin
+const float kMeteorSinElSpan = 0.85;                  // kMeteorSinElSpan
+// Shader only (not in the kit): the streak's narrowest half-width (radians, 0.15 degrees), the emission at level 1,
+// brightness 1 and full envelope, and a faint warm tint.
+const float kMeteorWidth = 0.0026179939;
+const float kMeteorGain = 1.0;
+const vec3 kMeteorColor = vec3(1.0, 0.95, 0.85);
+uint meteor_hash(uint x, uint y) { return cloud_hash(uvec2(x, y)); }  // kit::detail::meteor_hash
+float meteor_unit(uint h) { return float(h >> 8u) * (1.0 / 16777216.0); }  // kit::detail::meteor_unit
+// The meteors over sky colour c along d; pix: radians per pixel along d (the sky pass: the neighbouring pixel's ray,
+// apply_meteor; the water: the reflected ray's screen derivative).
+vec3 meteor_layer(vec3 c, vec3 d, float pix) {
+    if (d.y <= 0.0) return c;
+    float t = clamp(p_meteor2.y, 0.0, 60.0);
+    uint seed = uint(clamp(p_meteor2.z, 0.0, 65535.0));
+    uint slot = min(uint(t / kMeteorSlotSeconds), kMeteorSlotsPerPeriod - 1u);
+    float ts = t - float(slot) * kMeteorSlotSeconds;  // seconds into the slot
+    float per_slot = clamp(p_meteor2.x, 0.0, 30.0) / float(kMeteorSlotsPerPeriod);
+    float whole = floor(per_slot);
+    uint n = uint(whole);
+    if (per_slot - whole > 0.0 && meteor_unit(meteor_hash(slot, kMeteorCountSalt ^ seed)) < per_slot - whole) ++n;
+    n = min(n, kMeteorMaxPerSlot);
+    float speed = clamp(p_meteor.w, 0.5, 2.0);
+    float tail = kMeteorTailDeg * kMeteorDegToRad * clamp(p_meteor.z, 0.5, 2.0);
+    float len = tan(tail);
+    float w = max(kMeteorWidth, min(pix, 2.0 * kMeteorDegToRad));  // capped like the rainbow: a rough sea must not break the projection
+    float reach = cos(tail + 4.0 * w);  // the cosine of the bounding angle around the head
+    vec3 sum = vec3(0.0);
+    for (uint i = 0u; i < kMeteorMaxPerSlot; ++i) {
+        if (i >= n) break;
+        uint base = meteor_hash(slot, ((i & 0xFFFFu) << 16u) | seed);
+        float start = meteor_unit(meteor_hash(base, 3u)) * (kMeteorStartWindow * kMeteorSlotSeconds);
+        float dur = (kMeteorDurationMin + kMeteorDurationSpan * meteor_unit(meteor_hash(base, 4u))) / speed;
+        float age = ts - start;
+        if (age < 0.0 || age > dur) continue;
+        float x = age / dur;
+        float env = smoothstep(0.0, 0.15, x) * (1.0 - smoothstep(0.15, 1.0, x));
+        if (env <= 0.0) continue;
+        float az = meteor_unit(meteor_hash(base, 0u)) * kMeteorTwoPi;
+        float y = kMeteorSinElMin + kMeteorSinElSpan * meteor_unit(meteor_hash(base, 1u));
+        float ta = meteor_unit(meteor_hash(base, 2u)) * kMeteorTwoPi;
+        float r = sqrt(1.0 - y * y);
+        vec3 s0 = vec3(r * cos(az), y, r * sin(az));
+        vec3 e = vec3(s0.z / r, 0.0, -s0.x / r);
+        vec3 tv = cos(ta) * e + sin(ta) * cross(s0, e);
+        float ang = kMeteorSpeedDegPerSec * kMeteorDegToRad * speed * age;
+        vec3 head = cos(ang) * s0 + sin(ang) * tv;
+        float ch = dot(d, head);
+        if (ch < reach) continue;  // farther from the head than the streak reaches
+        vec3 fwd = cos(ang) * tv - sin(ang) * s0;  // the travel direction at the head
+        float u = -dot(d, fwd) / ch;               // along the segment, toward the tail (0 .. len)
+        float v = dot(d, cross(s0, tv)) / ch;      // across it (the great circle's pole)
+        float along = clamp(u, 0.0, len);
+        vec2 off = vec2(u - along, v);
+        float q2 = dot(off, off) / (w * w);
+        sum += kMeteorColor * (exp2(-q2) * (1.0 - along / len) * env);
+    }
+    return c + sum * (p_meteor.x * p_meteor.y * kMeteorGain * smoothstep(0.0, 0.25, d.y));
+}
+)"
+
 constexpr const char* kSkyFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
 layout(location = 0) in vec2 v_ndc;
 layout(location = 0) out vec4 o_color;
+)" MCE_GLSL_SKY_LAYERS R"(
+vec3 apply_night(vec3 c, vec3 d) {
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return apply_night_at(c, d, pix);
+}
+vec3 apply_aurora(vec3 c, vec3 d) {  // aurora_layer with the sky pass's pixel footprint, as apply_night
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return aurora_layer(c, d, pix);
+}
+vec3 apply_rainbow(vec3 c, vec3 d) {  // rainbow_layer with the sky pass's pixel footprint, as apply_aurora
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return rainbow_layer(c, d, pix);
+}
+vec3 apply_cirrus(vec3 c, vec3 d, vec3 sun, float cs) {  // cirrus_layer with the sky pass's pixel footprint
+    if (d.y <= 0.02) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return cirrus_layer(c, d, sun, cs, pix);
+}
+vec3 apply_meteor(vec3 c, vec3 d) {  // meteor_layer with the sky pass's pixel footprint, as apply_aurora
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return meteor_layer(c, d, pix);
+}
 void main() {
     vec4 w = u_inv_view_proj * vec4(v_ndc, 1.0, 1.0);
     vec3 d = normalize(w.xyz / w.w - u_camera_pos.xyz);
@@ -1243,6 +2589,12 @@ void main() {
     float cs = dot(d, sun);
     float edge = 1.0 - p_sun.x;
     c += p_light_color.rgb * p_sun.y * smoothstep(p_sun.x - edge * 0.25, p_sun.x + edge * 0.25, cs);
+    if (p_night.y > 0.0 || p_night2.x > 0.0) c = apply_night(c, d);  // under the clouds and the fog, as the sun is
+    if (p_aurora.x > 0.0) c = apply_aurora(c, d);  // in front of the stars, under the clouds and the fog (M-AURORA 16c)
+    if (p_rainbow.x > 0.0) c = apply_rainbow(c, d);  // after the aurora, under the clouds and the fog (M-RAINBOW 17c)
+    if (p_meteor.x > 0.0) c = apply_meteor(c, d);  // after the stars, the aurora and the rainbow (M-METEOR 18c)
+    if (p_cirrus.x > 0.0) c = apply_cirrus(c, d, sun, cs);  // behind the low layer, over the disk (M-CIRRUS 53b)
+    if (p_cloud.x > 0.0) c = apply_clouds(c, d, sun, cs);  // over the disk: a cloud in front of the sun dims it
     if (p_vol.x > 0.5) {  // the volumetric fog's whole depth in front of the sky
         vec4 f = vol_fog(v_ndc * 0.5 + 0.5, 1e30);
         c = c * f.a + f.rgb;
@@ -1252,6 +2604,293 @@ void main() {
     o_color = vec4(c, 1.0);
 }
 )";
+
+// ---- the water plane (M-WATER 15c), drawn by the main pass after the opaques and before the sky and the blended
+// draws, only while Scene3D::water() is on (p_water* and p_wave are zero otherwise and nothing reads them). A flat,
+// camera-following square of kWaterGrid x kWaterGrid cells at the level p_water.x (floating-origin local), p_water.w
+// meters in half size, its centre snapped to whole cells so the vertices never swim; depth-tested and depth-written.
+constexpr const char* kWaterVS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U R"(
+layout(location = 0) out vec3 v_world;
+out gl_PerVertex { vec4 gl_Position; };
+const int kWaterGrid = 16;  // Forward3D draws 6 * kWaterGrid^2 vertices
+void main() {
+    const ivec2 kCorner[6] = ivec2[6](ivec2(0, 0), ivec2(1, 0), ivec2(1, 1), ivec2(0, 0), ivec2(1, 1), ivec2(0, 1));
+    int q = gl_VertexID / 6;
+    ivec2 c = ivec2(q % kWaterGrid, q / kWaterGrid) + kCorner[gl_VertexID % 6];
+    float cell = 2.0 * p_water.w / float(kWaterGrid);
+    vec2 centre = floor(u_camera_pos.xz / cell + 0.5) * cell;
+    vec2 xz = centre + (vec2(c) - 0.5 * float(kWaterGrid)) * cell;
+    v_world = vec3(xz.x, p_water.x, xz.y);
+    gl_Position = u_view_proj * vec4(v_world, 1.0);
+}
+)";
+
+// The water's surface. Normals only (the plane stays flat):
+// waves   p_water.y Gerstner waves (forward3d.cpp water_params expands the authoring with the kit's tables:
+//         kit::water_wave_set), each a wave vector K, amplitude A and phase (the floating origin and the wrapped
+//         clock folded in on the CPU in f64), Q = min(1, steepness / (count k A)) as the kit computes it; the
+//         horizontal displacement is undone by the kit's two fixed-point steps and the normal is taken at the
+//         source point, so it is kit::water_normal's. Each wave fades to flat where its wavelength covers fewer
+//         than 8 pixels (gone under 3): no sparkle toward the horizon, no aliasing of the short waves; the faded
+//         slope variance roughens the glint instead. Two fixed small ripples (kWaterDetailK, slope p_water5.z)
+//         add detail near the camera and fade the same way.
+// sky     the reflected ray (kept above the horizon) through sky_radiance at the roughness' lod and the sky's own
+//         layers (MCE_GLSL_SKY_LAYERS: stars and moon, clouds) and its exp2 horizon haze, not a copy of them; the
+//         sun disk is replaced by the glint. Schlick fresnel, F0 0.02, scaled by the reflectivity.
+// glint   GGX from the frame's directional light (the sun, or the moon while the kit hands it the light).
+// body    the shallow-to-deep tint by the optical depth along the view ray to the opaque surface behind the water
+//         (u_water_depth: the half-size prepass's view depth, p_water4.w 1), else (and with nothing behind) deep,
+//         with a shallow hint fading out with distance; lit by the hemisphere ambient and the light.
+// foam    within p_water4.z meters of the opaque surface behind (along the view ray: the shore line on a steep
+//         shore), stripes moving in and the wave crests break it up; needs the depth read.
+// fog     last, as kMeshFS does (volumetric or exp2), so mist and fog hide the water with distance.
+constexpr const char* kWaterFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
+layout(location = 0) in vec3 v_world;
+layout(location = 0) out vec4 o_color;
+layout(binding = 6) uniform sampler2D u_water_depth;  // half size; a: the opaques' view depth (0 = nothing drawn)
+layout(binding = 7) uniform sampler2D u_water_scene;  // M-WATER2: this frame's opaque picture (p_water6.z 1), else a stand-in
+)" MCE_GLSL_SKY_LAYERS R"(
+// The detail ripples' wave vectors (rad/m on xz): forward3d.cpp kWaterDetail (directions and wavelengths) folds the
+// origin into their phases with these exact values, so a change here goes there too.
+const vec2 kWaterDetailK[2] = vec2[2](vec2(0.8, 0.6) * (6.2831853 / 1.7), vec2(-0.6, 0.8) * (6.2831853 / 1.1));
+vec3 water_sky(vec3 r, float pix, float lod) {
+    if (p_sky_zenith.w < 0.5) return p_fog.rgb;  // no sky: the frame's clear colour is behind everything
+    vec3 c = sky_radiance(r, lod);
+    vec3 sun = -p_light_dir.xyz;
+    if (p_night.y > 0.0 || p_night2.x > 0.0) c = apply_night_at(c, r, pix);
+    if (p_aurora.x > 0.0) c = aurora_layer(c, r, pix);  // the curtains on the reflected ray (M-AURORA 16c)
+    if (p_rainbow.x > 0.0) c = rainbow_layer(c, r, pix);  // the bows on the reflected ray (M-RAINBOW 17c)
+    if (p_meteor.x > 0.0) c = meteor_layer(c, r, pix);  // the streaks on the reflected ray (M-METEOR 18c)
+    if (p_cirrus.x > 0.0) c = cirrus_layer(c, r, sun, dot(r, sun), pix);  // on the reflected ray (M-CIRRUS 53b)
+    if (p_cloud.x > 0.0) c = apply_clouds(c, r, sun, dot(r, sun));
+    if (p_vol.x <= 0.5 && p_fog.w > 0.0) c = mix(p_fog.rgb, c, smoothstep(0.0, 0.35, r.y));
+    return c;
+}
+// The view depth of the opaque surface behind view depth zw at screen uv: the half-size texel under the pixel, or
+// where that one holds a nearer object (its half-size edge), the nearest surface behind among the 2 x 2 texels
+// around; 0 when there is none.
+float water_floor_depth(vec2 uv, float zw) {
+    ivec2 size = textureSize(u_water_depth, 0);
+    float z0 = texelFetch(u_water_depth, clamp(ivec2(uv * vec2(size)), ivec2(0), size - 1), 0).a;
+    if (z0 > zw) return z0;
+    ivec2 base = ivec2(floor(uv * vec2(size) - 0.5));
+    float best = 0.0;
+    for (int k = 0; k < 4; ++k) {
+        ivec2 t = clamp(base + ivec2(k & 1, k >> 1), ivec2(0), size - 1);
+        float z = texelFetch(u_water_depth, t, 0).a;
+        if (z > zw && (best == 0.0 || z < best)) best = z;
+    }
+    return best;
+}
+// M-WATER2 49c/49d: the constants and formulas of mce/render/water_optics.h (a change there goes here too).
+const float kWaterRefractScale = 0.5, kWaterRefractMaxPath = 4.0, kWaterRefractMaxUv = 0.05;
+const int kWaterTraceSteps = 24, kWaterTraceRefine = 4;
+const float kWaterTraceMaxDist = 80.0, kWaterEdgeFade = 0.1, kWaterTraceFadeStart = 0.7, kWaterFacingFade = 0.6;
+vec2 water_refract_offset(vec3 n, float path, float zw) {
+    vec2 o = (mat3(u_view) * vec3(n.x, 0.0, n.z)).xy * (kWaterRefractScale * min(max(path, 0.0), kWaterRefractMaxPath) /
+                                                         max(zw, 0.05));
+    float l = length(o);
+    return l > kWaterRefractMaxUv ? o * (kWaterRefractMaxUv / l) : o;
+}
+float water_reflect_fade(vec2 uv, float travel, float toward) {
+    vec2 e = min(uv, 1.0 - uv);
+    return smoothstep(0.0, kWaterEdgeFade, min(e.x, e.y)) *
+           (1.0 - smoothstep(kWaterTraceFadeStart * kWaterTraceMaxDist, kWaterTraceMaxDist, travel)) *
+           (1.0 - smoothstep(0.0, kWaterFacingFade, toward));
+}
+float water_depth_at(vec2 uv) {  // the half-size texel under uv
+    ivec2 size = textureSize(u_water_depth, 0);
+    return texelFetch(u_water_depth, clamp(ivec2(uv * vec2(size)), ivec2(0), size - 1), 0).a;
+}
+// The refracted lookup's depth (49c, water_refract_accept): the nearest of the 2 x 2 half-size texels around uv when
+// every one holds a surface behind view depth zw and under the level (world y from the texel's ray), else 0. So a post
+// standing in the water, nearer or behind but above the surface, never smears its colour into the water around it.
+float water_under_depth(vec2 uv, float zw) {
+    ivec2 size = textureSize(u_water_depth, 0);
+    ivec2 base = ivec2(floor(uv * vec2(size) - 0.5));
+    float m = 1e30;
+    for (int k = 0; k < 4; ++k) {
+        ivec2 t = clamp(base + ivec2(k & 1, k >> 1), ivec2(0), size - 1);
+        float z = texelFetch(u_water_depth, t, 0).a;
+        vec4 w = u_inv_view_proj * vec4((vec2(t) + 0.5) / vec2(size) * 2.0 - 1.0, 0.5, 1.0);
+        vec3 d = w.xyz / w.w - u_camera_pos.xyz;
+        if (!(z > zw) || u_camera_pos.y + d.y * (z / max(-(mat3(u_view) * d).z, 1e-6)) >= p_water.x) return 0.0;
+        m = min(m, z);
+    }
+    return m;
+}
+vec2 water_uv(vec3 q, out float w) {
+    vec4 c = u_view_proj * vec4(q, 1.0);
+    w = c.w;
+    return c.xy / max(c.w, 1e-6) * 0.5 + 0.5;
+}
+// The share of the 2 x 2 half-size texels around uv that hold a drawn surface (0, 0.25 .. 1): the reflection's weight at
+// a silhouette's half-size edge, where the full-size copy may hold the clear colour (the sky is not in it).
+float water_drawn_share(vec2 uv) {
+    ivec2 size = textureSize(u_water_depth, 0);
+    ivec2 base = ivec2(floor(uv * vec2(size) - 0.5));
+    float n = 0.0;
+    for (int k = 0; k < 4; ++k) n += texelFetch(u_water_depth, clamp(base + ivec2(k & 1, k >> 1), ivec2(0), size - 1), 0).a > 0.0 ? 0.25 : 0.0;
+    return n;
+}
+// The reflection march (49d) from p along r against the prepass depth: the confidence of the hit (0 = a miss) and its
+// uv. A sample behind the depth there, or one past a depth step after a sample in front of a surface (the ray went
+// through a thin object between two samples), starts kWaterTraceRefine bisection steps; the refined point counts when
+// it lies behind the surface by less than the step's length.
+float water_trace(vec3 p, vec3 r, out vec2 huv) {
+    huv = vec2(0.0);
+    float prev = 0.0, zs_prev = 0.0, w;
+    bool front = false;
+    for (int i = 1; i <= kWaterTraceSteps; ++i) {
+        float f = float(i) / float(kWaterTraceSteps);
+        float s = kWaterTraceMaxDist * f * f;
+        vec3 q = p + r * s;
+        vec2 uv = water_uv(q, w);
+        if (w <= 1e-4 || uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return 0.0;  // off screen: a miss
+        float zq = -(u_view * vec4(q, 1.0)).z, zs = water_depth_at(uv);
+        if ((zs > 0.0 && zq > zs) || (front && (zs <= 0.0 || zs > zs_prev + (s - prev)))) {
+            float lo = prev, hi = s;
+            for (int b = 0; b < kWaterTraceRefine; ++b) {
+                float m = 0.5 * (lo + hi);
+                vec2 um = water_uv(p + r * m, w);
+                float zm = -(u_view * vec4(p + r * m, 1.0)).z, zsm = water_depth_at(um);
+                if (zsm > 0.0 && zm > zsm) hi = m;
+                else lo = m;
+            }
+            vec3 qh = p + r * hi;
+            huv = water_uv(qh, w);
+            float zh = -(u_view * vec4(qh, 1.0)).z, zsh = water_depth_at(huv);
+            if (zsh > 0.0 && zh > zsh && zh - zsh < (s - prev) + 0.25)
+                return water_reflect_fade(huv, hi, (mat3(u_view) * r).z) * water_drawn_share(huv);
+        }
+        front = zs > 0.0 && zq < zs;
+        zs_prev = zs;
+        prev = s;
+    }
+    return 0.0;
+}
+void main() {
+    vec3 p = v_world;
+    float foot = max(length(dFdx(p)), length(dFdy(p)));  // meters per pixel on the plane
+    vec3 to_cam = u_camera_pos.xyz - p;
+    float dist = length(to_cam);
+    vec3 v = to_cam / max(dist, 1e-6);
+    int count = int(p_water.y);
+    float fade[8];
+    float q[8];
+    float lost = 0.0;  // slope variance of what the fades removed
+    for (int i = 0; i < count; ++i) {
+        float k = length(p_wave[i].xy);
+        float ka = k * p_wave[i].z * float(count);
+        q[i] = ka > p_water.z ? p_water.z / ka : 1.0;
+        fade[i] = smoothstep(3.0, 8.0, 6.2831853 / (k * max(foot, 1e-6)));
+        float s = k * p_wave[i].z * (1.0 - fade[i]);
+        lost += s * s;
+    }
+    vec2 u = p.xz;
+    for (int it = 0; it < 2; ++it) {
+        vec2 dsp = vec2(0.0);
+        for (int i = 0; i < count; ++i) {
+            vec2 K = p_wave[i].xy;
+            dsp += K * (q[i] * p_wave[i].z * fade[i] / length(K) * cos(dot(K, u) + p_wave[i].w));
+        }
+        u = p.xz - dsp;
+    }
+    vec3 nrm = vec3(0.0, 1.0, 0.0);
+    for (int i = 0; i < count; ++i) {
+        vec2 K = p_wave[i].xy;
+        float th = dot(K, u) + p_wave[i].w;
+        float a = p_wave[i].z * fade[i];
+        nrm.xz -= K * (a * cos(th));
+        nrm.y -= q[i] * length(K) * a * sin(th);
+    }
+    float fold = 1.0 - nrm.y;  // 0 flat .. the steepness at a fully folded crest
+    for (int j = 0; j < 2; ++j) {
+        vec2 K = kWaterDetailK[j];
+        float f = smoothstep(3.0, 8.0, 6.2831853 / (length(K) * max(foot, 1e-6)));
+        nrm.xz -= normalize(K) * (p_water5.z * f * cos(dot(K, p.xz) + p_water5[j]));
+        float s = p_water5.z * (1.0 - f);
+        lost += s * s;
+    }
+    nrm.y = max(nrm.y, 1e-4);
+    vec3 n = normalize(nrm);
+    vec3 r = reflect(-v, n);
+    r = normalize(vec3(r.x, max(r.y, 0.002), r.z));  // a ray tipped under the horizon reads the horizon
+    float pix = max(max(length(dFdx(r)), length(dFdy(r))), 1e-6);  // radians per pixel along r (the stars' footprint)
+    float NoV = clamp(dot(n, v), 1e-4, 1.0);
+    float F = (0.02 + 0.98 * pow(1.0 - NoV, 5.0)) * p_water3.w;
+    float rough = p_water4.x;
+    vec3 sky = water_sky(r, pix, rough * 8.0);
+    // the glint
+    vec3 l = -p_light_dir.xyz;
+    vec3 h = normalize(l + v);
+    float NoL = max(dot(n, l), 0.0), NoH = max(dot(n, h), 0.0), LoH = max(dot(l, h), 0.0);
+    float alpha = max(rough * rough, 0.02);
+    float a2 = alpha * alpha + lost;
+    float dd = NoH * NoH * (a2 - 1.0) + 1.0;
+    float D = a2 / (PI * dd * dd);
+    float Fh = (0.02 + 0.98 * pow(1.0 - LoH, 5.0)) * p_water3.w;
+    vec3 glint = p_light_color.rgb * (D * Fh * 0.25 / max(LoH * LoH, 0.1) * NoL * smoothstep(-0.02, 0.05, l.y));
+    // the body: the tint by the optical depth to the opaque surface behind
+    float zw = -(u_view * vec4(p, 1.0)).z;
+    float path = -1.0;  // meters along the view ray to the opaque surface behind; -1 = none (or not read)
+    vec2 suv = vec2(0.0);  // the pixel's screen uv (with the depth read)
+    if (p_water4.w > 0.5) {
+        vec4 cp = u_view_proj * vec4(p, 1.0);
+        suv = cp.xy / cp.w * 0.5 + 0.5;
+        float zo = water_floor_depth(cp.xy / cp.w * 0.5 + 0.5, zw);
+        if (zo > 0.0) path = dist * (zo / zw - 1.0);
+    }
+    float t = path >= 0.0 ? 1.0 - exp(-3.0 * path / p_water2.w) : 1.0 - 0.3 * exp(-dist / (10.0 * p_water2.w));
+    vec3 light = mix(p_amb_ground.rgb, p_amb_sky.rgb, 0.75) + p_light_color.rgb * (max(l.y, 0.0) / PI);
+    vec3 body = mix(p_water2.rgb, p_water3.rgb, t) * light;
+    // M-WATER2 49c: what lies under the water, seen through it: the copy bent by the wave tilt where what is there lies
+    // behind the water and under it (else straight through), absorbed per channel along the path (underwater_sigma), ending at
+    // the tint above where the path is long.
+    if (p_water6.y > 0.5 && path >= 0.0 && water_depth_at(suv) > zw) {  // the pixel's own texel is behind: no edge fringe
+        vec2 ruv = suv + water_refract_offset(n, path, zw);
+        float rp = path, zr = (all(greaterThanEqual(ruv, vec2(0.0))) && all(lessThanEqual(ruv, vec2(1.0)))) ? water_under_depth(ruv, zw) : 0.0;
+        if (zr > 0.0) rp = dist * (zr / zw - 1.0);
+        else ruv = suv;
+        vec3 T = exp(-(-log(clamp(p_water2.rgb, 0.02, 1.0)) / max(p_water2.w, 0.5)) * rp);
+        body = textureLod(u_water_scene, ruv, 0.0).rgb * T + body * (1.0 - (T.r + T.g + T.b) / 3.0);
+    }
+    // M-WATER2 49d: the on-screen geometry along the reflected ray, faded into the sky reflection (a miss is the sky).
+    if (p_water6.x > 0.5) {
+        vec2 huv;
+        float conf = water_trace(p, r, huv);
+        if (conf > 0.0) sky = mix(sky, textureLod(u_water_scene, huv, 0.0).rgb, conf);
+    }
+    vec3 color = body * (1.0 - F) + sky * F + glint;
+    // the shore foam
+    if (p_water4.y > 0.0 && path >= 0.0 && path < p_water4.z) {
+        float band = 1.0 - smoothstep(0.0, p_water4.z, path);  // 1 at the shore line, 0 at the band's edge
+        float crest = clamp(fold / max(p_water.z, 1e-3), 0.0, 1.0);
+        float stripe = 0.5 + 0.5 * sin(6.2831853 * path / max(0.35 * p_water4.z, 0.02) + p_water5.x);
+        float foam = p_water4.y * smoothstep(0.35, 0.75, band * (0.55 + 0.45 * stripe + 0.35 * crest));
+        color = mix(color, vec3(0.9) * light, foam);
+    }
+    if (p_vol.x > 0.5) {  // as kMeshFS
+        vec4 c = u_view_proj * vec4(p, 1.0);
+        vec4 f = vol_fog(c.xy / c.w * 0.5 + 0.5, zw);
+        color = color * f.a + f.rgb;
+    } else {
+        float fog = 1.0 - exp(-(p_fog.w * dist) * (p_fog.w * dist));
+        color = mix(color, p_fog.rgb, clamp(fog, 0.0, 1.0));
+    }
+    o_color = vec4(color, 1.0);
+}
+)";
+// M-CIRRUS 53b: the cirrus layer's text alone (with the cloud noise it reads and, since M-HALO 54b, the halo it adds),
+// for test_render3d_cirrus_gl's run against the CPU twin (mce/render/cirrus.h). A shader that uses it declares
+// p_cirrus, p_cirrus2, p_light_color, p_amb_sky and the halo's p_halo, p_night, p_moon and p_moon2.
+constexpr const char* kCirrusLayerGLSL = MCE_GLSL_CLOUD_NOISE MCE_GLSL_HALO MCE_GLSL_CIRRUS;
+// M-HALO 54b: the halo's text alone, for test_render3d_halo_gl's run against the CPU twin (mce/render/halo.h). A shader
+// that uses it declares p_halo, p_light_color, p_night, p_moon and p_moon2.
+constexpr const char* kHaloGLSL = MCE_GLSL_HALO;
+#undef MCE_GLSL_SKY_LAYERS
+#undef MCE_GLSL_CIRRUS
+#undef MCE_GLSL_HALO
 
 // ---- post chain. PostU rides bank 1 for the post passes.
 // Auto exposure (M-VISUAL 8): Forward3D::exposure_buffer(), bank kExposure.
@@ -1315,12 +2954,51 @@ void main() {
 // u_cluster here: x > 0.5 = auto exposure (times e_exposure), y = color-grade strength (0 = off),
 // z = color-vision mode (0 = off), w = its strength.
 constexpr const char* kTonemapFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_EXPOSURE("readonly") MCE_GLSL_CVD R"(
+layout(std140, binding = 1) uniform FilmU {
+    vec4 f_lens;   // x vignette, y vignette smoothness, z grain, w grain cell size (pixels)
+    vec4 f_lens2;  // x chromatic aberration, y lens dirt intensity, z tonemapper (0 ACES, 1 AgX, 2 Neutral), w grain seed
+};
 layout(binding = 6) uniform sampler2D u_hdr;
 layout(binding = 7) uniform sampler2D u_bloom;
 layout(binding = 8) uniform sampler2DArray u_lut;  // 256 × 16 strip (16³), display space
+layout(binding = 9) uniform sampler2DArray u_dirt;  // lens dirt mask (linear rgb)
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+// AgX base (Troy Sobotka's; this is the formulation three.js ships): Rec.2020 inset, log2 over 16.5 stops,
+// a sigmoid fit, outset, and back to linear sRGB.
+vec3 agx_contrast(vec3 x) {
+    vec3 x2 = x * x, x4 = x2 * x2;
+    return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
+}
+vec3 agx(vec3 c) {
+    const mat3 to2020 = mat3(0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956);
+    const mat3 from2020 = mat3(1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187);
+    // Column-major: each row of the matrix as a color transform sums to 1 (inset) / each column does (outset).
+    const mat3 inset = mat3(0.856627153315983, 0.137318972929847, 0.11189821299995,
+                            0.0951212405381588, 0.761241990602591, 0.0767994186031903,
+                            0.0482516061458583, 0.101439036467562, 0.811302368396859);
+    const mat3 outset = mat3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826,
+                             -0.11060664309660323, 1.157823702216272, -0.11060664309660294,
+                             -0.016493938717834573, -0.016493938717834257, 1.2519364065950405);
+    c = inset * (to2020 * c);
+    c = clamp((log2(max(c, 1e-10)) + 12.47393) / 16.5, 0.0, 1.0);
+    c = outset * agx_contrast(c);
+    return clamp(from2020 * pow(max(c, 0.0), vec3(2.2)), 0.0, 1.0);
+}
+// Khronos PBR Neutral: leaves in-gamut colors alone up to a knee, then rolls the peak off and desaturates.
+vec3 neutral(vec3 c) {
+    c = max(c, 0.0);
+    const float start = 0.8 - 0.04, desat = 0.15;
+    float x = min(c.r, min(c.g, c.b));
+    c -= x < 0.08 ? x - 6.25 * x * x : 0.04;
+    float peak = max(c.r, max(c.g, c.b));
+    if (peak < start) return c;
+    const float d = 1.0 - start;
+    float new_peak = 1.0 - d * d / (peak + d - start);
+    c *= new_peak / peak;
+    return mix(c, vec3(new_peak), 1.0 - 1.0 / (desat * (peak - new_peak) + 1.0));
+}
 vec3 linear_to_srgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 vec3 srgb_to_linear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 vec3 grade(vec3 c) {  // as the 2D post pass (renderer.cpp)
@@ -1331,10 +3009,38 @@ vec3 grade(vec3 c) {  // as the 2D post pass (renderer.cpp)
     vec3 s1 = textureLod(u_lut, vec3(rg + vec2(b1 / 16.0, 0.0), 0.0), 0.0).rgb;
     return mix(s0, s1, c.b - b0);
 }
+float grain_hash(vec2 cell, float seed) {
+    uvec3 q = uvec3(uvec2(cell + 4096.0), uint(seed));
+    q = q * 1664525u + 1013904223u;
+    q.x += q.y * q.z;
+    q.y += q.z * q.x;
+    q.z += q.x * q.y;
+    q ^= q >> 16u;
+    q.x += q.y * q.z;
+    return float(q.x >> 8u) * (1.0 / 16777216.0);
+}
 void main() {
-    vec3 c = texture(u_hdr, v_uv).rgb * (u_params.x * (u_cluster.x > 0.5 ? e_exposure : 1.0));
-    if (u_params.w > 0.5) c += textureLod(u_bloom, v_uv, 0.0).rgb * u_params.z;
-    c = aces(c * 0.6);
+    float exposure = u_params.x * (u_cluster.x > 0.5 ? e_exposure : 1.0);
+    vec3 c;
+    vec3 bloom = vec3(0.0);
+    if (f_lens2.x > 0.0) {  // chromatic aberration: the red and blue taps slide along the radius (1 = 0.5 % of the width at the edge)
+        vec2 shift = (v_uv - 0.5) * (f_lens2.x * 0.01);
+        c = vec3(texture(u_hdr, v_uv + shift).r, texture(u_hdr, v_uv).g, texture(u_hdr, v_uv - shift).b) * exposure;
+        if (u_params.w > 0.5)
+            bloom = vec3(textureLod(u_bloom, v_uv + shift, 0.0).r, textureLod(u_bloom, v_uv, 0.0).g, textureLod(u_bloom, v_uv - shift, 0.0).b) * u_params.z;
+    } else {
+        c = texture(u_hdr, v_uv).rgb * exposure;
+        if (u_params.w > 0.5) bloom = textureLod(u_bloom, v_uv, 0.0).rgb * u_params.z;
+    }
+    c += bloom;
+    if (f_lens2.y > 0.0) c += bloom * textureLod(u_dirt, vec3(v_uv, 0.0), 0.0).rgb * f_lens2.y;  // bloom lights the dirt
+    if (f_lens.x > 0.0) {  // vignette in linear light: 0 at the centre, 1 at the corners
+        float r = length(v_uv - 0.5) * 1.41421356;
+        c *= 1.0 - f_lens.x * smoothstep(1.0 - f_lens.y, 1.0, r);
+    }
+    if (f_lens2.z > 1.5) c = neutral(c);
+    else if (f_lens2.z > 0.5) c = agx(c);
+    else c = aces(c * 0.6);
     c = u_params.y > 0.5 ? linear_to_srgb(c) : c;
     if (u_cluster.y > 0.0) {  // the LUT is authored on display (sRGB) values
         vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(c);
@@ -1346,7 +3052,21 @@ void main() {
         l = cvd_correct(int(u_cluster.z + 0.5), u_cluster.w, l);
         c = u_params.y > 0.5 ? linear_to_srgb(l) : l;
     }
-    o_color = vec4(c, dot(c, vec3(0.299, 0.587, 0.114)));
+    float luma = dot(c, vec3(0.299, 0.587, 0.114));  // FXAA reads this: taken before the grain, which it would chase
+    if (f_lens.z > 0.0) {  // animated grain in display space, strongest in the mid tones
+        // On an sRGB target (u_params.y < 0.5) the hardware encodes on write and c is still linear: grain there
+        // is added to the encoded value so GL and SDL GPU agree.
+        vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(clamp(c, 0.0, 1.0));
+        float dl = dot(d, vec3(0.299, 0.587, 0.114));
+        // The cell in integers, half-pixel cell sizes: with floats, (x + 0.5) / 1.5 lands on a cell edge every third
+        // pixel and the driver's rounding picked the cell (rows and columns of grain differed between GPUs).
+        uvec2 px = uvec2(v_uv * u_viewport.xy);
+        uint half_cells = uint(max(f_lens.w, 1.0) * 2.0 + 0.5);
+        float n = grain_hash(vec2((px * 2u + 1u) / half_cells), f_lens2.w) - 0.5;
+        d += n * f_lens.z * 0.3 * (4.0 * dl * (1.0 - dl));
+        c = u_params.y > 0.5 ? d : srgb_to_linear(clamp(d, 0.0, 1.0));
+    }
+    o_color = vec4(c, luma);
 }
 )";
 
@@ -1684,12 +3404,26 @@ void main() {
 // probe, row-major from the batch's first row) into their 4 texels each: V_k = the sphere integral of
 // L * (1 + w.d_k) / 4pi over the faces' texels (solid angle 1 / (1 + u² + v²)^1.5). Drawn over the
 // batch's rows only, alpha = the new value's weight (alpha blending keeps the rest of the old one).
+// M-GI2 50d: g_size.w texels per probe (T, 4 or 10). With T = 10, texels 4..9 are the probe's record (gi_probes.h):
+// the vis faces' signed distances d (u_vis, kGiVisFS; negative on a back face) as the hit's distance ALONG each lobe's
+// axis (|d| times the cosine to the axis; M-GI2 50e: a plane across the axis then reads its own distance with no
+// spread), clamped to dmax (g_vis.x) and normalised, in cosine^4 lobes (kGiVisLobePower, written as two squarings)
+// around +x, +y, +z (texels 4: mean, 6: mean square) and -x, -y, -z (5, 7); texel 8 the relocation offset (0.5: none);
+// texel 9 r the back-face share. g_params.w
+// is the record's mode: 0 a rolling update (alpha 0 leaves texels 4..9 bit for bit), 1 a fill from the vis faces,
+// 2 a fill without them (nothing hit, no back face). Texels 0..3 are the same statements as with T = 4.
+// M-GI2 50f: on a fill, texel 8 = 0.5 + 0.5 * g_off[the probe of the run] (the relocation offset over kGiMaxOffsetLimit
+// times the cell; 0 when the volume does not relocate, so 0.5 as before). 50g: mode 3 invalidates the viewport's probes
+// (scrolled in): texel 9 = (kGiInvalidShare, 0, 0) with alpha 1, every other texel alpha 0 (left bit for bit).
 constexpr const char* kGiProjectFS = R"(#version 450 core
 layout(std140, binding = 1) uniform GiProjectU {
-    vec4 g_size;    // x: texels per row, y: rows in the pass, z: face size
-    vec4 g_params;  // x: probes per row, y: weight of the new value, z: the pass's first face probe
+    vec4 g_size;    // x: texels per row, y: rows in the pass, z: face size, w: texels per probe
+    vec4 g_params;  // x: probes per row, y: weight of the new value, z: the pass's first face probe, w: record mode
+    vec4 g_vis;     // x: dmax
+    vec4 g_off[32];
 };
 layout(binding = 6) uniform sampler2DArray u_faces;
+layout(binding = 7) uniform sampler2DArray u_vis;
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
 const vec3 kTetra[4] = vec3[4](vec3(0.57735027, 0.57735027, 0.57735027), vec3(0.57735027, -0.57735027, -0.57735027),
@@ -1698,12 +3432,53 @@ const vec3 kTetra[4] = vec3[4](vec3(0.57735027, 0.57735027, 0.57735027), vec3(0.
 // look_at(pos, pos + kFwd, kUp), so the face's ndc x runs along cross(kFwd, kUp) and ndc y along kUp.
 const vec3 kFwd[6] = vec3[6](vec3(1, 0, 0), vec3(-1, 0, 0), vec3(0, 1, 0), vec3(0, -1, 0), vec3(0, 0, 1), vec3(0, 0, -1));
 const vec3 kUp[6] = vec3[6](vec3(0, 1, 0), vec3(0, 1, 0), vec3(0, 0, -1), vec3(0, 0, 1), vec3(0, 1, 0), vec3(0, 1, 0));
+vec4 record(int k, int layer, int res, int p) {
+    int mode = int(g_params.w);
+    if (mode == 0) return vec4(0.0);
+    if (k == 8) return vec4(0.5 + 0.5 * g_off[min(p, 31)].xyz, 1.0);
+    if (mode != 1) return vec4(k < 8 ? vec3(1.0) : vec3(0.0), 1.0);
+    float sgn = (k & 1) == 0 ? 1.0 : -1.0;
+    vec3 sum = vec3(0.0), lsum = vec3(0.0);
+    float back = 0.0, wsum = 0.0;
+    for (int f = 0; f < 6; ++f) {
+        vec3 right = cross(kFwd[f], kUp[f]);
+        for (int j = 0; j < res; ++j) {
+            for (int i = 0; i < res; ++i) {
+                vec2 ndc = (vec2(i, j) + 0.5) * (2.0 / float(res)) - 1.0;
+                vec3 d = kFwd[f] + right * ndc.x + kUp[f] * ndc.y;
+                float len2 = dot(d, d);
+                float w = inversesqrt(len2) / len2;
+                d *= inversesqrt(len2);
+                float r = texelFetch(u_vis, ivec3(i, j, layer + f), 0).r;
+                back += r < 0.0 ? w : 0.0;
+                wsum += w;
+                vec3 c = max(d * sgn, 0.0);
+                vec3 a = min(abs(r) * c, g_vis.x) / g_vis.x;
+                c *= c;
+                c *= c * w;
+                lsum += c;
+                sum += c * (k < 6 ? a : a * a);
+            }
+        }
+    }
+    if (k == 9) return vec4(back / wsum, 0.0, 0.0, 1.0);
+    return vec4(sum / max(lsum, vec3(1e-12)), 1.0);
+}
 void main() {
     int x = min(int(v_uv.x * g_size.x), int(g_size.x) - 1);
     int row = min(int(v_uv.y * g_size.y), int(g_size.y) - 1);
-    int k = x & 3;
-    int layer = (int(g_params.z) + row * int(g_params.x) + (x >> 2)) * 6;
+    int T = int(g_size.w);
+    int k = x % T;
+    if (int(g_params.w) == 3) {
+        o_color = vec4(1.0, 0.0, 0.0, k == 9 ? 1.0 : 0.0);
+        return;
+    }
+    int layer = (int(g_params.z) + row * int(g_params.x) + x / T) * 6;
     int res = int(g_size.z);
+    if (k >= 4) {
+        o_color = record(k, layer, res, x / T);
+        return;
+    }
     vec3 d_k = kTetra[k];
     vec3 sum = vec3(0.0);
     float wsum = 0.0;
@@ -1722,6 +3497,21 @@ void main() {
         }
     }
     o_color = vec4(sum / wsum, g_params.y);
+}
+)";
+
+// M-GI2 50d: the irradiance volume's vis pass, over kMeshVS (or kSkinnedMeshVS), depth-tested, both faces drawn: r =
+// the radial distance from the probe (u_camera_pos), negated on a back face; the target is cleared to kGiVisFar
+// (gi_probes.h). Alpha masks are honoured as in kAoPrepassFS.
+constexpr const char* kGiVisFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_OBJECT_U R"(
+layout(binding = 6) uniform sampler2DArray u_albedo;
+layout(location = 0) in vec3 v_world;
+layout(location = 2) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+void main() {
+    if (o_params.x > 0.0 && texture(u_albedo, vec3(v_uv, 0.0)).a * o_base_color.a < o_params.x) discard;
+    float r = length(v_world - u_camera_pos.xyz);
+    o_color = vec4(gl_FrontFacing ? r : -r, 0.0, 0.0, 1.0);
 }
 )";
 
@@ -1745,7 +3535,13 @@ void main() {
 // rows per depth slice); FrameU and PassU are the main pass's.
 // Injection: each froxel's medium at its center, rgb = the light it scatters toward the camera per
 // meter (σs · in-scattered radiance), a = its extinction σt per meter.
-constexpr const char* kVolInjectFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_LIGHTS MCE_GLSL_VOLUME R"(
+// M-LIGHTCOOKIE 40f: the cookies shape the froxels' light as they shape the surfaces' (a window grid draws a lattice of
+// shafts): MCE_GLSL_COOKIE at the same bindings (bank 2 is free here: the pass has no decals). A froxel is a point
+// sample of a cell tile pixels wide and a slice deep, so the cookie is read at the one level nearest the cell's larger
+// extent (finer would alias,
+// the lattice crawling as the camera moves; the integration and the lit pass's bilinear read blur it again, so a second
+// level buys nothing): a bilinear for a spot, four texelFetch for the sun.
+constexpr const char* kVolInjectFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_COOKIE R"(
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
 float hg(float g, float c) { return (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5)); }
@@ -1770,7 +3566,23 @@ void main() {
     // The sun through its cascades (shafts where something casts a shadow). The engine's light
     // scale I is irradiance / π, so the scattered radiance is σs · π · I · phase.
     vec3 l = -p_light_dir.xyz;
-    vec3 lin = p_light_color.rgb * (PI * hg(g, dot(l, rd)) * shadow_term(p, l, l, depth) * p_vol_albedo.w);
+    // The cookies' footprint: the froxel's size, the larger of its width at this depth (the next column's ray at the same
+    // view depth) and its slice's depth (a conservative bound: a long cell must not alias the pattern either).
+    float cookie_cell = 0.0, cookie_size = 1.0;
+    if (p_local.z > 0.5) {
+        vec4 w2 = u_inv_view_proj * vec4((uv + vec2(1.0 / p_vol_grid.x, 0.0)) * 2.0 - 1.0, 1.0, 1.0);
+        vec3 ray2 = w2.xyz / w2.w - u_camera_pos.xyz;
+        cookie_cell = length(ray2 * (depth / dot(ray2, fwd)) - ray * (depth / dot(ray, fwd)));
+        cookie_cell = max(cookie_cell, vol_depth_of(float(slice + 1)) - vol_depth_of(float(slice)));  // or its depth, if longer
+        cookie_size = float(textureSize(u_slot2, 0).y);
+    }
+    vec3 lin;
+    if (p_sun_cookie.w > 0.5) {  // the sun's cookie (a black texel skips the cascade taps)
+        vec3 sc = sun_cookie(p - u_camera_pos.xyz, floor(cookie_lod_sun(cookie_cell, p_sun_cookie.z, cookie_size) + 0.5), cookie_size);
+        lin = max(sc.r, max(sc.g, sc.b)) > 0.0 ? p_light_color.rgb * sc * (PI * hg(g, dot(l, rd)) * shadow_term(p, l, l, depth) * p_vol_albedo.w) : vec3(0.0);
+    } else {
+        lin = p_light_color.rgb * (PI * hg(g, dot(l, rd)) * shadow_term(p, l, l, depth) * p_vol_albedo.w);
+    }
     // Point and spot lights of the froxel's cluster, with their shadows.
     uvec3 grid = uvec3(u_cluster.xyz);
     uint tx = min(uint(uv.x * u_cluster.x), grid.x - 1u), ty = min(uint(uv.y * u_cluster.y), grid.y - 1u);
@@ -1787,8 +3599,23 @@ void main() {
         float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);
         att *= cone * cone;
         if (att <= 0.0) continue;
+        // The spot's cookie, as in the lit pass (before the shadow: a black texel skips its taps), at the cell's level.
+        bool cookied = p_local.z > 0.5 && L.shadow.z > 0.0;
+        vec3 lc = vec3(1.0);
+        if (cookied) {
+            CookieRec c = l_cookies[int(L.shadow.z) - 1];
+            vec4 q = c.vp * vec4(p, 1.0);
+            vec3 tint = vec3(0.0);
+            if (q.w > 0.0) {
+                vec2 cuv = q.xy / q.w * 0.5 + 0.5;
+                if (all(greaterThanEqual(cuv, vec2(0.0))) && all(lessThanEqual(cuv, vec2(1.0))))
+                    tint = cookie_sample(cuv, c.params.x, floor(cookie_lod(cookie_cell, q.w, c.params.w, cookie_size) + 0.5), cookie_size) * cookie_edge(cuv, c.params.z);
+            }
+            lc = 1.0 + (tint - 1.0) * c.params.y;
+            if (max(lc.r, max(lc.g, lc.b)) <= 0.0) continue;
+        }
         if (L.shadow.x >= 0.0 && p_local.x > 0.5) att *= local_shadow(L.shadow, L.pos_radius.xyz, p, ld, ld);
-        lin += L.color.rgb * (PI * att * hg(g, dot(ld, rd)) * p_vol_scale.x);
+        lin += (cookied ? L.color.rgb * lc : L.color.rgb) * (PI * att * hg(g, dot(ld, rd)) * p_vol_scale.x);
     }
     // The ambient, isotropic: the sphere's mean radiance, between the sky's and the ground's.
     lin += (p_amb_sky.rgb + p_amb_ground.rgb) * (0.5 * p_vol_scale.y);
@@ -1870,11 +3697,35 @@ layout(std430, binding = 13) readonly buffer Instances { mat4 i_world[]; };
 layout(std430, binding = 14) readonly buffer Visible { uint i_visible[]; };
 mat4 instance_world(float first) { return i_world[i_visible[uint(first) + uint(gl_InstanceID)]]; }
 mat3 cofactor3(mat4 m) { return mat3(cross(m[1].xyz, m[2].xyz), cross(m[2].xyz, m[0].xyz), cross(m[0].xyz, m[1].xyz)); }
-vec3 wind_offset(mat4 w, vec3 p, float t, vec4 wind) {
+uint pcg_hash(uint v) {
+    uint s = v * 747796405u + 2891336453u;
+    uint g = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (g >> 22u) ^ g;
+}
+float hash01(vec3 p) {  // [0, 1) from the float bits of p: the same input gives the same value on every device
+    uvec3 u = floatBitsToUint(p);
+    return float(pcg_hash(u.x ^ pcg_hash(u.y ^ pcg_hash(u.z))) >> 8) * (1.0 / 16777216.0);
+}
+// ext (M-VISUAL3 6): x wind_height (profile (h / H)^2 when > 0), y gust, z flutter; all 0 = amplitude * h^2 as before.
+// `key` is the vertex's own a_pos: the flutter hashes it with the instance origin (bit-exact inputs, not the computed position).
+vec3 wind_offset(mat4 w, vec3 p, float t, vec4 wind, vec3 ext, vec3 key) {
     if (wind.x == 0.0) return vec3(0.0);
     float h = max(p.y - w[3].y, 0.0);
     float f = 6.2831853 * wind.y * t + dot(w[3].xz, vec2(0.37, 0.71));
-    return vec3(wind.z, 0.0, wind.w) * (wind.x * h * h * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
+    if (ext == vec3(0.0)) return vec3(wind.z, 0.0, wind.w) * (wind.x * h * h * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
+    float hh = max(ext.x, 1e-2);  // a tiny wind height must not blow the profile up
+    float r = ext.x > 0.0 ? h / hh : h;
+    float gust = 1.0;
+    if (ext.y > 0.0) {  // slow gusts running along the wind at 3 m/s
+        float s = dot(w[3].xz, wind.zw) - 3.0 * t;
+        gust = 1.0 + ext.y * (0.6 * sin(0.35 * s) + 0.4 * sin(0.83 * s + 1.3));
+    }
+    vec3 o = vec3(wind.z, 0.0, wind.w) * (wind.x * (ext.x > 0.0 ? r * r : h * h) * gust * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
+    if (ext.z > 0.0) {  // leaf flutter: 4 to 6 Hz, a phase per vertex
+        float ph = 6.2831853 * (4.0 + 2.0 * hash01(key.yzx + w[3].xyz)) * t + 6.2831853 * hash01(key + w[3].zxy);
+        o += ext.z * r * vec3(sin(ph), 0.5 * sin(1.31 * ph + 0.7), cos(0.93 * ph));
+    }
+    return o;
 }
 vec3 oct_decode(vec2 e) {
     vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
@@ -1892,11 +3743,17 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 0) out vec3 v_world;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec2 v_uv;
+layout(location = 3) flat out vec4 v_tint;
 out gl_PerVertex { vec4 gl_Position; };
 void main() {
     mat4 w = instance_world(o_skin.y);
     vec4 p = w * (o_model * vec4(a_pos.xyz, 1.0));
-    p.xyz += wind_offset(w, p.xyz, o_skin.z, o_inst);
+    // M-VISUAL3 6: a batch draw leaves o_dequant (identity for rigid draws, unread here) to carry the variation (column 0)
+    // and the wind extension (column 1: height, gust, flutter), so ObjectU keeps its size.
+    p.xyz += wind_offset(w, p.xyz, o_skin.z, o_inst, o_dequant[1].xyz, a_pos.xyz);
+    vec4 tv = o_dequant[0];
+    if (o_params.x > 0.0) tv.w = 1.0;  // alpha-masked: the depth passes mask by the base alpha alone, so the colour variation leaves alpha out
+    v_tint = tv == vec4(1.0) ? vec4(1.0) : mix(vec4(1.0), tv, hash01(w[3].xyz));
     v_world = p.xyz;
     v_normal = cofactor3(w) * (mat3(o_normal) * oct_decode(a_oct));
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
@@ -1912,7 +3769,7 @@ layout(std140, binding = 3) uniform InstDrawU {
     vec4 s_info;       // x: first visible slot, y: time, z: previous time (velocity), w: alpha cutoff (0 = none)
     vec4 s_wind;       // as ObjectU::o_inst
     vec4 s_uv_rect;
-    vec4 s_base;       // x: base color alpha
+    vec4 s_base;       // x: base color alpha, yzw: wind height, gust, flutter (M-VISUAL3 6)
 };
 layout(binding = 6) uniform sampler2DArray u_albedo;
 )"
@@ -1924,7 +3781,7 @@ out gl_PerVertex { vec4 gl_Position; };
 void main() {
     mat4 w = instance_world(s_info.x);
     vec4 p = w * (s_local * vec4(a_pos.xyz, 1.0));
-    p.xyz += wind_offset(w, p.xyz, s_info.y, s_wind);
+    p.xyz += wind_offset(w, p.xyz, s_info.y, s_wind, s_base.yzw, a_pos.xyz);
     v_uv = s_uv_rect.xy + a_uv * s_uv_rect.zw;
     gl_Position = s_view_proj * p;
 }
@@ -1947,8 +3804,8 @@ void main() {
     mat4 w = instance_world(s_info.x);
     vec4 base = w * (s_local * vec4(a_pos.xyz, 1.0));
     vec4 p = base, q = base;
-    p.xyz += wind_offset(w, base.xyz, s_info.y, s_wind);
-    q.xyz += wind_offset(w, base.xyz, s_info.z, s_wind);
+    p.xyz += wind_offset(w, base.xyz, s_info.y, s_wind, s_base.yzw, a_pos.xyz);
+    q.xyz += wind_offset(w, base.xyz, s_info.z, s_wind, s_base.yzw, a_pos.xyz);
     v_uv = s_uv_rect.xy + a_uv * s_uv_rect.zw;
     gl_Position = vp_jittered * p;
     v_current = vp_current * p;
@@ -2227,6 +4084,9 @@ void main() {
 #undef MCE_GLSL_INSTANCES
 
 #undef MCE_GLSL_IBL
+#undef MCE_GLSL_WET
+#undef MCE_GLSL_SNOW
+#undef MCE_GLSL_RIPPLES
 #undef MCE_GLSL_IBL_SAMPLING
 #undef MCE_GLSL_FRAME_U
 #undef MCE_GLSL_PASS_U
@@ -2435,6 +4295,937 @@ void main() {
         wsum += w;
     }
     o_color = vec4(sum / wsum, 1.0);
+}
+)";
+
+// ---- M-LENSFLARE 38c: the sun lens flare, after the post effects and before bloom. FlareU rides bank kPass for both
+// passes; its C++ mirror is FlareU in forward3d.cpp (static_asserts on kFlareUBytes and the member offsets). Everything
+// in it comes from lens_flare_frame (mce/render/lens_flare.h): the GPU holds no flare table of its own. Radii and
+// distances are fractions of the view height (uv scaled by f_sun.z = width / height along u). uv is the fullscreen
+// pass's (row 0 is v = 0), as lens_flare_project returns it. Portable on purpose: one block, combined samplers at the
+// post banks, explicit textureLod / texelFetch, constant loop bounds, no derivatives.
+inline constexpr int kFlareUBytes = 240;  // 15 vec4: sun, color, shape, ghost[12]
+inline constexpr int kFlareMaxGhosts = 6;  // = kLensFlareMaxGhosts (scene3d.h); f_ghost holds two vec4 per ghost
+#define MCE_GLSL_FLARE_U R"(
+layout(std140, binding = 1) uniform FlareU {
+    vec4 f_sun;        // xy: the sun's uv, z: aspect (width / height), w: occlusion disk radius (of the view height)
+    vec4 f_color;      // rgb: the sun's light times the strength, w: halo strength
+    vec4 f_shape;      // x: halo radius (of the view height), y: starburst strength (0 = none), z: rays, w: ghost count
+    vec4 f_ghost[12];  // ghost k: [2k] xy centre (uv), z radius, w intensity; [2k + 1] rgb tint, w 0
+};
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+)"
+
+// The 1x1 occlusion pass: 32 taps on a fixed Vogel disk of f_sun.w around the sun in the half-resolution opaque
+// prepass (a = view depth, 0 where nothing was drawn: sky). r = the share of the taps inside the frame that see sky;
+// no tap inside the frame reads 0 (the sun is not visible).
+constexpr const char* kFlareOccFS = "#version 450 core\n" MCE_GLSL_FLARE_U R"(
+layout(binding = 7) uniform sampler2D u_depth;
+void main() {
+    float visible = 0.0, taps = 0.0;
+    for (int i = 0; i < 32; ++i) {
+        float r = sqrt((float(i) + 0.5) / 32.0) * f_sun.w;
+        float a = float(i) * 2.39996323;
+        vec2 uv = f_sun.xy + vec2(cos(a) * r / f_sun.z, sin(a) * r);
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
+        taps += 1.0;
+        if (textureLod(u_depth, uv, 0.0).a <= 0.0) visible += 1.0;
+    }
+    o_color = vec4(taps > 0.0 ? visible / taps : 0.0, 0.0, 0.0, 1.0);
+}
+)";
+
+// The composite: the source frame plus the sun's light times the occlusion times halo + ghosts + starburst. The halo
+// is a Gaussian cut to 0 between 2 and 3 radii (so the frame beyond it is untouched), a ghost a soft disc a little
+// brighter toward its rim, the starburst f_shape.z symmetric spokes fading with the distance.
+constexpr const char* kFlareFS = "#version 450 core\n" MCE_GLSL_FLARE_U R"(
+layout(binding = 6) uniform sampler2D u_src;
+layout(binding = 8) uniform sampler2D u_occ;
+void main() {
+    vec3 c = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0).rgb;
+    float occ = texelFetch(u_occ, ivec2(0, 0), 0).r;
+    vec2 d = (v_uv - f_sun.xy) * vec2(f_sun.z, 1.0);
+    float r = length(d);
+    float hr = max(f_shape.x, 1e-4);
+    float k = f_color.w * exp(-(r * r) / (hr * hr)) * (1.0 - smoothstep(2.0 * hr, 3.0 * hr, r));
+    if (f_shape.y > 0.0 && r > 1e-6) {
+        float s = abs(cos(f_shape.z * 0.5 * atan(d.y, d.x)));
+        s *= s;  // s^32 by squaring: no pow() of a value that may be 0
+        s *= s;
+        s *= s;
+        s *= s;
+        s *= s;
+        k += f_shape.y * s * exp(-r * 6.0);
+    }
+    vec3 ghosts = vec3(0.0);
+    for (int i = 0; i < 6; ++i) {
+        if (float(i) >= f_shape.w) continue;
+        vec4 g = f_ghost[2 * i];
+        vec4 t = f_ghost[2 * i + 1];
+        float gd = length((v_uv - g.xy) * vec2(f_sun.z, 1.0));
+        float gr = max(g.z, 1e-4);
+        float disc = 1.0 - smoothstep(gr * 0.7, gr, gd);
+        ghosts += t.rgb * (g.w * disc * (0.7 + 0.3 * smoothstep(0.0, gr, gd)));
+    }
+    o_color = vec4(c + f_color.rgb * occ * (vec3(k) + ghosts), 1.0);
+}
+)";
+#undef MCE_GLSL_FLARE_U
+
+// ---- M-OUTLINE 39c: edge outlines, on the HDR frame after the MSAA resolve and before TAA. OutlineU rides bank kPass;
+// its C++ mirror is OutlineU in forward3d.cpp (static_asserts on kOutlineUBytes and the member offsets). Everything in
+// it comes from edge_outline_frame (mce/render/edge_outline.h). The three term functions mirror
+// edge_outline_depth_term, edge_outline_normal_term and edge_outline_fade (src/edge_outline.cpp) literally, one
+// expression each in the same order, and kOutlineTaps is kEdgeOutlineTaps; the CPU's NaN guards are left out (the
+// prepass writes finite values). The edges come from the half-resolution opaque prepass (rgb the unit view-space
+// vertex normal, a the linear view depth, 0 for sky), point sampled at the pixel's uv (the fullscreen pass's v_uv, as
+// every post pass reads it) and at the taps around it; taps past the border clamp to the edge texel (the sampler).
+// Portable on purpose: one block, combined samplers at the post banks, explicit textureLod / texelFetch, a constant
+// loop bound, no derivatives.
+inline constexpr int kOutlineUBytes = 80;  // 5 vec4: color, tap, edge, fade, misc
+inline constexpr int kOutlineMaxTaps = 8;  // = kEdgeOutlineMaxTaps (edge_outline.h)
+constexpr const char* kOutlineFS = R"(#version 450 core
+layout(std140, binding = 1) uniform OutlineU {
+    vec4 o_line;   // rgb: the line colour (linear HDR), w: opacity
+    vec4 o_tap;    // xy: the tap distance in uv (thickness / size), zw: the source's texel size
+    vec4 o_edge;   // x: depth threshold, y: normal threshold, z: depth weight, w: normal weight
+    vec4 o_fade;   // x: fade start, y: fade end (view depth, m), z: exp^2 fog density, w: taps (4 or 8)
+    vec4 o_misc;   // x: sky silhouette (1 or 0), y: strength, zw: 0
+};
+layout(binding = 6) uniform sampler2D u_src;   // the HDR frame, render size
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+const vec2 kOutlineTaps[8] = vec2[8](vec2(1.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, -1.0),
+                                     vec2(0.70710678, 0.70710678), vec2(-0.70710678, 0.70710678),
+                                     vec2(0.70710678, -0.70710678), vec2(-0.70710678, -0.70710678));
+// smooth_step of edge_outline.cpp. b > a in every call but the fade's fade_start == fade_end, where the CPU's
+// (x - a) / 0 is -inf, +inf or NaN and ranges to 0, 1 or 0: the same values without the division.
+float smooth_step(float a, float b, float x) {
+    float t = b > a ? clamp((x - a) / (b - a), 0.0, 1.0) : (x > a ? 1.0 : 0.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+float depth_term(float d_center, float d_tap, float threshold, float n_dot_v, bool sky_silhouette) {
+    if (!(d_center > 0.0)) return 0.0;
+    if (!(d_tap > 0.0)) return sky_silhouette ? 1.0 : 0.0;
+    if (!(d_tap > d_center)) return 0.0;
+    float grazing = n_dot_v > 0.2 ? n_dot_v : 0.2;
+    return smooth_step(threshold, 2.0 * threshold, (d_tap - d_center) / d_center * grazing);
+}
+float normal_term(vec3 n_center, vec3 n_tap, float threshold) {
+    float len2_center = n_center.x * n_center.x + n_center.y * n_center.y + n_center.z * n_center.z;
+    float len2_tap = n_tap.x * n_tap.x + n_tap.y * n_tap.y + n_tap.z * n_tap.z;
+    if (!(len2_center >= 0.25) || !(len2_tap >= 0.25)) return 0.0;
+    float d = n_center.x * n_tap.x + n_center.y * n_tap.y + n_center.z * n_tap.z;
+    return smooth_step(threshold, 1.5 * threshold, 1.0 - d);
+}
+float fade(float view_depth, float fade_start, float fade_end, float fog_density) {
+    float fog = fog_density * view_depth;
+    return (1.0 - smooth_step(fade_start, fade_end, view_depth)) * exp(-(fog * fog));
+}
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    vec4 c = textureLod(u_gbuf, v_uv, 0.0);
+    float e = 0.0;
+    if (c.a > 0.0) {  // a sky center draws nothing
+        // n_dot_v: the cosine between the centre's normal and the view axis (+z toward the camera in view space).
+        float n_dot_v = c.z;
+        bool sky = o_misc.x > 0.5;
+        for (int k = 0; k < 8; ++k) {
+            if (float(k) >= o_fade.w) continue;
+            vec4 t = textureLod(u_gbuf, v_uv + kOutlineTaps[k] * o_tap.xy, 0.0);
+            e = max(e, max(o_edge.z * depth_term(c.a, t.a, o_edge.x, n_dot_v, sky),
+                           o_edge.w * normal_term(c.rgb, t.rgb, o_edge.y)));
+        }
+    }
+    float a = o_misc.y * e * fade(c.a, o_fade.x, o_fade.y, o_fade.z);
+    // A pixel without a line is the source exactly (no mix rounding).
+    o_color = a > 0.0 ? vec4(mix(src.rgb, o_line.rgb, a), src.a) : src;
+}
+)";
+
+// M-LIGHTCOOKIE 40c: one level of one cookie atlas layer (Forward3D::record_cookie_bake, a fullscreen triangle whose
+// viewport is the level's square in the layer; see MCE_GLSL_COOKIE for the packing). The cookie texture (a TextureStore
+// 2D array, layer 0, any size) is read at the level's texel centres: a level the source covers with more texels than it
+// has takes four taps a quarter of its texel off the centre at the source mip one finer than the level (with the source's
+// box mips that is the exact 2x2 box of that mip); a level at or above the source's size takes one bilinear tap of mip 0.
+// The taps are clamped half a texel inside the source (CookieBakeU::clamp): the sampler repeats, the cookie does not.
+// rgb is kept, a is written 1. Portable: one block, one combined sampler at the post bank, explicit textureLod.
+inline constexpr int kCookieBakeUBytes = 32;  // 2 vec4: tap, clamp
+constexpr const char* kCookieBakeFS = R"(#version 450 core
+layout(std140, binding = 1) uniform CookieBakeU {
+    vec4 b_tap;    // x: source lod, y: 1 = four taps (minified), z: the taps' offset in uv (a quarter of the level's texel)
+    vec4 b_clamp;  // xy: lowest uv a tap may read, zw: highest (half a texel inside the read source mip)
+};
+layout(binding = 6) uniform sampler2DArray u_src;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+vec3 tap(vec2 uv) { return textureLod(u_src, vec3(clamp(uv, b_clamp.xy, b_clamp.zw), 0.0), b_tap.x).rgb; }
+void main() {
+    vec3 c;
+    if (b_tap.y > 0.5) {
+        float d = b_tap.z;
+        c = 0.25 * (tap(v_uv + vec2(-d, -d)) + tap(v_uv + vec2(d, -d)) + tap(v_uv + vec2(-d, d)) + tap(v_uv + vec2(d, d)));
+    } else {
+        c = tap(v_uv);
+    }
+    o_color = vec4(c, 1.0);
+}
+)";
+
+// ---- M-LENSRAIN 42c: rain on the camera lens (Forward3D::record_lens_rain), after the flare and before bloom. One
+// fullscreen pass from post_source_ (u_src, bank kAlbedo, linear clamp) into the post-fx ping-pong target. LensRainU
+// rides bank kPass; its C++ mirror is LensRainU in forward3d.cpp (static_asserts on kLensRainUBytes and the offsets).
+// Everything in it comes from lens_rain_frame (mce/render/lens_rain.h) and the tier's drop grid count.
+//
+// Units: p = v_uv * (aspect, 1) is the position in view heights (v = 0 is the bottom row, the fullscreen pass's
+// convention), so drops are round on any aspect. A grid layer cuts p into square cells of 0.22 * size view heights
+// (about 6 across a 4:3 view at size 1); each cell holds at most one drop, which never leaves its cell (its centre
+// stays a radius inside it), so a pixel only ever looks at its own cell: no neighbour loop. Because of that,
+// amount * density saturates at one drop per cell and grid: past 1 it only fades the last drops fully in.
+//
+// Per cell (h0 = lens_rain_hash(cell, layer seed), the C++ hash ported constant for constant in lr_mix / lr_hash):
+// bits 0..11  u, the drop exists where e = amount * density - u > 0; it fades in over e 0..0.05 (so a rising or
+//             falling wetness grows and shrinks drops instead of popping them);
+// bits 12..23 the fall phase offset;   bits 24..31 the fall speed variation, 0.5..1.5.
+// h2 = lens_rain_hash(h0, 0xffffffff, layer seed) (a cycle index never reaches that value): the drop's size, fixed per
+// cell, so the fall cycle length below never depends on a per-cycle value: full radius 0.18..0.40 of the cell (one
+// grid at amount 1 covers about 0.3 of the view, two about 0.48), times 0.55..1 with the amount; the big half of the
+// drops leaves trails.
+// Per fall cycle (h1 = lens_rain_hash(h0, cycle, layer seed): a fresh drop every time it re-seeds at the cell top):
+// bits 8..19 the x position inside the cell.
+// Time: r_look.w is the frame time wrapped to the CPU's 600 s period, as a share of it (0..1), so the whole field
+// repeats every 600 s. A drop makes n whole fall cycles per period, n = round(the view heights a drop falls per period
+// / its travel cell - 2 * full radius), so it falls at about fall_speed view heights per minute (times its 0.5..1.5
+// variation; a drop drawn below full size travels a little further at the same n, so a little faster); any
+// fall_speed > 0 makes n at least 1 (at very small speeds the rounding to whole cycles dominates: at least one fall per
+// 600 s), fall_speed 0 leaves the drops still. phase = fract(w * n + offset) is continuous across the wrap, and so is
+// the cycle index taken mod n (floor(n + offset) mod n == floor(offset) mod n): the wrap never pops. A still drop sits
+// in the fade-free middle of the cycle. A drop fades in over the first tenth of its cycle and out over the last, so
+// re-seeding at the cell edge does not pop.
+//
+// Inside a drop (q = d / radius, d = p - centre, s = |q|) the source is read at centre + d * (1 - 1.5 r) * (1 + 1.5 r
+// s^2), r = refraction: the factor's sign depends on r only and its size grows with s, so the sampled radius grows
+// monotonically from the centre to the rim (no fold back; a lens, strongest toward the rim) for every refraction.
+// r 0 reads p itself; 0 < r < 2/3 an upright, magnified view; r = 2/3 the centre's colour over the whole drop (the
+// focus); r > 2/3 the scene around the drop mirrored (upside down and left-right), the sampled radius growing faster
+// than s toward the rim (the drop shows ever more of the scene there). A thin rim brightens by 1 + 0.5 * rim. A big falling drop leaves a trail between where its cycle started and where it is: a
+// one-tap vertical smear (the source a little above, 1.1 times as bright: the wet film), weighted by `trail`, at most
+// 0.35 radius to either side. Between the drops the glass softens the picture: a 9-tap tent (weights 1 2 1 / 2 4 2 /
+// 1 2 1, the centre is the exact texel) mixed in by blur * amount, 1.5 texels apart up to 360 rows and proportionally
+// wider above (its look on a large display goes to the GPU list). Portable on purpose: one block, one combined sampler
+// at the post bank, explicit texelFetch / textureLod (no implicit derivatives anywhere, so the non-uniform `continue`
+// and branches are safe), constant loop bounds (two layers, the second skipped by a uniform test), u32 math that wraps
+// as the C++ does.
+inline constexpr int kLensRainUBytes = 48;  // 3 vec4: drop, look, frame
+inline constexpr int kLensRainMaxLayers = 2;  // the shader's layer loop bound (QualitySettings::lens_rain_layers <= 2)
+constexpr const char* kLensRainFS = R"(#version 450 core
+layout(std140, binding = 1) uniform LensRainU {
+    vec4 r_drop;   // x: amount (0..1, > 0 when recorded), y: density (0..4), z: size (0.25..4), w: refraction (0..2)
+    vec4 r_look;   // x: blur (0..1), y: trail (0..1), z: view heights a speed-1 drop falls per wrap period, w: time (0..1 of it)
+    vec4 r_frame;  // x: aspect (width / height), y: seed & 0xffff, z: seed >> 16 (both exact in a float), w: grids (1, 2)
+};
+layout(binding = 6) uniform sampler2D u_src;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+
+// lens_rain_hash (src/engine/render/src/lens_rain.cpp), step for step: lowbias32 mixes, u32 wrapping arithmetic.
+uint lr_mix(uint x) {
+    x ^= x >> 16u;
+    x *= 0x7feb352du;
+    x ^= x >> 15u;
+    x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}
+uint lr_hash(uint cx, uint cy, uint seed) {
+    uint h = lr_mix(cx);
+    h = lr_mix(h ^ (cy * 0x9e3779b9u));
+    h = lr_mix(h ^ seed);
+    return h;
+}
+float lr_unit12(uint h) { return float(h & 0xfffu) / 4096.0; }  // 12 bits -> [0, 1)
+vec3 lr_src(vec2 uv) { return textureLod(u_src, clamp(uv, vec2(0.0), vec2(1.0)), 0.0).rgb; }
+
+void main() {
+    vec3 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0).rgb;
+    vec2 size = vec2(textureSize(u_src, 0));
+    float amount = r_drop.x;
+
+    // The wet glass between the drops. blur * amount 0 keeps src exactly (mix(a, b, 0) == a).
+    vec2 tx = vec2(1.5 * max(1.0, size.y / 360.0)) / size;
+    vec3 tent = src * 4.0;
+    for (int j = -1; j <= 1; ++j) {
+        for (int i = -1; i <= 1; ++i) {
+            if (i == 0 && j == 0) continue;
+            tent += lr_src(v_uv + vec2(float(i), float(j)) * tx) * float((2 - abs(i)) * (2 - abs(j)));
+        }
+    }
+    vec3 col = mix(src, tent * (1.0 / 16.0), clamp(r_look.x * amount, 0.0, 1.0));
+
+    uint seed = uint(r_frame.y) | (uint(r_frame.z) << 16u);
+    vec2 p = v_uv * vec2(r_frame.x, 1.0);
+    float aa = 1.5 / size.y;  // the drop's edge is smoothed over 1.5 rows
+    for (int l = 0; l < 2; ++l) {
+        if (float(l) >= r_frame.w) break;  // uniform: the tier's grid count
+        // The second grid: smaller cells (0.62), shifted off the first's lines, its own seed.
+        float cell = 0.22 * r_drop.z * (l == 0 ? 1.0 : 0.62);
+        vec2 g = p / cell + (l == 0 ? vec2(0.0) : vec2(0.37, 0.53));  // >= 0: the cell index is a plain uint
+        vec2 gi = floor(g);
+        vec2 f = (g - gi) * cell;  // the position in the cell, view heights
+        uint lseed = seed + uint(l) * 0x632be5abu;
+        uint h0 = lr_hash(uint(gi.x), uint(gi.y), lseed);
+        float e = amount * r_drop.y - lr_unit12(h0);
+        if (e <= 0.0) continue;  // no drop in this cell
+        uint h2 = lr_hash(h0, 0xffffffffu, lseed);
+        float big = float(h2 & 0xffu) / 255.0;
+        float rfull = (0.18 + 0.22 * big) * cell;
+        float rr = rfull * mix(0.55, 1.0, amount);
+        float off0 = lr_unit12(h0 >> 12u);
+        float n = floor(r_look.z * (0.5 + float(h0 >> 24u) / 256.0) / (cell - 2.0 * rfull) + 0.5);
+        if (r_look.z > 0.0) n = max(n, 1.0);
+        float phase;
+        uint cyc;
+        if (n > 0.5) {
+            float x = r_look.w * n + off0;
+            phase = fract(x);
+            cyc = uint(x) % uint(n);
+        } else {
+            phase = 0.1 + 0.8 * off0;
+            cyc = 0u;
+        }
+        uint h1 = lr_hash(h0, cyc, lseed);
+        float top = cell - rr;  // where a cycle starts (v grows upward: the drop runs down toward rr)
+        vec2 c = vec2(rr + (cell - 2.0 * rr) * lr_unit12(h1 >> 8u), mix(top, rr, phase));
+        float fade = smoothstep(0.0, 0.05, e) * smoothstep(0.0, 0.1, phase) * (1.0 - smoothstep(0.9, 1.0, phase));
+        vec2 d = f - c;
+        if (n > 0.5 && r_look.y > 0.0 && d.y > 0.0 && f.y < top) {
+            // The run above a big drop: strongest right behind it, gone at the cycle's start, narrower than the drop.
+            float across = 1.0 - smoothstep(0.0, 0.35 * rr, abs(d.x));
+            float along = 1.0 - d.y / max(top - c.y, 1e-4);
+            float wt = 0.6 * r_look.y * smoothstep(0.5, 1.0, big) * fade * across * along;
+            // The film of water left behind catches a little light: 1.1 times the smeared source.
+            if (wt > 0.0) col = mix(col, lr_src(v_uv + vec2(0.0, 0.5 * d.y)) * 1.1, wt);
+        }
+        float dist = length(d);
+        if (dist < rr) {
+            vec2 q = d / rr;  // the unit disc
+            float s2 = dot(q, q);
+            vec2 m = c + d * ((1.0 - 1.5 * r_drop.w) * (1.0 + 1.5 * r_drop.w * s2));  // the point the drop shows
+            vec2 o = m - f;  // view heights; x back to uv by the aspect
+            float rim = smoothstep(0.7, 1.0, sqrt(s2));
+            vec3 drop = lr_src(v_uv + vec2(o.x / r_frame.x, o.y)) * (1.0 + 0.5 * rim);
+            col = mix(col, drop, fade * (1.0 - smoothstep(rr - aa, rr, dist)));
+        }
+    }
+    o_color = vec4(col, 1.0);
+}
+)";
+
+// ---- M-HEATHAZE 43c: heat haze (Forward3D::record_heat_haze), after the flare and the lens rain and before bloom. One
+// fullscreen pass from post_source_ (u_src, bank kAlbedo, linear clamp) and the half-resolution opaque prepass (u_gbuf,
+// bank kNormal, point: a = the view depth, 0 for sky) into the post-fx ping-pong target. HazeU rides bank kPass; its
+// C++ mirror is HazeU in forward3d.cpp (static_asserts on kHazeUBytes and the offsets). Everything in it comes from
+// heat_haze_frame (mce/render/heat_haze.h), the view's projection and the scene clock.
+//
+// Units: p = v_uv * (aspect, 1) in view heights (v = 0 the bottom row, the fullscreen pass's convention); a volume's
+// screen disc is its projected centre and screen radius (view heights). Per volume (constant bound 8, a uniform break
+// at the count): w = heat_haze_falloff(|p - c| / r, softness) ported literally (hh_falloff); the depth mask
+// m = smoothstep(near - 0.5, near + 0.5, the pixel's distance), where the distance is the prepass view depth times the
+// pixel ray's length (heat_haze_project's near depth is a distance along the ray, not a view z) and sky counts as far;
+// offset += hh_dir(q) * strength * w * m * 0.02 view heights, q = (p - c) / r * kHazeCells * scale. hh_dir is two
+// octaves (the second at twice the frequency, half the weight) of a two-channel value noise on heat_haze_hash, ported
+// constant for constant (hh_mix / hh_hash, seeds 4 * volume + channel); its lattice rows wrap every 256 cells (& 255u:
+// exact for negative indices, since 256 divides 2^32) and the field rises by HazeU's phase, rise * kHazeCells * scale
+// cells per second wrapped by the CPU to 0..256 (so the rising field repeats seamlessly and the f32 coordinates stay
+// small however long the clock runs). A pixel that no volume moves (outside every disc, or masked) is the source exactly
+// (texelFetch). Otherwise the source is read at uv + offset (bilinear); a lookup that lands on a pixel nearer than the
+// nearest contributing volume (an occluder in front of the haze that the displacement would pull in) falls back to the
+// undisplaced pixel, smoothly over the same 1 m band, so a front object's silhouette stays sharp from both sides.
+// Portable on purpose: one block, combined samplers at the post banks, explicit texelFetch / textureLod (no implicit
+// derivatives anywhere, so the non-uniform `continue` is safe), constant loop bounds, u32 math that wraps as the C++
+// does, int -> uint conversions that keep the bit pattern (GLSL, SPIR-V, MSL and WGSL alike).
+inline constexpr int kHazeUBytes = 272;  // 17 vec4: frame, then 2 per volume
+inline constexpr int kHazeMaxVolumes = 8;  // the shader's loop bound (= kHeatHazeMaxVolumes, scene3d.h)
+inline constexpr float kHazeCells = 3.0f;  // noise lattice cells per screen radius at scale 1 (kHazeFS)
+inline constexpr float kHazePeriodCells = 256.0f;  // the lattice rows' wrap (kHazeFS's & 255u)
+// heat_haze_hash (src/engine/render/src/heat_haze.cpp), step for step. A macro so test_render3d_heat_haze_gl can run the
+// port alone and compare it with the C++ hash bit for bit.
+#define MCE_GLSL_HEAT_HAZE_HASH R"(
+uint hh_mix(uint x) {
+    x ^= x >> 16u;
+    x *= 0x7feb352du;
+    x ^= x >> 15u;
+    x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}
+uint hh_hash(uint x, uint y, uint seed) {
+    uint h = hh_mix(x);
+    h = hh_mix(h ^ (y * 0x85ebca6bu));
+    h = hh_mix(h ^ (seed * 0xc2b2ae35u));
+    return h;
+}
+)"
+constexpr const char* kHazeFS = "#version 450 core\n" MCE_GLSL_HEAT_HAZE_HASH R"(
+layout(std140, binding = 1) uniform HazeU {
+    vec4 h_frame;     // x: volumes (1..8), y: aspect (width / height), zw: 1 / proj[0][0], 1 / proj[1][1] (0: orthographic)
+    vec4 h_vol[16];   // per volume: [2i] centre uv, near distance (m), screen radius (view heights);
+                      //             [2i + 1] strength (0..2), rise phase (cells, 0..256), scale (0.25..4), softness (0..1)
+};
+layout(binding = 6) uniform sampler2D u_src;   // the HDR frame, linear clamp
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+
+const float kCells = 3.0;  // kHazeCells
+
+// heat_haze_falloff (heat_haze.cpp), literally; softness is already clamped by heat_haze_frame.
+float hh_falloff(float d, float s) {
+    d = max(d, 0.0);
+    if (s <= 0.0) return d < 1.0 ? 1.0 : 0.0;
+    float x = clamp((d - (1.0 - s)) / s, 0.0, 1.0);
+    return clamp(1.0 - x * x * (3.0 - 2.0 * x), 0.0, 1.0);
+}
+float hh_unit(uint h) { return float(h & 0xffffu) / 32767.5 - 1.0; }  // 16 bits -> [-1, 1]
+// Value noise on the lattice, rows wrapped every 256 cells. -1..1.
+float hh_noise(vec2 q, uint seed) {
+    vec2 i = floor(q);
+    vec2 f = q - i;
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    uint x0 = uint(int(i.x));
+    uint y0 = uint(int(i.y)) & 255u;
+    uint x1 = x0 + 1u;
+    uint y1 = (y0 + 1u) & 255u;
+    float a = hh_unit(hh_hash(x0, y0, seed));
+    float b = hh_unit(hh_hash(x1, y0, seed));
+    float c = hh_unit(hh_hash(x0, y1, seed));
+    float d = hh_unit(hh_hash(x1, y1, seed));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+// The displacement direction at q (lattice cells), rising by `phase` cells: two octaves, two channels. |each| <= 1.
+vec2 hh_dir(vec2 q, float phase, uint seed) {
+    vec2 q1 = vec2(q.x, q.y - phase);
+    float phase2 = 2.0 * phase;
+    if (phase2 >= 256.0) phase2 -= 256.0;  // a whole wrap: the same rows
+    vec2 q2 = vec2(2.0 * q.x + 17.0, 2.0 * q.y - phase2);
+    float x = hh_noise(q1, seed) + 0.5 * hh_noise(q2, seed + 2u);
+    float y = hh_noise(q1, seed + 1u) + 0.5 * hh_noise(q2, seed + 3u);
+    return vec2(x, y) * (1.0 / 1.5);
+}
+
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    float aspect = h_frame.y;
+    vec2 p = v_uv * vec2(aspect, 1.0);
+    // The pixel's distance along its ray (sky: far, so the haze bends the horizon).
+    vec2 ndc = v_uv * 2.0 - 1.0;
+    vec2 slope = ndc * h_frame.zw;
+    float ray = sqrt(1.0 + dot(slope, slope));
+    float z = textureLod(u_gbuf, v_uv, 0.0).a;
+    float dist = z > 0.0 ? z * ray : 1e30;
+    vec2 offset = vec2(0.0);
+    float nearest = 1e30;
+    for (int i = 0; i < 8; ++i) {
+        if (float(i) >= h_frame.x) break;  // uniform: the volume count
+        vec4 a = h_vol[2 * i];
+        vec4 b = h_vol[2 * i + 1];
+        vec2 d = p - a.xy * vec2(aspect, 1.0);
+        float w = hh_falloff(length(d) / a.w, b.w);
+        if (w <= 0.0) continue;
+        float m = smoothstep(a.z - 0.5, a.z + 0.5, dist);
+        if (m <= 0.0) continue;  // the pixel is in front of the haze
+        vec2 q = d / a.w * (kCells * b.z);
+        offset += hh_dir(q, b.y, uint(i) * 4u) * (b.x * w * m * 0.02);
+        nearest = min(nearest, a.z);
+    }
+    if (offset.x == 0.0 && offset.y == 0.0) {
+        o_color = src;  // untouched, bit for bit
+    } else {
+        vec2 uv2 = v_uv + vec2(offset.x / aspect, offset.y);
+        vec4 moved = textureLod(u_src, clamp(uv2, vec2(0.0), vec2(1.0)), 0.0);
+        float z2 = textureLod(u_gbuf, uv2, 0.0).a;
+        float dist2 = z2 > 0.0 ? z2 * ray : 1e30;
+        // 1: the lookup lies behind the haze's near surface; 0: it landed on a nearer occluder (keep the pixel).
+        float keep = smoothstep(nearest - 0.5, nearest + 0.5, dist2);
+        o_color = keep >= 1.0 ? vec4(moved.rgb, src.a) : (keep <= 0.0 ? src : vec4(mix(src.rgb, moved.rgb, keep), src.a));
+    }
+}
+)";
+
+// ---- M-UNDERWATER 44c: the camera under water (Forward3D::record_underwater), after the flare and before the lens rain,
+// the heat haze and bloom. One fullscreen pass from post_source_ (u_src, bank kAlbedo, linear clamp) and, at detail 1 and
+// 2, the half-resolution opaque prepass (u_gbuf, bank kNormal, point: a = the view depth, 0 for sky or nothing drawn; at
+// detail 0 the 1 x 1 ao_off_ is bound and never read) into the post-fx ping-pong target. UnderwaterU rides bank kPass;
+// its C++ mirror is UnderwaterU in forward3d.cpp (static_asserts on kUnderwaterUBytes and every offset). Everything in it
+// comes from underwater_frame (mce/render/underwater.h, the single source of truth for the look's numbers): the
+// critical cosine of the Snell window and the fog's far cap ride in the w of u_up and u_fwd, so no constant of the
+// helpers is repeated here. The functions of MCE_GLSL_UNDERWATER are ports of underwater_window, _lid_distance and
+// _transmittance, step for step; test_render3d_underwater_gl runs them alone on the GPU against the C++ helpers.
+//
+// Per pixel (detail 1 and 2):
+// 1. uv2 = uv + s * amp * (wx / aspect, wy): wx = 0.7 sin(38 uv.y + ph1.x) (+ 0.3 sin(71 uv.y + ph2.x) at detail 2),
+//    wy = 0.7 sin(43 uv.x + ph1.y) (+ 0.3 sin(79 uv.x + ph2.y)), in view heights; the phases are whole-cycle and wrapped
+//    to 0..2 pi on the CPU, so the arguments stay below 80; uv2 is clamped to the frame.
+// 2. the world ray of uv2, dir = normalize(right * ndc.x * slope_x + up * ndc.y * slope_y + fwd), and the prepass
+//    distance d = a * |(ndc * slope, 1)| (the view depth times the ray length), or the far cap where a == 0.
+// 3. an up-going ray (dir.y > 0) whose distance to the mean surface t_s = max(cam_depth, 0) / dir.y is below d is the
+//    lid: the scene colour is discarded for mix(scatter, window colour, window(dir.y)) seen through t_s of water.
+//    (cam_depth <= 0, the camera in the band above the mean surface, makes t_s 0: the whole upper half is the lid,
+//    faded in by s, so the lid does not pop when the camera crosses the mean level.)
+// 4. otherwise absorption and fog over d: c * T + scatter * (1 - mean(T)), T = exp(-sigma * d).
+// 5. out = mix(the unwobbled source, that colour, s): s is the surface-crossing blend times the strength.
+// Detail 0 (Low, or no prepass pipeline) is the flat tint: one tap, sigma already times the flat distance (the CPU), so
+// the shader takes d = 1; no wobble, no lid, no depth read.
+// Portable on purpose: one block, combined samplers at the post banks, explicit texelFetch / textureLod (no derivatives
+// anywhere), no loop, branches on uniforms or per-pixel values only around taps with explicit lod, exp only of
+// non-positive numbers, sin of small arguments, every division by a clamped value (GLSL, SPIR-V, MSL and WGSL alike).
+inline constexpr int kUnderwaterUBytes = 128;  // 8 vec4: frame, right, up, fwd, sigma, scatter, lid, phase
+#define MCE_GLSL_UNDERWATER R"(
+// underwater_window (underwater.cpp), literally: c the critical cosine, s the edge softness (both from the CPU).
+float uw_window(float dir_y, float c, float s) {
+    float lo = c - s;
+    float x = clamp((dir_y - lo) / (2.0 * s), 0.0, 1.0);
+    return x * x * (3.0 - 2.0 * x);
+}
+// underwater_lid_distance: cam_depth / max(dir_y, 1e-3), clamped to 0..far_cap.
+float uw_lid_distance(float cam_depth, float dir_y, float far_cap) {
+    float y = dir_y > 1e-3 ? dir_y : 1e-3;
+    return clamp(cam_depth / y, 0.0, far_cap);
+}
+// underwater_transmittance: exp(-sigma * dist) per channel, dist clamped to 0..far_cap, sigma to >= 0.
+vec3 uw_transmittance(vec3 sigma, float dist, float far_cap) {
+    float d = clamp(dist, 0.0, far_cap);
+    return clamp(exp(-max(sigma, vec3(0.0)) * d), vec3(0.0), vec3(1.0));
+}
+// Absorption and fog over dist: each channel of what is seen fades at its own rate (red first), and one fog colour, the
+// scatter colour, grows with the mean transmittance.
+vec3 uw_fog(vec3 c, vec3 sigma, vec3 scatter, float dist, float far_cap) {
+    vec3 t = uw_transmittance(sigma, dist, far_cap);
+    return c * t + scatter * (1.0 - (t.r + t.g + t.b) * (1.0 / 3.0));
+}
+)"
+constexpr const char* kUnderwaterFS = "#version 450 core\n" MCE_GLSL_UNDERWATER R"(
+layout(std140, binding = 1) uniform UnderwaterU {
+    vec4 u_frame;    // x: submersion s (0..1], y: aspect (width / height), zw: 1 / proj[0][0], 1 / proj[1][1]
+    vec4 u_right;    // xyz: the camera's right (world), w: the camera's depth below the mean surface (m, render-relative)
+    vec4 u_up;       // xyz: the camera's up, w: the Snell window's critical cosine (kUnderwaterWindowCos)
+    vec4 u_fwd;      // xyz: the camera's forward, w: the fog's far cap (kUnderwaterFarCap, m)
+    vec4 u_sigma;    // rgb: absorption per metre (detail 0: times the flat distance), w: wobble amplitude (view heights)
+    vec4 u_scatter;  // rgb: the fog colour, w: the detail tier (0, 1, 2)
+    vec4 u_lid;      // rgb: the window colour, w: the window's edge softness
+    vec4 u_phase;    // the wobble phases (radians, 0..2 pi): xy octave 1 (x, y), zw octave 2
+};
+layout(binding = 6) uniform sampler2D u_src;   // the HDR frame, linear clamp
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled (detail 1 and 2)
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    float s = u_frame.x;
+    float far_cap = u_fwd.w;
+    vec3 c;
+    if (u_scatter.w < 0.5) {
+        c = uw_fog(src.rgb, u_sigma.rgb, u_scatter.rgb, 1.0, far_cap);  // the flat tint: sigma holds the distance
+    } else {
+        float wx = 0.7 * sin(v_uv.y * 38.0 + u_phase.x);
+        float wy = 0.7 * sin(v_uv.x * 43.0 + u_phase.y);
+        if (u_scatter.w > 1.5) {
+            wx += 0.3 * sin(v_uv.y * 71.0 + u_phase.z);
+            wy += 0.3 * sin(v_uv.x * 79.0 + u_phase.w);
+        }
+        float amp = s * u_sigma.w;
+        vec2 uv2 = clamp(v_uv + amp * vec2(wx / max(u_frame.y, 1e-3), wy), vec2(0.0), vec2(1.0));
+        vec3 seen = textureLod(u_src, uv2, 0.0).rgb;
+        vec2 slope = (uv2 * 2.0 - 1.0) * u_frame.zw;
+        vec3 dir = normalize(u_right.xyz * slope.x + u_up.xyz * slope.y + u_fwd.xyz);
+        float z = textureLod(u_gbuf, uv2, 0.0).a;
+        float d = z > 0.0 ? z * sqrt(1.0 + dot(slope, slope)) : far_cap;
+        float t_s = uw_lid_distance(max(u_right.w, 0.0), dir.y, far_cap);
+        if (dir.y > 0.0 && t_s < d) {
+            vec3 lid = mix(u_scatter.rgb, u_lid.rgb, uw_window(dir.y, u_up.w, u_lid.w));
+            c = uw_fog(lid, u_sigma.rgb, u_scatter.rgb, t_s, far_cap);
+        } else {
+            c = uw_fog(seen, u_sigma.rgb, u_scatter.rgb, d, far_cap);
+        }
+    }
+    o_color = vec4(s >= 1.0 ? c : mix(src.rgb, c, s), src.a);
+}
+)";
+
+// ---- M-SUNSHAFTS 45c: sun light shafts (Forward3D::record_sun_shafts), after the exposure histogram and before the flare.
+// Two fullscreen passes. kShaftsFS accumulates the rays at half resolution into shafts_buf_ (R11G11B10F): it reads the HDR
+// frame (u_src, bank kAlbedo, linear clamp) and the half-resolution opaque prepass (u_gbuf, bank kNormal, point: a = the
+// view depth, exactly 0 for sky). kShaftsCompFS adds them at full resolution into the post-fx ping-pong target: it reads
+// post_source_ (u_src, bank kAlbedo, texelFetch), the prepass (u_gbuf, bank kNormal, point: the pixel's own veil) and the
+// ray buffer (u_rays, bank kOrm, linear clamp: the bilinear upsample). ShaftsU rides bank kPass in both; its C++ mirror is
+// ShaftsU in forward3d.cpp (static_asserts on kShaftsUBytes and every offset). Everything in it comes from
+// sun_shafts_frame (mce/render/sun_shafts.h).
+//
+// Per half-resolution pixel (uv its centre, uv_sun the sun's uv, possibly off screen): the walk goes from uv toward the sun,
+// N samples (16 or 32: a constant loop bound of 32 with a uniform break at s_shape.w, so Medium runs the first 16
+// iterations of the same code as High) of step (uv_sun - uv) * length / N, started at a fixed per-pixel jitter (the hash
+// of the half-resolution pixel and a constant seed, never the frame: the pass keeps no history, so a moving pattern would
+// only flicker). Sample i at uv + step * (i + jitter) weighs w_i, a running product of s_shape.x (the CPU passes
+// decay^(32 / N), so the weight is a function of the position along the walk and 16 and 32 samples give the same
+// brightness, only a different smoothness); it counts only inside 0..1 (outside it adds 0 and does not clamp to the border,
+// which would smear the border pixel along the ray), only where the prepass says sky (a == 0: opaque geometry occludes; a
+// transparent surface writes no depth and never does) and only by the bright-sun mask smoothstep(t, 2t, lum) times
+// min(lum / t, 16) (t = the threshold: the sky gradient, a lit wall and a white cloud stay under it, the disk does not).
+// rays = sum / sum of the weights of the iterations run; the result is the soft clamp cap * (1 - exp(-x / cap)) of
+// rays * colour per channel (sun_shafts_soft_clamp, ported literally: never above cap; exp of a non-positive number only).
+// The composite adds rays * veil, veil = 1 on sky and 1 - exp(-depth / scatter_m) on geometry (the air in front of a near
+// wall scatters little). Portable on purpose: one block, combined samplers at the post banks, explicit textureLod and
+// texelFetch only (no implicit derivatives, no dFdx), a constant loop bound with a uniform break, no pow, max(x, 1e-3)
+// before every division, u32 math that wraps as the C++ does (GLSL, SPIR-V, MSL and WGSL alike).
+inline constexpr int kShaftsUBytes = 64;      // 4 vec4: sun, shape, color, comp
+inline constexpr int kShaftsMaxSamples = 32;  // the shader's loop bound (sun_shafts_samples' largest count)
+inline constexpr unsigned kShaftsSeed = 0x5AFE5u;  // the jitter's constant seed (under 2^24: exact as a float)
+// sun_shafts_hash (src/engine/render/src/sun_shafts.cpp), step for step. A macro so test_render3d_sun_shafts_gl can run the
+// port alone and compare it with the C++ hash bit for bit.
+#define MCE_GLSL_SUN_SHAFTS_HASH R"(
+uint ss_mix(uint x) {
+    x ^= x >> 16u;
+    x *= 0x7feb352du;
+    x ^= x >> 15u;
+    x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}
+uint ss_hash(uint x, uint y, uint seed) {
+    uint h = ss_mix(x);
+    h = ss_mix(h ^ (y * 0x85ebca6bu));
+    h = ss_mix(h ^ (seed * 0xc2b2ae35u));
+    return h;
+}
+)"
+#define MCE_GLSL_SHAFTS_U R"(
+layout(std140, binding = 1) uniform ShaftsU {
+    vec4 s_sun;    // xy the sun's uv (fullscreen convention, may lie outside 0..1), z aspect, w length (0.1..1)
+    vec4 s_shape;  // x per-sample weight factor (decay^(32 / N)), y threshold, z cap, w samples N (16 or 32)
+    vec4 s_color;  // rgb tint * intensity * strength, w the jitter seed (an exact float)
+    vec4 s_comp;   // x the veil distance scatter_m (m), yzw 0
+};
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+)"
+constexpr const char* kShaftsFS = "#version 450 core\n" MCE_GLSL_SUN_SHAFTS_HASH MCE_GLSL_SHAFTS_U R"(
+layout(binding = 6) uniform sampler2D u_src;   // the HDR frame, linear clamp
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+// sun_shafts_soft_clamp (sun_shafts.cpp), literally (cap is 0..8 from sun_shafts_frame).
+float ss_soft_clamp(float x, float cap) {
+    if (!(cap > 0.0)) return 0.0;
+    return cap * (1.0 - exp(-max(x, 0.0) / cap));
+}
+void main() {
+    uvec2 px = uvec2(gl_FragCoord.xy);
+    float jitter = float(ss_hash(px.x, px.y, uint(s_color.w))) * (1.0 / 4294967296.0);
+    float n = s_shape.w;
+    vec2 stepv = (s_sun.xy - v_uv) * (s_sun.w / max(n, 1.0));
+    float thr = max(s_shape.y, 1e-3);
+    float w = 1.0;
+    float acc = 0.0;
+    float norm = 0.0;
+    for (int i = 0; i < 32; ++i) {
+        if (float(i) >= n) break;  // uniform: the tier's sample count
+        vec2 p = v_uv + stepv * (float(i) + jitter);
+        float inside = (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) ? 1.0 : 0.0;
+        float sky = textureLod(u_gbuf, p, 0.0).a == 0.0 ? 1.0 : 0.0;
+        float lum = dot(textureLod(u_src, p, 0.0).rgb, vec3(0.2126, 0.7152, 0.0722));
+        lum = (lum == lum) ? lum : 0.0;  // a NaN texel must not become a streak
+        float mask = smoothstep(thr, 2.0 * thr, lum);
+        acc += w * inside * sky * mask * min(lum / thr, 16.0);
+        norm += w;
+        w *= s_shape.x;
+    }
+    vec3 rays = s_color.rgb * (acc / max(norm, 1e-3));
+    float cap = s_shape.z;
+    o_color = vec4(ss_soft_clamp(rays.r, cap), ss_soft_clamp(rays.g, cap), ss_soft_clamp(rays.b, cap), 1.0);
+}
+)";
+constexpr const char* kShaftsCompFS = "#version 450 core\n" MCE_GLSL_SHAFTS_U R"(
+layout(binding = 6) uniform sampler2D u_src;   // post_source_, read texel for texel
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+layout(binding = 8) uniform sampler2D u_rays;  // shafts_buf_, linear clamp (the bilinear upsample)
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    vec3 rays = textureLod(u_rays, v_uv, 0.0).rgb;
+    float z = textureLod(u_gbuf, v_uv, 0.0).a;
+    float veil = z == 0.0 ? 1.0 : 1.0 - exp(-max(z, 0.0) / max(s_comp.x, 1e-3));
+    o_color = vec4(src.rgb + rays * veil, src.a);
+}
+)";
+
+// ---- M-CLOUDSHADOW 51c: cloud shadows (Forward3D::record_cloud_shadow), after the exposure histogram and before the sun
+// shafts. One fullscreen pass from post_source_ (u_src, bank kAlbedo, texelFetch) and the half-resolution opaque prepass
+// (u_gbuf, bank kNormal, point: a = the view depth, exactly 0 where nothing was drawn) into the post-fx ping-pong target.
+// CloudShadowU rides bank kPass; its C++ mirror is CloudShadowU in forward3d.cpp (static_asserts on kCloudShadowUBytes and
+// every offset). The cloud values are the sky's own (cloud_params: p_cloud, p_cloud2), the octave count the tier's.
+//
+// Per pixel: z = the prepass depth at v_uv; z <= 0 (sky, or a NaN) writes src unchanged. Otherwise the view-space point is
+// rebuilt as kAoFS does ((ndc + proj[2].xy) * z / (proj[0][0], proj[1][1]), -z) and turned into the camera-relative world
+// offset p (right, up, back: the inverse of the view's rotation; neither the camera's position nor the floating origin
+// enters, as in the sky layer). Then, step for step as the CPU twin (mce/render/cloud_shadow.h): cloud_shadow_point with
+// the camera at 0 (rise = height - p.y; no hit at or above the plane), cloud_noise (q = xz / cell - drift mod 64; 1, 2 or 3
+// of the sky's octaves through MCE_GLSL_CLOUD_NOISE, the reduced sums renormalized), cloud_density (smoothstep(t, t + 0.12 +
+// 0.3 softness, n), t = 0.78 - 0.6 coverage, times 0.55 + 0.45 density) and cloud_shadow_factor (1 - strength * density *
+// sun share * smoothstep(0.02, 0.25, sun.y)); the pixel's rgb is multiplied by the factor, alpha kept. With the main
+// pass's exp² fog (c_drift.z != 0; the volumetric fog, which replaces it, is not modelled) only the surface part of the
+// pixel is shaded, exactly (cloud_shadow_shade): src - (1 - factor) (src - (1 - T) fog), T = exp(-(density * distance)²).
+// A depth of 6e4 or more (half-float overflow to +inf) counts as sky; a non-finite plane point leaves the pixel unshaded. The CPU records the
+// pass only with the sun at or above kCloudShadowMinSunY, so the division by c_sun.y is safe. Portable: one block,
+// combined samplers at the post banks, textureLod and texelFetch only, no loops, u32 math that wraps as the C++ does.
+inline constexpr int kCloudShadowUBytes = 128;  // 8 vec4: proj, right, up, back, sun, shade, drift, fog
+#define MCE_GLSL_CLOUD_SHADOW_U R"(
+layout(std140, binding = 1) uniform CloudShadowU {
+    vec4 c_proj;   // x proj[0][0], y proj[1][1], z proj[2][0], w proj[2][1] (the unjittered projection, as kAoFS)
+    vec4 c_right;  // xyz the camera's right (world), w 1 / noise cell (1/m, p_cloud.z)
+    vec4 c_up;     // xyz the camera's up, w the plane's height above the camera (m, p_cloud.w)
+    vec4 c_back;   // xyz the camera's back (-forward), w coverage (p_cloud.x, > 0)
+    vec4 c_sun;    // xyz the unit direction toward the sun (y >= 0.02), w the layer's density (p_cloud.y)
+    vec4 c_shade;  // x strength, y the sun's share of the light, z softness, w octaves (1, 2 or 3)
+    vec4 c_drift;  // xy the drift in noise cells (p_cloud2.xy), z the exp² fog density (0: none or volumetric), w 0
+    vec4 c_fog;    // rgb the exp² fog colour (p_fog.rgb), w 0
+};
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+)"
+constexpr const char* kCloudShadowFS = "#version 450 core\n" MCE_GLSL_CLOUD_NOISE MCE_GLSL_CLOUD_SHADOW_U R"(
+layout(binding = 6) uniform sampler2D u_src;   // post_source_, read texel for texel
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+// cloud_noise (cloud_shadow.cpp) at the camera-relative plane xz (m).
+float cs_noise(vec2 xz) {
+    vec2 q = mod(xz * c_right.w - c_drift.xy, 64.0);
+    float o = c_shade.w;
+    float n = cloud_value(q, 64u, 0x27D4EB2Fu) * 0.55;
+    float w = 0.55;
+    if (o >= 2.0) {
+        n += cloud_value(q * 2.0, 128u, 0x165667B1u) * 0.30;
+        w += 0.30;
+    }
+    if (o >= 3.0) {
+        n += cloud_value(q * 4.0, 256u, 0xD3A2646Cu) * 0.15;
+        w += 0.15;
+    }
+    return o >= 3.0 ? n : n / w;
+}
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    float z = textureLod(u_gbuf, v_uv, 0.0).a;
+    if (!(z > 0.0 && z < 6.0e4)) {
+        o_color = src;  // sky (0), a half-float depth that overflowed to +inf, or a NaN: untouched
+        return;
+    }
+    vec2 ndc = v_uv * 2.0 - 1.0;
+    vec3 v = vec3((ndc.x + c_proj.z) * z / c_proj.x, (ndc.y + c_proj.w) * z / c_proj.y, -z);
+    vec3 p = c_right.xyz * v.x + c_up.xyz * v.y + c_back.xyz * v.z;
+    float rise = c_up.w - p.y;  // how far the point is below the plane
+    float factor = 1.0;
+    if (rise > 0.0) {
+        float t = rise / c_sun.y;
+        vec2 xz = vec2(p.x + c_sun.x * t, p.z + c_sun.z * t);
+        if (all(lessThan(abs(xz), vec2(1.0e30)))) {  // a NaN or an overflow never reaches the float-to-uint lattice
+            float n = cs_noise(xz);
+            float th = 0.78 - 0.6 * c_back.w;
+            float mask = smoothstep(th, th + (0.12 + 0.3 * c_shade.z), n);
+            float dens = mask * (0.55 + 0.45 * c_sun.w);
+            float fade = smoothstep(0.02, 0.25, c_sun.y);
+            factor = 1.0 - c_shade.x * dens * c_shade.y * fade;
+            factor = (factor == factor) ? clamp(factor, 0.0, 1.0) : 1.0;  // a NaN never reaches the frame
+        }
+    }
+    vec3 rgb = src.rgb * factor;
+    if (c_drift.z != 0.0) {
+        // cloud_shadow_shade: the main pass wrote src = s T + fog (1 - T); only the surface s is shaded.
+        float fd = c_drift.z * length(v);
+        float haze = 1.0 - exp(-fd * fd);
+        rgb = src.rgb - (1.0 - factor) * (src.rgb - haze * c_fog.rgb);
+    }
+    o_color = vec4(rgb, src.a);
+}
+)";
+
+// ---- M-CAUSTICS 52b / 52f: caustics under water (Forward3D::record_main from above, record_caustics under the water).
+// One fullscreen pass from a source frame (u_src, bank kAlbedo, texelFetch) and the half-resolution opaque prepass (u_gbuf,
+// bank kNormal, point: a = the view depth, exactly 0 where nothing was drawn) into another target: from above the opaque
+// frame into the copy kWaterFS refracts (the water then applies its own Fresnel, extinction, reflection and fog to the
+// light, 52f), under the water post_source_ into the post-fx ping-pong target after the cloud shadows.
+// CausticsU rides bank kPass; its C++ mirror is CausticsU in forward3d.cpp (static_asserts on kCausticsUBytes and every
+// offset). Every step is the CPU twin's (mce/render/caustics.h), in the same order.
+//
+// The web (MCE_GLSL_CAUSTICS_NOISE): per octave a cellular noise on an integer lattice, m cells per period (64, 128, 256),
+// the 3 x 3 cells around q wrapped; each cell's feature point jittered by pcg2d (the cloud noise's family; no sin()) and
+// moved on a closed loop (ca_loop: a parabola per half turn, no sin()) whose phase is k * c_misc.x + h, k a whole 1..3, so
+// the loop closes when the CPU's integer-wrapped clock does. v = 1 - smoothstep(0, 0.16, F2 - F1) (M-CAUSTICS 52d: not
+// squared, a softer falloff): the bright lines between neighbouring points. 0.6 v(q) + 0.3 v(2q) + 0.1 v(4q), 1 to 3
+// octaves (the tier's), the reduced sums renormalized.
+//
+// Per pixel: z = the prepass depth at v_uv; z <= 0 (sky, or a NaN) or z >= 6e4 (half-float overflow) writes src unchanged.
+// Otherwise the view-space point is rebuilt as kCloudShadowFS does and turned into the camera-relative world offset p.
+// depth = c_up.w - p.y (the plane's height above the camera minus p.y); nothing is added at or above the plane or at or
+// below max_depth. The point moves along the sun to the plane (t = depth / sun.y, the sun ray's length in water); outside
+// the drawn water square (centre c_plane.zw, half size c_back.w) nothing is added. term = pattern(xz / scale + offset) *
+// exp(-absorption t) * the depth falloff (in over the first 0.25 m, out over the last 20 % of max_depth) * the facing
+// (caustics_facing, M-CAUSTICS 52d: the prepass's view normal (u_gbuf.rgb, the same point-sampled texel as the depth)
+// turned to world space by the camera basis; smoothstep(0.6, 0.95, dot(n, sun) / sun.y), so a floor gets 1 and a face
+// that would show the web stretched (a steep wall), turned away from the sun or lit edge-on gets 0; a normal shorter than
+// 0.5, or a NaN, gets 0) * the fog the surface went through in the main pass: the exp² fog's exp(-(fog |p|)²) or, with
+// the volumetric fog in its place, its transmittance at the point (the main pass wrote s T + fog (1 - T); light added to s
+// adds term T). No water transmission (52f: from above the water applies its own to the copy).
+// The pixel's rgb gains c_color.rgb * luma(term) * chroma(src) (caustics_composite, M-CAUSTICS 52d review: the
+// surface reflects the light in its own colour; chroma = clamp(src / luma(src), 0, 4), 1 for luma(src) outside (1e-4,
+// 1e30) or NaN), alpha kept: a term of 0 leaves the pixel's bits as they are. The CPU
+// records the pass only with the sun at or above kCausticsMinSunY (the division by c_sun.y is safe) and, with the camera
+// above the water, only when the water shows what lies under it (M-WATER2 refraction). Portable: one block, combined
+// samplers at the post banks, textureLod and texelFetch only, constant-bound loops, u32 math that wraps as the C++ does.
+inline constexpr int kCausticsUBytes = 160;  // 10 vec4: proj, right, up, back, sun, color, plane, misc, vol, vol_grid
+#define MCE_GLSL_CAUSTICS_NOISE \
+    R"(
+uvec2 ca_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), both lanes
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    return v;
+}
+float ca_unit(uint h) { return float(h >> 8u) * (1.0 / 16777216.0); }
+float ca_loop(float a) {  // a closed loop in turns: period 1, -1..1, C1, no sin()
+    a = a - floor(a);
+    float b = a < 0.5 ? a : a - 0.5;
+    float v = 16.0 * b * (0.5 - b);
+    return a < 0.5 ? v : -v;
+}
+// One octave at q (cells, 0..m; m cells per period).
+float ca_cells(vec2 q, uint m, uint seed, float phase) {
+    vec2 i = floor(q);
+    vec2 f = q - i;
+    uvec2 c = uvec2(max(i, vec2(0.0))) % m;  // q may round up to m: it wraps to cell 0
+    float d1 = 64.0;
+    float d2 = 64.0;
+    for (int y = 0; y < 3; ++y) {
+        for (int x = 0; x < 3; ++x) {
+            uvec2 h = ca_hash(uvec2((c.x + uint(x) + (m - 1u)) % m + seed, (c.y + uint(y) + (m - 1u)) % m));
+            uvec2 g = ca_hash(h ^ uvec2(0x9E3779B9u, 0x85EBCA6Bu));
+            float k = float(1u + g.x % 3u);
+            float a = k * phase + ca_unit(g.y);
+            float px = float(x - 1) + (0.2 + 0.6 * ca_unit(h.x)) + 0.18 * ca_loop(a + 0.25);
+            float py = float(y - 1) + (0.2 + 0.6 * ca_unit(h.y)) + 0.18 * ca_loop(a);
+            float dx = px - f.x;
+            float dy = py - f.y;
+            float dd = dx * dx + dy * dy;
+            if (dd < d1) {
+                d2 = d1;
+                d1 = dd;
+            } else if (dd < d2) {
+                d2 = dd;
+            }
+        }
+    }
+    return 1.0 - smoothstep(0.0, 0.16, sqrt(d2) - sqrt(d1));
+}
+// caustics_pattern (caustics.cpp): q in first-octave cells, o octaves (1, 2 or 3).
+float ca_pattern(vec2 q, float phase, float o) {
+    q = mod(q, 64.0);
+    float n = ca_cells(q, 64u, 0x6C8E9CF5u, phase) * 0.6;
+    float w = 0.6;
+    if (o >= 2.0) {
+        n += ca_cells(q * 2.0, 128u, 0x2545F491u, phase) * 0.3;
+        w += 0.3;
+    }
+    if (o >= 3.0) {
+        n += ca_cells(q * 4.0, 256u, 0x9E3779B1u, phase) * 0.1;
+        w += 0.1;
+    }
+    return o >= 3.0 ? n : n / w;
+}
+)"
+#define MCE_GLSL_CAUSTICS_U R"(
+layout(std140, binding = 1) uniform CausticsU {
+    vec4 c_proj;   // x proj[0][0], y proj[1][1], z proj[2][0], w proj[2][1] (the unjittered projection, as kAoFS)
+    vec4 c_right;  // xyz the camera's right (world), w 1 / the pattern's cell (1/m)
+    vec4 c_up;     // xyz the camera's up, w the water level minus the camera's y (m; < 0: the camera is above the water)
+    vec4 c_back;   // xyz the camera's back (-forward), w the water square's half size (m)
+    vec4 c_sun;    // xyz the unit direction toward the sun (y >= 0.02), w the absorption per metre
+    vec4 c_color;  // rgb sun colour * intensity * strength * sun share * sun fade, w max_depth (m)
+    vec4 c_plane;  // xy the camera's world xz / cell wrapped to 64 (caustics_offset), zw the water square's centre - camera
+    vec4 c_misc;   // x the clock's phase 0..1 (caustics_phase), y octaves (1..3), z the exp² fog density (0: none), w 0
+    vec4 c_vol;    // the volumetric fog as the main pass's p_vol: x 1 = on (0: u_vol is not read), y slices, z far, w log2 term
+    vec4 c_vol_grid;  // as p_vol_grid: xy the froxel grid, z atlas columns, w atlas rows
+};
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+)"
+constexpr const char* kCausticsFS = "#version 450 core\n" MCE_GLSL_CAUSTICS_NOISE MCE_GLSL_CAUSTICS_U R"(
+layout(binding = 4) uniform sampler2D u_vol;   // the volumetric fog's integrated light (vol_light_), as the main pass
+layout(binding = 6) uniform sampler2D u_src;   // post_source_, read texel for texel
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+// MCE_GLSL_VOLUME's vol_fog(uv, depth).a (the transmittance the main pass multiplied the surface at view depth `depth` by),
+// on c_vol / c_vol_grid in place of p_vol / p_vol_grid.
+vec2 ca_vol_uv(vec2 uv, int slice) {
+    int cols = int(c_vol_grid.z);
+    vec2 g = c_vol_grid.xy;
+    vec2 p = clamp(uv * g, vec2(0.5), g - 0.5);
+    return (vec2(slice % cols, slice / cols) * g + p) / (g * c_vol_grid.zw);
+}
+float ca_vol(vec2 uv, float depth) {
+    float s = min(log2(1.0 + max(depth, 0.0)) / c_vol.w * c_vol.y, c_vol.y);
+    int k = int(floor(s));
+    float a = k > 0 ? textureLod(u_vol, ca_vol_uv(uv, k - 1), 0.0).a : 1.0;
+    float b = k < int(c_vol.y) ? textureLod(u_vol, ca_vol_uv(uv, k), 0.0).a : a;
+    return mix(a, b, s - float(k));
+}
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    vec4 gb = textureLod(u_gbuf, v_uv, 0.0);
+    float z = gb.a;
+    if (!(z > 0.0 && z < 6.0e4)) {
+        o_color = src;  // sky (0), a half-float depth that overflowed to +inf, or a NaN: untouched
+        return;
+    }
+    vec2 ndc = v_uv * 2.0 - 1.0;
+    vec3 v = vec3((ndc.x + c_proj.z) * z / c_proj.x, (ndc.y + c_proj.w) * z / c_proj.y, -z);
+    vec3 p = c_right.xyz * v.x + c_up.xyz * v.y + c_back.xyz * v.z;
+    float depth = c_up.w - p.y;  // how far the point is below the plane
+    vec3 term = vec3(0.0);
+    if (depth > 0.0 && depth < c_color.w) {
+        float t = depth / c_sun.y;  // the sun ray's length in water
+        vec2 xz = vec2(p.x + c_sun.x * t, p.z + c_sun.z * t);
+        // A NaN or an overflow never reaches the float-to-uint lattice; outside the drawn water square: nothing.
+        if (abs(xz.x) < 1.0e30 && abs(xz.y) < 1.0e30 && abs(xz.x - c_plane.z) <= c_back.w &&
+            abs(xz.y - c_plane.w) <= c_back.w) {
+            float pat = ca_pattern(vec2(xz.x * c_right.w + c_plane.x, xz.y * c_right.w + c_plane.y), c_misc.x, c_misc.y);
+            // caustics_facing: the surface normal (view space in the prepass) in world space, against the sun.
+            vec3 nw = c_right.xyz * gb.x + c_up.xyz * gb.y + c_back.xyz * gb.z;
+            float n2 = dot(nw, nw);
+            float facing = 0.0;
+            if (n2 >= 0.25 && n2 < 1.0e30) facing = smoothstep(0.6, 0.95, dot(nw, c_sun.xyz) / sqrt(n2) / c_sun.y);
+            float k = pat * exp(-c_sun.w * t) * (smoothstep(0.0, 0.25, depth) * (1.0 - smoothstep(0.8 * c_color.w, c_color.w, depth))) *
+                      facing;
+            // The fog the surface went through in the main pass (kMeshFS): the exp² one at the point's distance, or the
+            // volume's transmittance at its view depth. Seen from above, kWaterFS fogs the water pixel itself.
+            if (c_misc.z != 0.0) {
+                float fd = c_misc.z * sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+                k *= exp(-fd * fd);  // only the surface part of the pixel receives the light
+            }
+            if (c_vol.x > 0.5) k *= ca_vol(v_uv, z);
+            term = vec3(k);
+            term = mix(vec3(0.0), clamp(term, 0.0, 1.0), equal(term, term));  // a NaN never reaches the frame
+        }
+    }
+    // caustics_composite: the light as the surface reflects it, in the pixel's own colour.
+    const vec3 kLuma = vec3(0.2126, 0.7152, 0.0722);
+    float ls = dot(src.rgb, kLuma);
+    vec3 ch = vec3(1.0);
+    if (ls > 1.0e-4 && ls < 1.0e30) {
+        ch = src.rgb / ls;
+        ch = mix(vec3(0.0), min(max(ch, vec3(0.0)), vec3(4.0)), greaterThan(ch, vec3(0.0)));  // a NaN gives 0
+    }
+    o_color = vec4(src.rgb + c_color.rgb * dot(term, kLuma) * ch, src.a);
 }
 )";
 

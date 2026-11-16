@@ -1,0 +1,15 @@
+# Text files are checked out with LF on every platform. Windows runners default to core.autocrlf=true, which made
+# the committed samples differ from what the tools write (byte-for-byte tests: import_demo_reimport, the scene
+# round trip in test_editor). Binary files are never touched.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ogg binary
+*.wav binary
+*.ttf binary
+*.glb binary
+*.fbx binary
+*.mce binary
+*.zip binary
+*.bat text eol=crlf
+*.cmd text eol=crlf

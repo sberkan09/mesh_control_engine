@@ -1,0 +1,1 @@
+- Tests: core's `Application::quit`, `want_quit`, `exit_code` and `on_shutdown` get a direct test (run returns the quit code after one shutdown).

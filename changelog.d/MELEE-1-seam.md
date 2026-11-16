@@ -1,0 +1,1 @@
+- Kit (M-MELEE 1): `Melee3D` swings at everything in front of the attacker (cone, reach, windup, rate) and pushes `MeleeSwung3D`. Record: `docs/milestones/M-MELEE.md`.

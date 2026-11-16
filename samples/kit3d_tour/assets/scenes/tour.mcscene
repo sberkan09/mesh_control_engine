@@ -34,7 +34,8 @@
       0
      ]
     },
-    "Environment3D": {}
+    "Environment3D": {},
+    "LensFlare3D": {}
    }
   },
   {
@@ -434,6 +435,63 @@
       20,
       1,
       0
+     ]
+    }
+   }
+  },
+  {
+   "id": 22,
+   "name": "Grime",
+   "components": {
+    "DecalScatter3D": {
+     "area": [
+      4,
+      4
+     ],
+     "count": 12,
+     "size_min": 0.6,
+     "size_max": 1.6,
+     "seed": 7,
+     "color": [
+      0.12,
+      0.1,
+      0.08,
+      0.5
+     ],
+     "fade_distance_m": 40
+    },
+    "LocalTransform": {
+     "position": [
+      6,
+      0.5,
+      -4
+     ]
+    }
+   }
+  },
+  {
+   "id": 23,
+   "name": "Campfire light",
+   "components": {
+    "PointLight3D": {
+     "offset": [
+      0,
+      0.6,
+      0
+     ],
+     "intensity": 4,
+     "radius": 8
+    },
+    "LightFlicker3D": {
+     "depth": 0.4,
+     "rate_hz": 9,
+     "seed": 3
+    },
+    "LocalTransform": {
+     "position": [
+      -5,
+      0.2,
+      2
      ]
     }
    }

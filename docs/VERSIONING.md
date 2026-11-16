@@ -25,8 +25,8 @@ needs changes to compile.
    `## Unreleased` and deletes them; the bumping PR commits the fragment deletions.
 2. The bumping PR runs `python3 scripts/bump_version.py x.y.z`. It collects the fragments, updates `CMakeLists.txt`, the projects'
    `engine_version`, the user-guide example, and turns `## Unreleased` into `## x.y.z (date)`.
-3. After that PR merges, tag the merge commit `vx.y.z`: `git tag -a vx.y.z origin/dev_claude && git push origin vx.y.z`,
-   or on GitHub, Releases → Draft a new release → tag `vx.y.z`, target `dev_claude`. Cloud Claude sessions can
+3. After that PR merges, tag the merge commit `vx.y.z`: `git tag -a vx.y.z origin/master && git push origin vx.y.z`,
+   or on GitHub, Releases → Draft a new release → tag `vx.y.z`, target `master`. Cloud Claude sessions can
    push only their own branch, so they leave this step to the owner.
 
 `scripts/ci/local_ci.sh` runs `bump_version.py --check` in its walls stage, so a copy that disagrees with

@@ -27,6 +27,7 @@
 // scene's viewport size and are recreated on resize. Each stage boundary writes a GPU timestamp
 // (rhi::CommandBuffer::write_timestamp) for the NFR-F-01 per-stage budget table.
 
+#include "mce/draw_cause.h"
 #include "mce/render/scene3d.h"
 #include "mce/render/texture_store.h"
 #include "mce/rhi/command_buffer.h"
@@ -35,11 +36,14 @@
 namespace mce::render {
 
 struct Forward3DPassU;  // forward3d.cpp: the lit passes' PassU block
+struct GiProbeState;    // M-GI2: gi_probes.h, relocation and following state (kept out of this header)
+struct DynResState;     // M-DYNRES: dynres.h, the controller's state (kept out of this header)
 
 struct Forward3DDesc {
     u32 msaa = 4;            // 1 = no multisampling (the HDR target is rendered directly)
     u32 shadow_size = 2048;  // per cascade; keep ShadowSettings::resolution equal (texel snapping)
     f32 render_scale = 1.0f; // 3D targets at viewport * scale (0.5..1); tonemap/FXAA upsample (quality.h)
+    f32 dynres_floor = 0.6f; // M-DYNRES 46a: the tier's lowest dynamic render scale (0.5..1; apply_quality fills it from QualitySettings)
     bool encode_srgb_output = true;  // the backbuffer/editor targets are plain RGBA8 (see RendererDesc)
     bool timestamps = true;          // write GPU timestamps [timestamp_base, timestamp_base + kStageCount]
     u32 timestamp_base = 0;
@@ -73,6 +77,30 @@ struct Forward3DDesc {
     // grade needs none); a scene turns each on in PostFx. False (or -r.post_fx 0) draws every scene
     // without them. Auto exposure also needs compute.
     bool post_fx = true;
+    // Automatic instancing (M-VISUAL3 5a): the instanced twins of the mesh, SSAO prepass, shadow and velocity
+    // pipelines that draw Scene3D's runs. False (or -r.instancing 0) draws every run as single draws.
+    bool instancing = true;
+    // Light cookie bake pipeline and atlas (M-LIGHTCOOKIE 40a), created lazily when a scene has a cookie. False (or -r.light_cookies 0)
+    // draws every light without one.
+    bool light_cookies = true;
+    // Translucency and diffuse wrap (M-TRANSLUCENT 41a): materials carrying the factors (mce/asset/material_translucency.h) light their
+    // back and terminator. False (or -r.translucency 0) forces every draw's value to 0 for the renderer's life.
+    bool translucency = true;
+    // Edge outline pipelines (M-OUTLINE 39a), and with them the prepass pipelines the outline reads; a scene turns it on with
+    // PostFx::outline. False (or -r.edge_outline 0) draws every scene without it.
+    bool edge_outline = true;
+    // Bytes of per-copy instancing data a frame may upload over all its views (128 per main / prepass copy, 64
+    // per shadow or velocity copy, through set_storage_data); a run past it draws the copies that still fit
+    // instanced and the rest singly (Forward3DStats::instancing_overflow). The frame's budget is the smaller of this and a quarter of
+    // geometry_ring_bytes: the storage data shares that ring with the frame's transient vertices, indices and
+    // light lists, and an upload that does not fit is dropped by the device, so the budget must stay under it.
+    // Each view reserves the main pass's copies first, then the SSAO prepass's, then the velocity prepass's;
+    // the shadow passes take what is left.
+    // The default is the whole quarter of the default ring (1 MiB: about 8,000 main-pass copies), which costs no
+    // memory: the ring is allocated anyway. A city raises both (M-OPENWORLD A1: 10k visible copies at 60 Hz).
+    u32 instancing_budget = 1024 * 1024;
+    // The device's per-frame-slot geometry ring (rhi::DeviceDesc::geometry_ring_bytes): keep them equal.
+    usize geometry_ring_bytes = rhi::DeviceDesc{}.geometry_ring_bytes;
 };
 
 struct Forward3DStats {
@@ -95,6 +123,10 @@ struct Forward3DStats {
     u32 ssao_draws = 0;         // the half-size prepass's draws (SSAO, SSR and contact shadows read it)
     bool ssr = false;           // this frame traced screen-space reflections (M-VISUAL2 1)
     bool ssr_history = false;   // ... over a valid previous frame (false: nothing reflected yet)
+    bool ssr_blur = false;      // ... and the main pass gathered it blurred by roughness (r.ssr.blur, M-REFLECT2 48c)
+    bool ssr_motion = false;    // ... and the trace read the velocity buffer at its hits (r.ssr.motion, M-REFLECT2 48e)
+    bool water_reflect = false;  // this frame's water draw traced the scene for its reflection (r.water.reflect, M-WATER2 49d)
+    bool water_refract = false;  // ... and refracted the opaque copy behind it (r.water.refract, M-WATER2 49c)
     bool contact_shadows = false;  // this frame marched contact shadows toward the sun (M-VISUAL2 3)
     bool taa = false;           // this frame went through the TAA resolve
     bool taa_history = false;   // ... blending a valid history (false on the first frame or after a reset)
@@ -105,6 +137,10 @@ struct Forward3DStats {
     u32 gi_probes = 0;          // probes captured this frame (the fill's or the rolling update's)
     u32 gi_draws = 0;           // draws of those captures, over all faces
     u32 gi_lights = 0;          // the most point / spot lights one probe's captures saw
+    bool gi_visibility = false; // this frame's lookup used the visibility weight (M-GI2)
+    u32 gi_relocated = 0;       // probes moved by the latest fill or slab (M-GI2)
+    u32 gi_scrolled = 0;        // probes invalidated by a scroll this frame (M-GI2)
+    u32 gi_vis_draws = 0;       // draws of this frame's visibility capture passes (M-GI2)
     bool atmosphere = false;         // the sky came from the atmosphere (M-VISUAL 7)
     bool atmosphere_baked = false;   // ... re-baked this frame (the sun or the air changed)
     bool volumetrics = false;        // volumetric fog lit this frame (M-VISUAL 7)
@@ -114,6 +150,28 @@ struct Forward3DStats {
     bool color_vision = false;       // the color-vision correction ran this frame (M-ACCESS)
     bool dof = false;                // depth of field blurred this frame
     bool motion_blur = false;        // motion blur smeared this frame
+    bool lens_flare = false;         // the sun lens flare pass drew this frame (M-LENSFLARE)
+    f32 lens_flare_strength = 0.0f;  // its overall strength after the horizon, edge and occlusion fades (0 = not drawn)
+    bool edge_outline = false;       // the edge outline pass drew this frame (M-OUTLINE)
+    bool lens_rain = false;          // the lens rain pass drew this frame (M-LENSRAIN)
+    f32 lens_rain_amount = 0.0f;     // the wetness it drew with (0 = not drawn)
+    u32 heat_haze_volumes = 0;       // volumes the heat haze pass drew this frame (M-HEATHAZE; 0 = not drawn)
+    bool underwater = false;         // the underwater pass drew this frame (M-UNDERWATER)
+    f32 underwater_submersion = 0.0f;  // the submersion it drew with, 0..1 (0 = not drawn)
+    bool sun_shafts = false;         // the sun shafts pass drew this frame (M-SUNSHAFTS)
+    f32 sun_shafts_strength = 0.0f;  // the combined strength it drew with (0 = not drawn)
+    bool cloud_shadow = false;       // the cloud shadow pass drew this frame (M-CLOUDSHADOW)
+    f32 cloud_shadow_strength = 0.0f;  // the strength it drew with (0 = not drawn)
+    bool caustics = false;           // the caustics pass drew this frame (M-CAUSTICS)
+    f32 caustics_strength = 0.0f;    // the strength it drew with (0 = not drawn)
+    f32 render_scale = 1.0f;         // the scale this view drew at (1 = 1:1; M-DYNRES)
+    bool dynres = false;             // the dynamic resolution controller ran this frame (M-DYNRES)
+    f32 dynres_cost_ms = 0.0f;       // its smoothed measured cost converted to ms at the current scale (0 = none)
+    u32 edge_outline_taps = 0;       // neighbour taps it used per pixel (4 or 8; 0 = not drawn)
+    u32 cookie_lights = 0;           // lights that drew with a cookie this frame (M-LIGHTCOOKIE)
+    u32 cookie_layers = 0;           // atlas layers in use (distinct cookie textures)
+    bool sun_cookie = false;         // the sun's cookie shaped this frame
+    u32 translucent_draws = 0;       // draws this frame whose resolved translucency or wrap is not 0 (M-TRANSLUCENT)
     u32 batches = 0;                 // instance batches drawn (M-VISUAL 9)
     bool batches_gpu = false;        // ... culled by the compute pass (false: on the CPU)
     bool occlusion = false;          // ... and tested against the depth pyramid
@@ -130,6 +188,17 @@ struct Forward3DStats {
     bool upscaled = false;           // the spatial upsample drew the output (M-VISUAL2 2)
     bool sharpened = false;          // the contrast-adaptive sharpen drew the output
     u32 transmissive = 0;            // draws that refracted the opaque frame (M-VISUAL2 4)
+    // Automatic instancing (M-VISUAL3 5a). main_draws counts an instanced run once.
+    u32 runs_instanced = 0;          // instanced draws of the main pass
+    u32 draws_instanced = 0;         // ... the scene draws they replaced (main_draws fell by this - runs_instanced)
+    u32 shadow_runs_instanced = 0;   // instanced draws over all cascades and local shadow tiles
+    u32 shadow_draws_instanced = 0;  // ... the caster draws they replaced
+    u32 instancing_overflow = 0;     // runs of any pass drawn singly because the frame's instancing budget ran out
+    u32 instancing_bytes = 0;        // per-copy data uploaded this record()
+    // M-CONTENT 2: the scene draws of the main pass that did not take part in an instanced run, by DrawCause
+    // (core/draw_cause.h); with draws_instanced they add up to scene.draws().size(). Deterministic. Zero unless
+    // the scene asked: Scene3D::set_collect_draw_causes(true) (the player does under -perf_capture and perf_run).
+    u32 draw_causes[kDrawCauseCount] = {};
 };
 
 // Milliseconds per stage of one completed frame; -1 = not measured.
@@ -293,7 +362,8 @@ private:
     void swap_view(ViewState& v);
     void destroy_view_resources();
     ResultV create_pipelines();
-    void ensure_targets(rhi::Extent2D size);
+    void ensure_targets(rhi::Extent2D size, bool keep_history = false);  // keep_history: M-DYNRES 46c (ignored until then)
+    void update_dynres(const Scene3D& scene);  // M-DYNRES 46c (declared only until then)
     void destroy_targets();
     void timestamp(rhi::CommandBuffer& cmd, u32 stage);
     void record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene);
@@ -316,6 +386,16 @@ private:
     void record_velocity(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSFLARE 38c
+    void record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSRAIN 42c (declared only until then)
+    void record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-HEATHAZE 43c (declared only until then)
+    void record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-UNDERWATER 44c: the camera-under-water composite
+    void record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-SUNSHAFTS 45c
+    void record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-CLOUDSHADOW 51c (declared only until then)
+    void record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-CAUSTICS 52b (a stub until then)
+    void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
+    void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
+    u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     rhi::TextureHandle post_fx_target(rhi::Extent2D size);
     void record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene);
     u32 gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight);
@@ -334,8 +414,25 @@ private:
     // draws[begin, end) of the bound frame/pass state; indices >= opaque_end take the blend
     // pipelines. `main` counts them in the stats; `prepass` draws them all with the SSAO prepass;
     // `frame`: trans_src_ holds the opaque frame, so transmissive draws refract it (bank kAo).
-    void draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
-                     u32 opaque_end, DrawCache& cache, bool main, bool prepass = false, bool frame = false);
+    // `instanced`: draws[begin, end) are scene.draws() and the runs upload_runs() placed draw instanced.
+    // Returns the draws issued.
+    u32 draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
+                    u32 opaque_end, DrawCache& cache, bool main, bool prepass = false, bool frame = false,
+                    bool instanced = false, const rhi::PipelineHandle* prepass_pipes = nullptr);
+    // ---- automatic instancing (M-VISUAL3 5a)
+    struct InstSlot {  // per draw: an instanced run starting there (count >= 2) and its first slot
+        u32 count = 0;
+        u32 slot = 0;
+    };
+    // Uploads the per-copy data of the scene's opaque runs for one pass (`velocity`: the model only; else
+    // model and normal) within the budget and fills inst_slots_; false when nothing is drawn instanced.
+    enum InstPass : u32 { kInstMain, kInstPrepass, kInstVelocity, kInstShadow, kInstPassCount };
+    bool upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstPass pass);
+    void count_draw_causes(const Scene3D& scene);  // Forward3DStats::draw_causes, before the passes draw
+    // Splits the frame's remaining instancing budget into this view's per-pass reservations (main first).
+    void reserve_instancing(const Scene3D& scene);
+    // The caster list `list` (indices into shadow_draws()) of one depth pass, in caster runs.
+    void draw_casters(rhi::CommandBuffer& cmd, const Scene3D& scene, const math::mat4& view_proj, Span<const u32> list);
     // ---- scale (M-VISUAL 9, forward3d_scale.cpp)
     ResultV create_scale_pipelines();
     void destroy_scale();
@@ -371,6 +468,9 @@ private:
     rhi::PipelineHandle skinned_two_sided_;
     rhi::PipelineHandle skinned_blend_;
     rhi::PipelineHandle sky_;
+    rhi::PipelineHandle water_;  // M-WATER 15c: made on the first frame with a water plane
+    bool water_failed_ = false;  // ... and not again after the driver refused it
+    bool water_depth_ = false;   // this frame's water reads the prepass's view depth (ao_gbuf_)
     rhi::PipelineHandle bloom_down_;
     rhi::PipelineHandle bloom_up_;       // additive
     rhi::PipelineHandle tonemap_;
@@ -447,6 +547,35 @@ private:
     rhi::Extent2D fin_up_size_{};
     rhi::PipelineHandle upscale_pipe_;
     rhi::PipelineHandle sharpen_pipe_;
+    // M-LENSFLARE: the sun flare's occlusion sample and draw pipelines, and its 1x1 occlusion target. Not per-view state:
+    // the target is written and read within one record.
+    rhi::PipelineHandle flare_occ_pipe_, flare_pipe_;
+    rhi::TextureHandle flare_occ_;
+    // M-LENSRAIN: the lens rain composite pipeline (writes post_fx_target; no target of its own).
+    rhi::PipelineHandle rain_pipe_;
+    // M-HEATHAZE: the heat haze composite pipeline (writes post_fx_target; no target of its own).
+    rhi::PipelineHandle haze_pipe_;
+    // M-UNDERWATER: the underwater composite pipeline (writes post_fx_target; no target of its own).
+    rhi::PipelineHandle underwater_pipe_;
+    // M-SUNSHAFTS: the half-resolution accumulation and the full-resolution composite pipelines, and the half-resolution
+    // ray buffer (shared by the views like outline_dst_, recreated on a size change by the first view that draws shafts).
+    rhi::PipelineHandle shafts_pipe_, shafts_comp_pipe_;
+    rhi::TextureHandle shafts_buf_;
+    // M-CLOUDSHADOW: the cloud shadow composite pipeline (writes post_fx_target; no target of its own; 51c creates it).
+    rhi::PipelineHandle cloud_shadow_pipe_;
+    // M-CAUSTICS: the caustics composite pipeline (writes post_fx_target; no target of its own; 52b creates it).
+    rhi::PipelineHandle caustics_pipe_;
+    // M-DYNRES: the dynamic resolution controller's state (46c creates it in init and frees it in shutdown; null until then).
+    DynResState* dynres_ = nullptr;
+    bool shafts_buf_used_ = false;  // a view of this frame recorded into shafts_buf_ (cleared on the frame's first view)
+    // M-OUTLINE: the edge outline's composite pipeline and its own render-size target (not per-view state: written and read within one record).
+    rhi::PipelineHandle outline_pipe_;
+    rhi::TextureHandle outline_dst_;
+    // M-LIGHTCOOKIE: the cookie atlas bake pipeline, the atlas (one array layer per distinct cookie texture) and the cache of what it holds.
+    rhi::PipelineHandle cookie_pipe_;
+    rhi::TextureHandle cookie_atlas_;
+    u32 cookie_keys_[16] = {};     // TextureStore key baked into each layer
+    u32 cookie_records_ = 0;       // records uploaded for this frame
     rhi::TextureHandle bloom_[kMaxBloomLevels];
     rhi::Extent2D bloom_size_[kMaxBloomLevels];
     u32 bloom_levels_ = 0;
@@ -454,6 +583,18 @@ private:
     // TAA (M-VISUAL 5)
     rhi::PipelineHandle velocity_pipe_;  // null when Forward3DDesc::taa is off
     rhi::PipelineHandle velocity_skinned_;
+    // Automatic instancing (M-VISUAL3 5a): null when Forward3DDesc::instancing is off (or a twin's base is null).
+    rhi::PipelineHandle mesh_cull_inst_;
+    rhi::PipelineHandle mesh_two_sided_inst_;
+    rhi::PipelineHandle ao_prepass_inst_;
+    rhi::PipelineHandle shadow_inst_;
+    rhi::PipelineHandle velocity_inst_;
+    u32 inst_frame_left_ = 0;               // bytes of the frame's instancing budget no view has reserved
+    u32 inst_budget_[kInstPassCount] = {};  // this view's reservation per pass, bytes left
+    Array<InstSlot> inst_slots_;   // per opaque draw of the pass being drawn
+    Array<math::mat4> inst_data_;  // the pass's per-copy block
+    Array<u32> caster_sorted_;
+    Array<DrawRun> caster_runs_;
     rhi::PipelineHandle taa_pipe_;
     rhi::TextureHandle velocity_;        // RGBA16F, 3D size
     rhi::TextureHandle velocity_depth_;  // D32, 3D size
@@ -552,6 +693,8 @@ private:
     u32 gi_cursor_ = 0;                  // the next probe the rolling update captures
     u32 gi_filled_ = 0;                  // probes the current fill has captured
     u64 gi_key_ = 0;                     // what the volume was filled from; 0 = nothing
+    GiProbeState* gi_probes_ = nullptr;  // M-GI2 relocation / following state (null until used)
+    f64 origin_[3] = {0.0, 0.0, 0.0};    // floating origin: the shifts seen so far (probe and GI keys are absolute)
     bool gi_shadowed_ = false;           // this frame's volume sun fit was rendered
     math::mat4 gi_shadow_vp_ = math::mat4::identity();
     f32 gi_shadow_texel_ = 0.0f;

@@ -1,0 +1,1 @@
+- CI, M-PANELSHOT: the integration run uploads the editor's per-panel images (`panel-shots` artifact); the PR gate prints how many it wrote.

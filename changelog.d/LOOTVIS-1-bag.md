@@ -1,0 +1,1 @@
+- Kit (M-LOOTVIS 1): `LootDrop` draws its pickups (`mesh`, `tint`, `mesh_scale`, `lift`); `ItemHotkey3D` uses the first consumable on the `UseItem` action. `09_openworld` walkers drop bandages and medkits, H uses one, the HUD lists the bag. Record: `docs/milestones/M-LOOTVIS.md`.

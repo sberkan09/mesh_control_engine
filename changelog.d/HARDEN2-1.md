@@ -1,0 +1,1 @@
+- Editor, M-HARDEN2: the Strings panel no longer reads past the end of a locale row that has a key and no text; a mutation test now covers the recent-files list, camera bookmarks, `.mceproj` and locale tables.

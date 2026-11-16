@@ -1,0 +1,1 @@
+- Particle swatches, M-ASSETLOOK step 2: a `.mcpart` preset shows in the Assets grid and in `asset_thumbnail` as its emitter run for 1.5 s (the particles at ten instants, older ones fainter), drawn on the CPU.

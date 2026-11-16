@@ -1,0 +1,1 @@
+- Tests: the prefab override field masks, the entity-reference walk, the perf stage names and values, and the 2D editor camera's drag-pan now have cases.

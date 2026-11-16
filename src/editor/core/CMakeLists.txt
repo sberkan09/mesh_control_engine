@@ -10,6 +10,38 @@ mce_add_library(mce_editor_core UMBRELLA
     SOURCES
         src/animgraph_editor.cpp
         src/asset_browser.cpp
+        src/asset_thumb.cpp
+        src/asset_form.cpp
+        src/scene_tabs.cpp
+        src/asset_kinds.cpp
+        src/asset_ops.cpp
+        src/asset_refs.cpp
+        src/camera_bookmarks.cpp
+        src/quick_open.cpp
+        src/selection_history.cpp
+        src/selection_sets.cpp
+        src/hierarchy_filter.cpp
+        src/batch_rename.cpp
+        src/select_related.cpp
+        src/select_all.cpp
+        src/group_entities.cpp
+        src/entity_path.cpp
+        src/unique_names.cpp
+        src/align_entities.cpp
+        src/reset_transform.cpp
+        src/flip_entities.cpp
+        src/snap_entities.cpp
+        src/duplicate_offset.cpp
+        src/match_transform.cpp
+        src/scene_diff.cpp
+        src/scene_lint.cpp
+        src/scene_stats.cpp
+        src/scene_find.cpp
+        src/recent_list.cpp
+        src/mixer_model.cpp
+        src/source_doc.cpp
+        src/strings_grid.cpp
+        src/thumb_cache.cpp
         src/bt_editor.cpp
         src/console_model.cpp
         src/editor_scene.cpp

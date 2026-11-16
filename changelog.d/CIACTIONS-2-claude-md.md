@@ -1,0 +1,1 @@
+- CLAUDE.md: CI section describes the master branch and the GitHub Actions workflows.

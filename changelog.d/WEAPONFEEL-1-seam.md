@@ -1,0 +1,1 @@
+- kit: `Weapon3D` pushes `WeaponReloadStarted3D`, `WeaponReloaded3D` and `WeaponDry3D`; `EventSfx3D` gains reload, reloaded, dry and switch clips (168 to 280 bytes).

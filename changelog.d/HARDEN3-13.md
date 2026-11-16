@@ -1,0 +1,1 @@
+- tests(liveops): a damaged game services state file (wrong magic, newer version, every cut length, empty) starts empty or keeps what was read.

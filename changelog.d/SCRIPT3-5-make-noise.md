@@ -1,0 +1,1 @@
+- Luau noise, M-SCRIPT3 step 5: `mce.make_noise(position, loudness?, source?, team?)` pushes a `kit::Noise`, so a script-only trap or alarm can be heard by perceivers without a C++ component.

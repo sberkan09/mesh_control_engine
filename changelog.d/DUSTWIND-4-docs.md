@@ -1,0 +1,1 @@
+- M-DUSTWIND done: the user guide gets "Dust blows." in `08-3d.md` (the opt-in `Dust` component, drawn as one camera-following alpha-blended particle emitter in a strong dry wind, with the Luau `weather.set_dust` API from 9.19w); the milestone record is closed with follow-ups.

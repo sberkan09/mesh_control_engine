@@ -1,0 +1,401 @@
+{
+ "format": "mce-input",
+ "version": 1,
+ "guid": "c14b685e-75c7-5c32-b33e-703eaddde578",
+ "maps": [
+  {
+   "name": "Gameplay",
+   "actions": [
+    {
+     "name": "Move",
+     "type": "axis2d",
+     "bindings": [
+      {
+       "key": "D"
+      },
+      {
+       "key": "A",
+       "scale": -1
+      },
+      {
+       "key": "W",
+       "axis": "y"
+      },
+      {
+       "key": "S",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "key": "Right"
+      },
+      {
+       "key": "Left",
+       "scale": -1
+      },
+      {
+       "key": "Up",
+       "axis": "y"
+      },
+      {
+       "key": "Down",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_axis": "LeftX",
+       "deadzone": [
+        0.15,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "LeftY",
+       "axis": "y",
+       "deadzone": [
+        0.15,
+        1
+       ],
+       "scale": -1
+      }
+     ]
+    },
+    {
+     "name": "Look",
+     "type": "axis2d",
+     "bindings": [
+      {
+       "mouse_delta": "x"
+      },
+      {
+       "mouse_delta": "y"
+      },
+      {
+       "gamepad_axis": "RightX",
+       "deadzone": [
+        0.15,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "RightY",
+       "axis": "y",
+       "deadzone": [
+        0.15,
+        1
+       ],
+       "scale": -1
+      }
+     ]
+    },
+    {
+     "name": "Jump",
+     "bindings": [
+      {
+       "key": "Space"
+      },
+      {
+       "gamepad_button": "South"
+      }
+     ]
+    },
+    {
+     "name": "Fire",
+     "bindings": [
+      {
+       "mouse_button": "Left"
+      },
+      {
+       "key": "J"
+      },
+      {
+       "gamepad_button": "West"
+      }
+     ]
+    },
+    {
+     "name": "Reload",
+     "bindings": [
+      {
+       "key": "R"
+      },
+      {
+       "gamepad_button": "North"
+      }
+     ]
+    },
+    {
+     "name": "Interact",
+     "bindings": [
+      {
+       "key": "E"
+      },
+      {
+       "key": "F"
+      },
+      {
+       "gamepad_button": "East"
+      }
+     ]
+    },
+    {
+     "name": "UseItem",
+     "bindings": [
+      {
+       "key": "H"
+      },
+      {
+       "gamepad_button": "RightShoulder"
+      }
+     ]
+    },
+    {
+     "name": "Sprint",
+     "bindings": [
+      {
+       "key": "LShift"
+      },
+      {
+       "gamepad_button": "LeftShoulder"
+      }
+     ]
+    },
+    {
+     "name": "TriggerL",
+     "bindings": [
+      {
+       "key": "LCtrl"
+      },
+      {
+       "gamepad_axis": "LeftTrigger"
+      }
+     ]
+    },
+    {
+     "name": "Radio",
+     "bindings": [
+      {
+       "key": "Q"
+      },
+      {
+       "gamepad_button": "DpadLeft"
+      }
+     ]
+    },
+    {
+     "name": "Slot1",
+     "bindings": [
+      {
+       "key": "1"
+      }
+     ]
+    },
+    {
+     "name": "Slot2",
+     "bindings": [
+      {
+       "key": "2"
+      }
+     ]
+    },
+    {
+     "name": "Slot3",
+     "bindings": [
+      {
+       "key": "3"
+      }
+     ]
+    },
+    {
+     "name": "WeaponNext",
+     "bindings": [
+      {
+       "key": "X"
+      },
+      {
+       "gamepad_button": "DpadUp"
+      }
+     ]
+    },
+    {
+     "name": "WeaponPrev",
+     "bindings": [
+      {
+       "key": "Z"
+      },
+      {
+       "gamepad_button": "DpadDown"
+      }
+     ]
+    },
+    {
+     "name": "Melee",
+     "bindings": [
+      {
+       "key": "V"
+      },
+      {
+       "gamepad_button": "RightStick"
+      }
+     ]
+    },
+    {
+     "name": "Throw",
+     "bindings": [
+      {
+       "key": "B"
+      },
+      {
+       "gamepad_button": "Back"
+      }
+     ]
+    },
+    {
+     "name": "Horn",
+     "bindings": [
+      {
+       "key": "G"
+      },
+      {
+       "gamepad_button": "LeftStick"
+      }
+     ]
+    },
+    {
+     "name": "Lights",
+     "bindings": [
+      {
+       "key": "L"
+      },
+      {
+       "gamepad_button": "DpadRight"
+      }
+     ]
+    },
+    {
+     "name": "Pause",
+     "bindings": [
+      {
+       "key": "Escape"
+      },
+      {
+       "gamepad_button": "Start"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "UI",
+   "blocks_below": true,
+   "actions": [
+    {
+     "name": "Navigate",
+     "type": "axis2d",
+     "bindings": [
+      {
+       "key": "Right"
+      },
+      {
+       "key": "Left",
+       "scale": -1
+      },
+      {
+       "key": "Up",
+       "axis": "y"
+      },
+      {
+       "key": "Down",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "key": "D"
+      },
+      {
+       "key": "A",
+       "scale": -1
+      },
+      {
+       "key": "W",
+       "axis": "y"
+      },
+      {
+       "key": "S",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_button": "DpadRight"
+      },
+      {
+       "gamepad_button": "DpadLeft",
+       "scale": -1
+      },
+      {
+       "gamepad_button": "DpadUp",
+       "axis": "y"
+      },
+      {
+       "gamepad_button": "DpadDown",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_axis": "LeftX",
+       "deadzone": [
+        0.4,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "LeftY",
+       "axis": "y",
+       "deadzone": [
+        0.4,
+        1
+       ],
+       "scale": -1
+      }
+     ]
+    },
+    {
+     "name": "Confirm",
+     "bindings": [
+      {
+       "key": "Return"
+      },
+      {
+       "key": "Space"
+      },
+      {
+       "gamepad_button": "South"
+      }
+     ]
+    },
+    {
+     "name": "Cancel",
+     "bindings": [
+      {
+       "key": "Escape"
+      },
+      {
+       "gamepad_button": "East"
+      }
+     ]
+    },
+    {
+     "name": "Resume",
+     "bindings": [
+      {
+       "key": "Escape"
+      },
+      {
+       "gamepad_button": "Start"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,1 @@
+- Editor, M-SELSIMILAR: Edit > Select > Similar selects every entity with the same components as the primary selection.

@@ -1,0 +1,1 @@
+- Editor, M-QUICKOPEN 2: Ctrl+P opens a search box over the project assets, the scene's entities, the panels and the main commands; Up/Down pick, Enter runs (an asset opens as a double-click in Assets does), Esc closes.

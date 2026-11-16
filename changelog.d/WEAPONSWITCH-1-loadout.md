@@ -1,0 +1,1 @@
+- Kit (M-WEAPONSWITCH 1): `Loadout3D` and `WeaponPreset3D` (`mce/kit/loadout3d.h`): switch the player's single `Weapon3D` between up to three presets with per-slot ammo; `WeaponSwitched3D` event. No sample change yet. Record: `docs/milestones/M-WEAPONSWITCH.md`.

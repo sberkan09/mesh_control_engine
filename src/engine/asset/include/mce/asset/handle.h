@@ -38,12 +38,15 @@ struct Video { static constexpr ChunkType chunk = ChunkType::Video; static const
 struct BehaviorTree { static constexpr ChunkType chunk = ChunkType::BehaviorTree; static constexpr const char* name = "BehaviorTree"; };
 struct Skeleton2D { static constexpr ChunkType chunk = ChunkType::Skeleton2D; static constexpr const char* name = "Skeleton2D"; };
 struct Script { static constexpr ChunkType chunk = ChunkType::Script; static constexpr const char* name = "Script"; };
+struct RoadNetwork { static constexpr ChunkType chunk = ChunkType::RoadNetwork; static constexpr const char* name = "RoadNetwork"; };
 struct Sequence { static constexpr ChunkType chunk = ChunkType::Sequence; static constexpr const char* name = "Sequence"; };
 struct Timeline { static constexpr ChunkType chunk = ChunkType::Timeline; static constexpr const char* name = "Timeline"; };
 struct ParticlePreset { static constexpr ChunkType chunk = ChunkType::ParticlePreset; static constexpr const char* name = "ParticlePreset"; };
 struct StringTable { static constexpr ChunkType chunk = ChunkType::StringTable; static constexpr const char* name = "StringTable"; };
 struct StoreCatalog { static constexpr ChunkType chunk = ChunkType::StoreCatalog; static constexpr const char* name = "StoreCatalog"; };
 struct GameServicesCatalogChunk { static constexpr ChunkType chunk = ChunkType::GameServicesCatalog; static constexpr const char* name = "GameServicesCatalog"; };
+struct ItemCatalogChunk { static constexpr ChunkType chunk = ChunkType::ItemCatalog; static constexpr const char* name = "ItemCatalog"; };
+struct ConvarDefaultsChunk { static constexpr ChunkType chunk = ChunkType::ConvarDefaults; static constexpr const char* name = "ConvarDefaults"; };
 struct RemoteConfigChunk { static constexpr ChunkType chunk = ChunkType::RemoteConfig; static constexpr const char* name = "RemoteConfig"; };
 // clang-format on
 

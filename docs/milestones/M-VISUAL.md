@@ -16,7 +16,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | done: GL and SDL GPU (gated + goldens), High tier on TAA; Metal untested; real-GPU budget on the Mac/device session |
 | 6 | Global illumination (irradiance-probe volume) | SBA-11 | done: GL and SDL GPU (gated + goldens), editor bake, Low tier on the bake; Metal untested; real-GPU budget on the Mac/device session |
 | 7 | Atmosphere and volumetrics | SBA-12 | done: GL and SDL GPU (gated + goldens), Low tier without the volumetric fog; Metal untested; real-GPU budget on the Mac/device session |
-| 8 | Post completion | SBA-13 | done: GL and SDL GPU (gated + goldens), Low tier without depth of field and motion blur; SSR not taken (optional); Metal untested; real-GPU budget on the Mac/device session |
+| 8 | Post completion | SBA-13 | done: GL and SDL GPU (gated + goldens), Low tier without depth of field and motion blur; SSR shipped later in M-VISUAL2 step 1 ([M-VISUAL2.md](M-VISUAL2.md)); Metal untested; real-GPU budget on the Mac/device session |
 | 9 | Scale (GPU culling, foliage, decals, GPU particles) | SBA-14 | done: GL and SDL GPU (gated + goldens), CPU culling fallback without compute; Metal untested; real-GPU budget on the Mac/device session |
 | demo | High-profile sample side by side | SBA-15 | done: `samples/06_showcase`, sheet and llvmpipe budget below; mid-range GPU 1080p and mobile tier numbers on the Mac/device session |
 
@@ -212,6 +212,9 @@ mismatch leaves `<name>.actual.png` and `<name>.diff.png` under the build's `gol
 it three times per backend (0 flakes over 3 runs). PNG in and out is `mce/cook/image.h` (stb stays behind the
 cook wall). Step 2's goldens: `ibl_off`, `ibl_sky`, `ibl_roughness` (four metal boxes, roughness 0.05 to 0.95),
 `ibl_texture` and `probe_room`, baselined on Mesa llvmpipe (GL) and lavapipe (SDL GPU); later steps add theirs.
+A golden in `<os>-<backend>-nvidia/` wins over the plain one when the device name says NVIDIA: today only
+`ibl_roughness`, whose box edges NVIDIA's 4x MSAA rasterizes one block 0.97% away from llvmpipe, identically on the
+RTX 3070, 4090 and a Blackwell card on both backends (`M-GPU-VERIFY.md`).
 
 **Open in step 2:** real-GPU numbers (the budgets above are llvmpipe, relative cost only); they need a device and
 go with the Mac session.
@@ -399,7 +402,9 @@ The main pass pays for the eight-probe lookup (32 volume fetches a pixel, every 
 volume). Capture frames stay at about 450 KiB of the 1 MiB uniform ring (the frame alone: 150 KiB).
 
 **Limits.** Light leaks through walls thinner than the probe spacing, and probes buried in walls darken what is near
-them (no probe relocation or visibility term yet): keep the grid's planes off walls. Diffuse only; reflections stay
+them (no probe relocation or visibility term yet): keep the grid's planes off walls, or add the opt-in `GiVisibility3D`
+(M-GI2, [M-GI2.md](M-GI2.md): per-probe distance record with a Chebyshev weight, probe classification and relocation, a
+camera-following box; its limits are in the user guide). Diffuse only; reflections stay
 with the sky and the reflection probes. Lightmaps were not needed for the step's gates. Metal is untested; Metal
 pixels and real-GPU numbers belong to the Mac/device session.
 

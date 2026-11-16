@@ -1,0 +1,1 @@
+- Kit (M-PEDCRASH): pedestrians run from a vehicle crash (a contact of 5 m/s or more involving a `Vehicle3D`) like from a shot. Record: `docs/milestones/M-PEDCRASH.md`.

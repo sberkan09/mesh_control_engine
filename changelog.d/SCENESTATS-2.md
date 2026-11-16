@@ -1,0 +1,1 @@
+- Editor, M-SCENESTATS step 2: `mce scene stats <scene>...` prints what each scene holds.

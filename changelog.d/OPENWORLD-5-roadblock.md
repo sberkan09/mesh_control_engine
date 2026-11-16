@@ -1,0 +1,1 @@
+- Kit (M-OPENWORLD-POLICE 3): `Roadblock3D` markers spawn police cars and officers when an offender reaches a wanted level from a distance and take them down after the level drops (`RoadblockSpawnHook` for games without prefabs); the 09_openworld roadblocks use it. Record: `docs/milestones/M-OPENWORLD-POLICE.md`.

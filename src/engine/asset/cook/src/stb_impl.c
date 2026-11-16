@@ -2,8 +2,11 @@
 #define STBI_NO_STDIO
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
-#define STBI_NO_HDR
-#define STBI_NO_LINEAR
+/* M-IMPORTMEDIA 1: Targa and BMP textures; PSD, GIF, PIC and PNM stay out (layers and frames have no single right answer). */
+#define STBI_ONLY_TGA
+#define STBI_ONLY_BMP
+/* Radiance .hdr (M-VISUAL3 4) is read as floats by stbi_loadf; PNG/JPEG still only go through the 8-bit loader. */
+#define STBI_ONLY_HDR
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 

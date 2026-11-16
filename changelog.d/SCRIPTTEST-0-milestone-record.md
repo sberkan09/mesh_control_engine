@@ -1,0 +1,1 @@
+- Planned: M-SCRIPTTEST (record only), `.mctest` checks for entity counts and script step budgets.

@@ -5,8 +5,10 @@
 #include "cook_test_util.h"
 #include "mce/asset/asset_system.h"
 #include "mce/cook/cook.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/scene/entity_names.h"
 #include "mce/scene/scene.h"
 
 using namespace mce;
@@ -130,4 +132,110 @@ TEST_CASE("scene: components registered from reflection unify with typed registr
     CHECK(id == w.component_id<LocalTransform>());
     CHECK(refl::type_of<LocalTransform>().type_hash == kTypeHash<LocalTransform>);
     CHECK(refl::type_of<kit::Sprite>().is_component());
+}
+
+TEST_CASE("scene: entities are found by name, names go with a scene change, and the hash does not see them (M-WORKFLOW 7)") {
+    const std::string root = make_scene_project("scene_names",
+        R"({ "name": "Target", "components": { "LocalTransform": { "position": [1, 2, 0] } } },
+           { "name": "Camera", "components": { "LocalTransform": { "position": [5, 6, 0] } } },
+           { "components": { "LocalTransform": { "position": [9, 9, 0] } } })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+
+    World w;
+    Array<Entity> spawned;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &spawned));
+    CHECK(scene::find_entity(w, "Target") == spawned[0]);
+    CHECK(scene::find_entity(w, "Camera") == spawned[1]);
+    CHECK(scene::find_entity(w, "Nobody").is_null());
+    CHECK(scene::find_entity(w, "").is_null());  // the unnamed entity is not found by ""
+
+    // A second copy of the scene: the earlier copy wins while it lives, then the next one takes over.
+    Array<Entity> copy;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &copy));
+    CHECK(scene::find_entity(w, "Target") == spawned[0]);
+    w.destroy(spawned[0]);
+    CHECK(scene::find_entity(w, "Target") == copy[0]);
+    w.destroy(copy[0]);
+    CHECK(scene::find_entity(w, "Target").is_null());
+
+    // Dead rows are dropped when the table is rebuilt, so load/unload cycles do not grow it.
+    for (int i = 0; i < 5; ++i) {
+        Array<Entity> again;
+        REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &again));
+        for (Entity e : again) w.destroy(e);
+    }
+    Array<Entity> last;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &last));
+    CHECK(w.resource<scene::EntityNames>().rows.size() == 4);  // two Cameras still alive from earlier + the last copy's two; the 5 destroyed copies are gone
+
+    // The table is a resource, not a component: replacing it with an empty one leaves the state hash as it was.
+    const u64 with_names = w.state_hash();
+    w.set_resource(scene::EntityNames{});
+    CHECK(w.state_hash() == with_names);
+    CHECK(scene::find_entity(w, "Target").is_null());
+
+    // A scene change clears the table, then the new scene fills it.
+    scene::request_change(w, std::string("guid:").append(kSceneGuid));
+    Array<Entity> after;
+    REQUIRE(scene::apply_change(w, assets, &after).value());
+    CHECK(scene::find_entity(w, "Camera") == after[1]);
+    CHECK(w.alive(after[1]));
+}
+
+TEST_CASE("scene: request_load with a slot name past 63 bytes loads nothing, a 63-byte one loads") {
+    const std::string root = fresh_dir("scene_slot_limit");
+    save::set_root(root + "/saves");
+    asset::AssetSystem assets;
+
+    World saved;
+    saved.register_components<SaveKey>();
+    saved.spawn_with(SaveKey{7});
+    const std::string fits(63, 'a');
+    REQUIRE(save::save_game(saved, fits, {}));
+
+    World w;
+    w.register_components<SaveKey>();
+    scene::request_load(w, fits);
+    REQUIRE(scene::apply_change(w, assets, nullptr));
+    CHECK(w.query<const SaveKey&>().count() == 1);
+
+    // 64 bytes would be cut to the 63-byte slot above, which exists: it must not be loaded instead.
+    World other;
+    other.register_components<SaveKey>();
+    scene::request_load(other, fits + "b");
+    REQUIRE(scene::apply_change(other, assets, nullptr));
+    CHECK(other.query<const SaveKey&>().count() == 0);
+}
+
+TEST_CASE("scene: request_change to a target past 255 bytes is NotFound and leaves the world alone") {
+    const std::string root = make_scene_project("scene_target_limit", R"({ "name": "Target" })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+
+    World w;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), nullptr));
+    const usize before = w.entity_count();
+    REQUIRE(before == 1);
+
+    // The scene's own path still resolves; the same path padded to 300 bytes does not, and the
+    // entities that were loaded are still there afterwards.
+    scene::request_change(w, std::string(300, 'x'));
+    const Result<bool> r = scene::apply_change(w, assets, nullptr);
+    REQUIRE_FALSE(r);
+    CHECK(r.error().code == Errc::NotFound);
+    CHECK(w.entity_count() == before);
+    CHECK(w.resource<scene::SceneChange>().next.empty());
+
+    scene::request_change(w, std::string("guid:").append(kSceneGuid));
+    REQUIRE(scene::apply_change(w, assets, nullptr).value());
+    CHECK(w.entity_count() == before);
 }

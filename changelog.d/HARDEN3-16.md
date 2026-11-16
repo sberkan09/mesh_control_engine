@@ -1,0 +1,1 @@
+- Tests: core's `StateStack::has_pending`, `mat4_identity`, `Color::to_vec4` and `RingBuffer::size_approx` get direct tests.

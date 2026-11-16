@@ -13,11 +13,18 @@
 //   * M-VISUAL2: screen-space reflections in the puddle and the polished floor, contact shadows,
 //     sharpening, a glass block refracting the path, a lacquered crate and a brushed-metal statue
 //     ("highbase" is High without them, for the on/off sheet)
+//   * M-VISUAL3 (the "visual3" profile; "visual3off" is the same scene with each feature off, for the on/off sheet):
+//     a parallax-mapped cobble floor, the filmic lens (vignette, grain, chromatic aberration), a cooked HDR dusk sky
+//     (.hdr, RGBA16F) lighting the scene, a crate yard drawn by automatic instancing, a modular wall of three
+//     different pieces merged into one mesh by render::build_merged_mesh (the draw of a StaticMerge3D, which the
+//     kit's extract runs for entities; this sample draws through Scene3D directly), and a windy meadow whose copies
+//     vary in colour, with a wind height, gusts, flutter and two kinds (grass and flowers). Draw counts are printed.
 //
 //   06_showcase                                   run until the window closes (the High profile)
 //   06_showcase -profile current                  the same scene with the M5a frame
 //   06_showcase -profile medium|low               a quality tier (r.quality's knobs)
 //   06_showcase -profile highbase                 High without the M-VISUAL2 effects
+//   06_showcase -profile visual3|visual3off       the M-VISUAL3 features on / off (shot 3 "meadow" shows them best)
 //   06_showcase -shot 1 -hour 12                  another camera / time of day (S cycles the shots)
 //   06_showcase -sheet sheet.ppm                  side by side: every shot under every profile in
 //                                                 -sheet.profiles, each settled for -sheet.frames
@@ -33,6 +40,7 @@
 
 #include "hud_font.h"
 #include "mce/asset/asset_system.h"
+#include "mce/asset/formats.h"
 #include "mce/core.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
@@ -40,6 +48,7 @@
 #include "mce/render/atmosphere.h"
 #include "mce/render/quality.h"
 #include "mce/render/renderer.h"
+#include "mce/render/static_merge.h"
 #include "mce/rhi/default_device.h"
 #include "ship_paths.h"
 
@@ -55,9 +64,11 @@ MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this
 MCE_CVAR(cv_ticks, "ticks", 300, "Headless: ticks to simulate", CVarFlags::None);
 MCE_CVAR(cv_pack, "pack", "", "Cooked pack to mount (default: assets.mce next to the executable)", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
-MCE_CVAR(cv_profile, "profile", "high", "current (the M5a frame), low, medium or high (M-VISUAL on that tier)",
+MCE_CVAR(cv_profile, "profile", "high",
+         "current (the M5a frame), low, medium or high (M-VISUAL on that tier), highbase, visual3 or visual3off (M-VISUAL3 on / off)",
          CVarFlags::RequiresRestart);
-MCE_CVAR(cv_shot, "shot", 0, "Camera and time of day: 0 dusk at the door, 1 the interior, 2 the courtyard at noon",
+MCE_CVAR(cv_shot, "shot", 0,
+         "Camera and time of day: 0 dusk at the door, 1 the interior, 2 the courtyard at noon, 3 the M-VISUAL3 meadow",
          CVarFlags::None);
 MCE_CVAR(cv_hour, "hour", -1.0f, "Overrides the shot's hour of the day (0..24)", CVarFlags::None);
 MCE_CVAR(cv_grass, "grass", 6000, "Grass tufts scattered over the courtyard", CVarFlags::RequiresRestart);
@@ -71,7 +82,10 @@ MCE_CVAR(cv_sheet_h, "sheet.h", 270, "Height of one sheet cell", CVarFlags::None
 
 // ---- profiles and shots -------------------------------------------------------------------------
 
-enum class Profile : u8 { Current, Low, Medium, High, HighBase };
+enum class Profile : u8 { Current, Low, Medium, High, HighBase, Visual3Off, Visual3 };
+
+// The two M-VISUAL3 profiles draw the visual3 corner (the cobble floor, the crate yard, the wall and the meadow).
+bool is_visual3(Profile p) { return p == Profile::Visual3 || p == Profile::Visual3Off; }
 
 bool parse_profile(StringView s, Profile& out) {
     if (s == StringView("current")) out = Profile::Current;
@@ -79,6 +93,8 @@ bool parse_profile(StringView s, Profile& out) {
     else if (s == StringView("medium")) out = Profile::Medium;
     else if (s == StringView("high")) out = Profile::High;
     else if (s == StringView("highbase")) out = Profile::HighBase;
+    else if (s == StringView("visual3off")) out = Profile::Visual3Off;
+    else if (s == StringView("visual3")) out = Profile::Visual3;
     else return false;
     return true;
 }
@@ -90,6 +106,8 @@ const char* profile_name(Profile p) {
         case Profile::Medium: return "medium";
         case Profile::High: return "high";
         case Profile::HighBase: return "highbase";
+        case Profile::Visual3Off: return "visual3off";
+        case Profile::Visual3: return "visual3";
     }
     return "?";
 }
@@ -111,15 +129,17 @@ constexpr Shot kShots[] = {
     {"dusk", {0.0f, 1.3f, 1.0f}, 0.28f, 0.16f, 10.5f, 55.0f, 18.35f},      // outside, the low sun behind the camera's left
     {"interior", {0.6f, 1.2f, -2.2f}, 0.42f, 0.10f, 4.6f, 70.0f, 15.5f},  // inside: back wall, statue, window light
     {"noon", {0.0f, 0.6f, 0.0f}, -0.75f, 0.42f, 17.0f, 50.0f, 12.0f},     // the courtyard from above
+    {"meadow", {-10.5f, 0.5f, 7.6f}, 0.18f, 0.33f, 11.0f, 55.0f, 16.0f},  // M-VISUAL3: meadow, cobbles, crate yard and wall
 };
 constexpr u32 kShotCount = sizeof(kShots) / sizeof(kShots[0]);
 
 // ---- content -------------------------------------------------------------------------------------
 
-enum Model : u32 { Courtyard, Pavilion, Statue, Lantern, Brazier, Crate, Grass, kModelCount };
+enum Model : u32 { Courtyard, Pavilion, Statue, Lantern, Brazier, Crate, Grass, Flower, Cobbles, WallSlab, WallPillar, WallCap, kModelCount };
 constexpr const char* kModelPaths[kModelCount] = {"models/courtyard.glb", "models/pavilion.glb", "models/statue.glb",
                                                   "models/lantern.glb",   "models/brazier.glb",  "models/crate.glb",
-                                                  "models/grass.glb"};
+                                                  "models/grass.glb",     "models/flower.glb",   "models/cobbles.glb",
+                                                  "models/wall_slab.glb", "models/wall_pillar.glb", "models/wall_cap.glb"};
 
 // The pavilion's room (pavilion.glb): x -3.5..3.5, z -3..3, 3.2 m tall, the door on +Z, a window on +X.
 constexpr aabb3 kRoom{{-3.5f, 0.0f, -3.0f}, {3.5f, 3.2f, 3.0f}};
@@ -148,8 +168,14 @@ struct Content {
     MeshStore cpu_meshes;
     const MeshStore* meshes = nullptr;
     u32 keys[kModelCount] = {};
+    asset::AssetHandle<asset::Mesh> model_handles[kModelCount] = {};
+    u32 sky_key = ~0u;         // textures/dusk_sky.hdr (RGBA16F), the visual3 profile's sky
+    u32 cobble_albedo = ~0u;   // the parallax floor's maps, made in code (GPU only)
+    u32 cobble_maps = ~0u;     // a 2-layer array: layer 0 the normal map, layer 1 the height map
     Array<asset::AnyHandle> handles;
     bool gpu = false;
+
+    MeshStore& writable_meshes() { return gpu ? renderer.meshes() : cpu_meshes; }
 
     ResultV load(rhi::RenderDevice* device, Profile profile) {
         if (device) {
@@ -172,6 +198,7 @@ struct Content {
         MCE_TRY(assets.mount(Span<const StringView>(roots, 1), mo));
         for (asset::AssetKey k = 0; k < assets.asset_count(); ++k) {  // textures first: meshes resolve their maps
             if (assets.info(k).type != asset::ChunkType::Texture) continue;
+            if (assets.info(k).path == StringView("textures/dusk_sky.hdr")) sky_key = k;
             MCE_TRY_ASSIGN(asset::AssetHandle<asset::Texture> h, assets.load_sync<asset::Texture>(k));
             handles.push_back(asset::AnyHandle(h));
         }
@@ -184,7 +211,108 @@ struct Content {
             handles.push_back(asset::AnyHandle(h));
             if (!device) MCE_TRY(cpu_meshes.upload(key, assets.generation(key), assets.resolve(h)));
             keys[m] = key;
+            model_handles[m] = h;
         }
+        if (device) MCE_TRY(make_cobble_maps());
+        return ok();
+    }
+
+    // The parallax floor's maps (M-VISUAL3 2): running-bond cobbles, 128 x 128 texels. The albedo is sRGB; layer 0 of
+    // the array holds the normal map derived from the height, layer 1 the height itself (255 on a stone's crown, 0 in
+    // the joints). Each mip level halves both (a box filter); a level holds both layers one after the other.
+    ResultV make_cobble_maps() {
+        constexpr u32 N = 128;
+        Array<u8> height;
+        height.resize(N * N);
+        Array<u8> albedo_mip;
+        albedo_mip.resize(N * N * 4);
+        for (u32 y = 0; y < N; ++y)
+            for (u32 x = 0; x < N; ++x) {
+                const u32 row = y / 16;
+                const u32 bx = (x + (row % 2) * 16) % 32, by = y % 16;  // inside the stone
+                const u32 stone = (row * 7 + (x + (row % 2) * 16) / 32 * 13) % 5;
+                const f32 edge = static_cast<f32>(min(min(bx, 31 - bx), min(by, 15 - by)));  // texels to the nearest joint
+                const f32 crown = clamp((edge - 1.0f) / 4.0f, 0.0f, 1.0f);
+                const u8 h8 = static_cast<u8>(255.0f * crown * (2.0f - crown));
+                height[y * N + x] = h8;
+                const f32 tone = 0.55f + 0.09f * static_cast<f32>(stone);
+                const f32 lit = 0.45f + 0.55f * crown;  // joints are dirty
+                const u8 r = static_cast<u8>(255.0f * tone * lit), g = static_cast<u8>(255.0f * tone * 0.93f * lit),
+                         b = static_cast<u8>(255.0f * tone * 0.8f * lit);
+                u8* px = &albedo_mip[(y * N + x) * 4];
+                px[0] = r, px[1] = g, px[2] = b, px[3] = 255;
+            }
+        Array<Array<u8>> layers_by_mip;  // per mip: normal then height, RGBA8
+        Array<Array<u8>> albedo_by_mip;
+        Array<u8> hcur = height;
+        Array<u8> acur = albedo_mip;
+        for (u32 size = N; size >= 1; size /= 2) {
+            Array<u8> level;
+            level.resize(size_t(size) * size * 4 * 2);
+            const usize layer_bytes = usize(size) * size * 4;
+            for (u32 y = 0; y < size; ++y)
+                for (u32 x = 0; x < size; ++x) {
+                    const auto hat = [&](i32 xx, i32 yy) {
+                        const u32 cx = static_cast<u32>((xx + static_cast<i32>(size)) % static_cast<i32>(size));
+                        const u32 cy = static_cast<u32>((yy + static_cast<i32>(size)) % static_cast<i32>(size));
+                        return static_cast<f32>(hcur[cy * size + cx]) / 255.0f;
+                    };
+                    const f32 dx = (hat(static_cast<i32>(x) + 1, static_cast<i32>(y)) - hat(static_cast<i32>(x) - 1, static_cast<i32>(y))) * 0.5f;
+                    const f32 dy = (hat(static_cast<i32>(x), static_cast<i32>(y) + 1) - hat(static_cast<i32>(x), static_cast<i32>(y) - 1)) * 0.5f;
+                    const f32 k = 6.0f * static_cast<f32>(size) / static_cast<f32>(N);  // the slope shrinks with the level
+                    const vec3 n = normalize(vec3{-dx * k, dy * k, 1.0f});  // +v runs down the image: the green channel flips
+                    u8* np = &level[(y * size + x) * 4];
+                    np[0] = static_cast<u8>(255.0f * (n.x * 0.5f + 0.5f));
+                    np[1] = static_cast<u8>(255.0f * (n.y * 0.5f + 0.5f));
+                    np[2] = static_cast<u8>(255.0f * (n.z * 0.5f + 0.5f));
+                    np[3] = 255;
+                    u8* hp = &level[layer_bytes + (y * size + x) * 4];
+                    hp[0] = hp[1] = hp[2] = hcur[y * size + x];
+                    hp[3] = 255;
+                }
+            layers_by_mip.push_back(std::move(level));
+            Array<u8> alevel;
+            alevel.resize(usize(size) * size * 4);
+            std::memcpy(alevel.data(), acur.data(), alevel.size());
+            albedo_by_mip.push_back(std::move(alevel));
+            if (size == 1) break;
+            const u32 half = size / 2;
+            Array<u8> hn;
+            hn.resize(usize(half) * half);
+            Array<u8> an;
+            an.resize(usize(half) * half * 4);
+            for (u32 y = 0; y < half; ++y)
+                for (u32 x = 0; x < half; ++x) {
+                    u32 hs = 0, as[4] = {0, 0, 0, 0};
+                    for (u32 j = 0; j < 4; ++j) {
+                        const u32 sx = 2 * x + (j & 1), sy = 2 * y + (j >> 1);
+                        hs += hcur[sy * size + sx];
+                        for (u32 c = 0; c < 4; ++c) as[c] += acur[(sy * size + sx) * 4 + c];
+                    }
+                    hn[y * half + x] = static_cast<u8>((hs + 2) / 4);
+                    for (u32 c = 0; c < 4; ++c) an[(y * half + x) * 4 + c] = static_cast<u8>((as[c] + 2) / 4);
+                }
+            hcur = std::move(hn);
+            acur = std::move(an);
+        }
+        Array<TextureMipUpload> amips, lmips;
+        for (u32 m = 0; m < albedo_by_mip.size(); ++m) {
+            const u32 size = N >> m;
+            amips.push_back({size, size, std::as_bytes(albedo_by_mip[m].span())});
+            lmips.push_back({size, size, std::as_bytes(layers_by_mip[m].span())});
+        }
+        TextureUpload aup;
+        aup.format = rhi::TextureFormat::RGBA8_SRGB;
+        aup.mips = amips.span();
+        aup.debug_name = "06_showcase.cobble_albedo";
+        cobble_albedo = renderer.textures().allocate_key();
+        MCE_TRY(renderer.textures().upload(cobble_albedo, 1, aup));
+        TextureUpload lup;
+        lup.layers = 2;
+        lup.mips = lmips.span();
+        lup.debug_name = "06_showcase.cobble_maps";
+        cobble_maps = renderer.textures().allocate_key();
+        MCE_TRY(renderer.textures().upload(cobble_maps, 1, lup));
         return ok();
     }
 
@@ -236,14 +364,31 @@ MaterialOverride brushed_material() {
     return m;
 }
 
+// The visual3 corner (M-VISUAL3 6), west of the pavilion: the wall at z = 1.2, the cobble floor and the crate yard
+// in front of it, the meadow in front of those. The courtyard's own grass leaves the corner out in these profiles.
+constexpr vec3 kCobbleCenter{-13.0f, 0.012f, 7.5f};
+constexpr aabb3 kCorner{{-18.5f, 0.0f, 0.4f}, {-3.4f, 3.0f, 19.0f}};
+constexpr vec3 kMeadowCenter{-10.9f, 0.0f, 15.8f};
+constexpr vec2 kMeadowHalf{6.6f, 3.0f};
+constexpr u32 kMeadowGrass = 1400, kMeadowFlowers = 250;
+
 // The static layout and the grass, shared by every profile.
 struct Layout {
     Array<MeshInstance> statics;
     Array<MeshInstance> visual2;  // drawn by the M-VISUAL2 profiles only
     Array<mat4> grass;
     MaterialOverride glass = glass_material(), lacquer = lacquer_material(), brushed = brushed_material();
+    // The visual3 profiles only.
+    Array<mat4> grass_v3;                        // `grass` without the corner
+    Array<mat4> meadow_grass, meadow_flowers;    // two kinds over the corner's meadow
+    Array<mat4> meadow_all;                      // both, drawn as one kind by visual3off
+    Array<MeshInstance> yard;                    // the crate yard: identical draws for automatic instancing
+    Array<MeshInstance> wall;                    // the wall's pieces, one draw each (visual3off)
+    u32 wall_merged = ~0u;                       // the same pieces as one mesh (store key); ~0u = not built
+    MergeStats wall_stats;
+    MaterialOverride cobbles_on, cobbles_off;    // the parallax floor with and without its height map
 
-    void build(const Content& c) {
+    void build(Content& c) {
         auto place = [&](Model m, vec3 p, f32 yaw = 0.0f, f32 s = 1.0f) {
             MeshInstance i;
             i.mesh = c.keys[m];
@@ -286,6 +431,96 @@ struct Layout {
             const bool fire = length(p - kBrazier) < 1.2f;
             if (!room && !path && !fire) grass.push_back(m);
         }
+        build_visual3(c);
+    }
+
+    void build_visual3(Content& c) {
+        for (const mat4& m : grass) {
+            const vec3 p{m.c[3][0], 0.0f, m.c[3][2]};
+            if (!(p.x > kCorner.min.x && p.x < kCorner.max.x && p.z > kCorner.min.z && p.z < kCorner.max.z)) grass_v3.push_back(m);
+        }
+        FoliageScatter sc;
+        sc.origin = kMeadowCenter;
+        sc.half_extents = kMeadowHalf;
+        sc.count = kMeadowGrass;
+        sc.seed = 11;
+        sc.scale_min = 0.8f;
+        sc.scale_max = 1.5f;
+        scatter_foliage(sc, meadow_grass);
+        sc.count = kMeadowFlowers;
+        sc.seed = 23;
+        sc.scale_min = 0.9f;
+        sc.scale_max = 1.4f;
+        scatter_foliage(sc, meadow_flowers);
+        for (const mat4& m : meadow_grass) meadow_all.push_back(m);
+        for (const mat4& m : meadow_flowers) meadow_all.push_back(m);
+
+        // Crates: 5 x 6, a second layer on every third; a small deterministic turn each.
+        for (u32 i = 0; i < 5; ++i)
+            for (u32 j = 0; j < 6; ++j) {
+                const f32 yaw = 0.35f * std::sin(static_cast<f32>(i * 3 + j * 5));
+                for (u32 layer = 0; layer < ((i + j) % 3 == 0 ? 2u : 1u); ++layer) {
+                    MeshInstance m;
+                    m.mesh = c.keys[Crate];
+                    m.world = trs({-8.0f + 0.95f * static_cast<f32>(i), 0.8f * static_cast<f32>(layer), 5.0f + 0.95f * static_cast<f32>(j)},
+                                  quat_from_axis_angle({0, 1, 0}, yaw + 0.1f * static_cast<f32>(layer)), {1, 1, 1});
+                    yard.push_back(m);
+                }
+            }
+
+        // The wall: slabs between pillars along z = 1.2 and a short return at each end, a cap on every slab.
+        struct Piece {
+            Model model;
+            vec3 at;
+            f32 yaw;
+        };
+        Array<Piece> pieces;
+        for (u32 i = 0; i < 7; ++i) pieces.push_back({WallPillar, {-17.0f + 2.0f * static_cast<f32>(i), 0.0f, 1.2f}, 0.0f});
+        for (u32 i = 0; i < 6; ++i) {
+            pieces.push_back({WallSlab, {-16.0f + 2.0f * static_cast<f32>(i), 0.0f, 1.2f}, 0.0f});
+            pieces.push_back({WallCap, {-16.0f + 2.0f * static_cast<f32>(i), 1.2f, 1.2f}, 0.0f});
+        }
+        for (const f32 x : {-17.0f, -5.0f}) {
+            const f32 quarter = 1.5707963f;
+            pieces.push_back({WallSlab, {x, 0.0f, 2.2f}, quarter});
+            pieces.push_back({WallCap, {x, 1.2f, 2.2f}, quarter});
+            pieces.push_back({WallPillar, {x, 0.0f, 3.2f}, 0.0f});
+        }
+        asset::MeshView views[kModelCount] = {};
+        for (const Model m : {WallSlab, WallPillar, WallCap}) {
+            auto v = asset::MeshView::read(c.assets.resolve(c.model_handles[m]));
+            if (!v) return;
+            views[m] = v.value();
+        }
+        Array<MergeSource> sources;
+        for (const Piece& p : pieces) {
+            MeshInstance i;
+            i.mesh = c.keys[p.model];
+            i.world = trs(p.at, quat_from_axis_angle({0, 1, 0}, p.yaw), {1, 1, 1});
+            wall.push_back(i);
+            MergeSource ms;
+            ms.mesh = &views[p.model];
+            ms.world = i.world;
+            sources.push_back(ms);
+        }
+        Array<byte> blob;
+        if (build_merged_mesh(sources.span(), blob, &wall_stats)) {
+            MeshStore& store = c.writable_meshes();
+            const u32 key = store.allocate_key();
+            if (store.upload(key, 1, blob.span())) wall_merged = key;
+        }
+
+        cobbles_off.params.base_color[0] = cobbles_off.params.base_color[1] = cobbles_off.params.base_color[2] = 1.0f;
+        cobbles_off.params.base_color[3] = 1.0f;
+        cobbles_off.params.roughness = 0.9f;
+        cobbles_off.params.uv_scale_half = asset::MaterialChunk::pack_uv_scale(6.0f, 6.0f);
+        cobbles_off.albedo_key = c.cobble_albedo;
+        cobbles_off.normal_key = c.cobble_maps;  // layer 0: the same normal map, without the parallax
+        cobbles_on = cobbles_off;
+        cobbles_on.parallax = true;
+        cobbles_on.parallax_normal = true;
+        cobbles_on.ext.set_height(asset::Guid{0x6d63e0a1, 0x1});  // any GUID: the height map is layer 1 of normal_key
+        cobbles_on.ext.height_scale = 0.06f;
     }
 };
 
@@ -295,12 +530,19 @@ void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile 
                 f32 t, f32 dt, rhi::Extent2D viewport) {
     const bool visual = profile != Profile::Current;
     const bool visual2 = visual && profile != Profile::HighBase;  // M-VISUAL2's effects and materials
+    const bool corner = is_visual3(profile);                     // the visual3 corner is drawn
+    const bool v3 = profile == Profile::Visual3;                 // ... with M-VISUAL3's features on
     const QualitySettings q = profile_quality(profile);
     Camera3D cam = orbit_camera(shot.target, shot.yaw + yaw_offset, shot.pitch, shot.distance, radians(shot.fov_deg));
     cam.near_z = 0.05f;
     cam.far_z = 150.0f;
     scene.begin(cam, viewport);
     scene.set_time(t, dt);
+    if (corner) {  // automatic instancing (5a) is on for visual3 and off for visual3off; the other profiles keep the default
+        InstancingSettings inst;
+        inst.enabled = v3;
+        scene.set_instancing(inst);
+    }
 
     const vec3 sun_dir = sun_direction_at(hour, 58.0f, 35.0f);
     const f32 day = clamp(-sun_dir.y * 4.0f, 0.0f, 1.0f);  // the sun's height: 0 at the horizon
@@ -308,7 +550,9 @@ void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile 
     sun.direction = sun_dir;
     sun.intensity = 3.0f;
     if (visual) {
-        sun.color = {1.0f, 1.0f, 1.0f};  // above the air: the atmosphere tints it and sets the ambient
+        // Above the air: the atmosphere tints it and sets the ambient. visual3 has no atmosphere (its sky is the HDR map),
+        // so the sun carries the dusk's colour itself.
+        sun.color = v3 ? lerp(vec3{1.0f, 0.58f, 0.34f}, vec3{1.0f, 0.95f, 0.88f}, day) : vec3{1.0f, 1.0f, 1.0f};
     } else {
         // The M5a frame: a hand-picked warm sun at dusk and a hemisphere ambient.
         sun.color = lerp(vec3{1.0f, 0.55f, 0.3f}, vec3{1.0f, 0.95f, 0.88f}, day);
@@ -327,6 +571,11 @@ void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile 
         sky.horizon = lerp(vec3{0.85f, 0.45f, 0.3f}, vec3{0.7f, 0.78f, 0.9f}, day);
     }
     sky.ibl = visual;
+    if (v3 && c.sky_key != ~0u) {  // M-VISUAL3 4: the cooked .hdr lights the scene; its glow faces the sun
+        sky.texture = c.sky_key;
+        const vec3 toward_sun = -sun_dir;
+        sky.rotation = -std::atan2(toward_sun.z, toward_sun.x);
+    }
     scene.set_sky(sky);
     ShadowSettings shadows;
     shadows.distance = 45.0f;
@@ -335,7 +584,7 @@ void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile 
     post.fxaa = true;
     if (visual) {
         Atmosphere atmosphere;
-        atmosphere.enabled = true;
+        atmosphere.enabled = !v3;
         scene.set_atmosphere(atmosphere);
         Volumetrics vol;
         vol.enabled = hour >= 17.0f || hour <= 7.0f;  // the dusk haze
@@ -382,6 +631,16 @@ void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile 
         scene.set_contact_shadows(contact);
         post.sharpen = 0.3f;
     }
+    if (corner) {
+        ParallaxSettings parallax;
+        apply_quality(q, parallax);
+        scene.set_parallax(parallax);
+    }
+    if (v3) {  // M-VISUAL3 3: the filmic lens
+        post.lens.vignette = 0.5f;
+        post.lens.grain = 0.12f;
+        post.lens.chromatic_aberration = 0.4f;
+    }
     shadows.resolution = visual ? q.shadow_size : 2048;  // = Forward3DDesc::shadow_size
     scene.set_shadows(shadows);
     scene.set_post(post);
@@ -390,6 +649,22 @@ void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile 
         if (!visual2 || i.mesh != c.keys[Statue]) scene.add(i);
     if (visual2)
         for (const MeshInstance& i : layout.visual2) scene.add(i);
+    if (corner) {
+        MeshInstance floor;
+        floor.mesh = c.keys[Cobbles];
+        floor.world = translation(kCobbleCenter);
+        floor.cast_shadows = false;
+        floor.material = v3 ? &layout.cobbles_on : &layout.cobbles_off;
+        scene.add(floor);
+        for (const MeshInstance& i : layout.yard) scene.add(i);
+        if (v3 && layout.wall_merged != ~0u) {  // one merged mesh in the pieces' world space
+            MeshInstance m;
+            m.mesh = layout.wall_merged;
+            scene.add(m);
+        } else {
+            for (const MeshInstance& i : layout.wall) scene.add(i);
+        }
+    }
     for (const LanternSpot& l : kLanterns) {
         PointLight pl;
         pl.position = l.position + vec3{0.0f, l.spot ? -0.25f : 0.0f, 0.0f};
@@ -409,12 +684,41 @@ void fill_scene(Scene3D& scene, const Content& c, const Layout& layout, Profile 
         grass.id = 1;
         grass.version = 1;
         grass.mesh = c.keys[Grass];
-        grass.transforms = layout.grass.span();
+        grass.transforms = (corner ? layout.grass_v3 : layout.grass).span();
         grass.cull_distance = 60.0f;
         grass.wind_amplitude = 0.35f;
         grass.wind_frequency = 0.6f;
         grass.wind_direction = {0.8f, 0.3f};
         scene.add_batch(grass);
+        if (corner) {
+            // The meadow. On: two kinds, each copy tinted by its own hash, the sway reaching its amplitude at the blades'
+            // height, with gusts and a little flutter (M-VISUAL3 6). Off: one kind, one tint, today's amplitude x h^2.
+            InstanceBatch meadow;
+            meadow.id = 2;
+            meadow.version = 1;
+            meadow.mesh = c.keys[Grass];
+            meadow.cull_distance = 70.0f;
+            meadow.wind_frequency = 0.6f;
+            meadow.wind_direction = {0.8f, 0.3f};
+            if (v3) {
+                meadow.transforms = layout.meadow_grass.span();
+                meadow.wind_amplitude = 0.2f;
+                meadow.tint_variation = {2.0f, 1.3f, 0.7f, 1.0f};
+                meadow.wind_ext = {0.7f, 0.6f, 0.01f, 0.0f};
+                scene.add_batch(meadow);
+                InstanceBatch flowers = meadow;
+                flowers.id = 3;
+                flowers.mesh = c.keys[Flower];
+                flowers.transforms = layout.meadow_flowers.span();
+                flowers.tint_variation = {1.0f, 0.2f, 0.5f, 1.0f};
+                flowers.wind_ext = {0.5f, 0.6f, 0.01f, 0.0f};
+                scene.add_batch(flowers);
+            } else {
+                meadow.transforms = layout.meadow_all.span();
+                meadow.wind_amplitude = 0.35f;
+                scene.add_batch(meadow);
+            }
+        }
         Decal puddle;  // a dark, glossy puddle on the path
         puddle.world = translation({0.6f, 0.0f, 6.0f}) * scaling({2.2f, 0.4f, 1.4f});
         puddle.color = {0.12f, 0.12f, 0.13f, 0.75f};
@@ -479,6 +783,10 @@ public:
             window_->set_event_handler(&ShowcaseApp::on_event, this);
         }
         MCE_LOG_INFO("06_showcase: profile {}, {} grass tufts", profile_name(profile_), layout_.grass.size());
+        if (is_visual3(profile_))
+            MCE_LOG_INFO("06_showcase: visual3 corner: {} crates, a wall of {} pieces{}, a meadow of {} + {} copies", layout_.yard.size(),
+                         layout_.wall.size(), layout_.wall_merged != ~0u ? " (merged into one mesh)" : "", layout_.meadow_grass.size(),
+                         layout_.meadow_flowers.size());
         return ok();
     }
 
@@ -547,10 +855,10 @@ private:
         const Forward3DGpuTimes gpu = content_.renderer.forward_3d().gpu_times(device_->last_gpu_timestamps());
         char line[400];
         std::snprintf(line, sizeof(line),
-                      "MCE M-VISUAL SHOWCASE  PROFILE %s  SHOT %s  HOUR %.1f\nDRAWS %u  SHADOW TILES %u  BATCH DRAWS %u  DECALS %u  "
-                      "PARTICLES %u\nGPU MS %.2f\nS NEXT SHOT  H +1 HOUR  ARROWS ORBIT  SPACE AUTO",
-                      profile_name(profile_), kShots[shot_].name, static_cast<f64>(hour_), fs.main_draws, fs.local_shadow_tiles,
-                      fs.batch_draws, fs.decals, fs.particle_emitters, gpu.total);
+                      "MCE M-VISUAL SHOWCASE  PROFILE %s  SHOT %s  HOUR %.1f\nDRAWS %u  INSTANCED RUNS %u (%u DRAWS)  SHADOW TILES %u  BATCH DRAWS %u  "
+                      "DECALS %u  PARTICLES %u\nGPU MS %.2f\nS NEXT SHOT  H +1 HOUR  ARROWS ORBIT  SPACE AUTO",
+                      profile_name(profile_), kShots[shot_].name, static_cast<f64>(hour_), fs.main_draws, fs.runs_instanced,
+                      fs.draws_instanced, fs.local_shadow_tiles, fs.batch_draws, fs.decals, fs.particle_emitters, gpu.total);
         for (char* p = line; *p; ++p)
             if (*p >= 'a' && *p <= 'z') *p = static_cast<char>(*p - 'a' + 'A');  // the HUD font has capitals only
         TextLayout text(mem::frame());
@@ -665,6 +973,13 @@ int run_sheet(rhi::RenderDevice& device) {
     };
     Array<Times> times;
     times.resize(cols);
+    struct DrawRow {  // what the main pass drew in each cell (M-VISUAL3 5a / 5b): the draw counts the sheet prints
+        Profile profile;
+        const char* shot;
+        u32 main_draws, runs_instanced, draws_instanced, batch_draws, wall_pieces, wall_materials;
+        bool merged;
+    };
+    Array<DrawRow> draw_rows;
     u64 frame = 0;
     for (u32 col = 0; col < cols; ++col) {
         const Profile profile = profiles[col];
@@ -696,6 +1011,9 @@ int run_sheet(rhi::RenderDevice& device) {
                 content.renderer.record_3d(cmd, scene, target);
                 device.submit(cmd);
                 if (f + 1 == frames) {
+                    const Forward3DStats& fs = content.renderer.forward_3d().last_stats();
+                    draw_rows.push_back({profile, shot.name, fs.main_draws, fs.runs_instanced, fs.draws_instanced, fs.batch_draws,
+                                         static_cast<u32>(layout.wall.size()), layout.wall_stats.submeshes, layout.wall_merged != ~0u});
                     if (!device.read_pixels(target, rhi::Rect2D{0, 0, w, h}, px.span())) return 1;
                     for (u32 y = 0; y < h; ++y)
                         for (u32 x = 0; x < w; ++x) {
@@ -773,6 +1091,23 @@ int run_sheet(rhi::RenderDevice& device) {
     row("tonemap", &Times::tonemap);
     row("FXAA", &Times::fxaa);
     row("3D frame total", &Times::total);
+    // Draw counts of the main pass per cell. visual3 folds the crate yard by instancing and the wall by merging; visual3off
+    // draws each crate and each wall piece on its own (instancing off).
+    std::printf("  main-pass draws per cell (an instanced run counts once; batch draws are the foliage's)\n"
+                "  | profile | shot | main draws | instanced runs | draws folded | batch draws | wall |\n  |---|---|---|---|---|---|---|\n");
+    for (const DrawRow& r : draw_rows) {
+        if (!is_visual3(r.profile)) {
+            std::printf("  | %s | %s | %u | %u | %u | %u | - |\n", profile_name(r.profile), r.shot, r.main_draws, r.runs_instanced,
+                        r.draws_instanced, r.batch_draws);
+            continue;
+        }
+        if (r.profile == Profile::Visual3 && r.merged)
+            std::printf("  | %s | %s | %u | %u | %u | %u | %u pieces merged into 1 mesh, %u material |\n", profile_name(r.profile), r.shot,
+                        r.main_draws, r.runs_instanced, r.draws_instanced, r.batch_draws, r.wall_pieces, r.wall_materials);
+        else
+            std::printf("  | %s | %s | %u | %u | %u | %u | %u pieces, one draw each |\n", profile_name(r.profile), r.shot, r.main_draws,
+                        r.runs_instanced, r.draws_instanced, r.batch_draws, r.wall_pieces);
+    }
     return 0;
 }
 
@@ -809,6 +1144,7 @@ int run_windowed(Profile profile) {
     if (!window) return fail("window creation failed", window.error());
     rhi::DeviceDesc dd;
     dd.debug_layer = cv_gl_debug.get_bool();
+    dd.uniform_ring_bytes = 4 * MiB;  // the player's default: the visual3 corner's draws across the shadow views outgrow 1 MiB
     auto device = rhi::create_default_device(*window.value(), dd);
     if (!device) return fail("render device creation failed", device.error());
     int rc = 0;

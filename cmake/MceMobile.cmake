@@ -36,10 +36,22 @@ if(MCE_MOBILE)
 else()
     set(_mce_textures_default rgba8)
 endif()
-set(MCE_COOK_TEXTURES "${_mce_textures_default}" CACHE STRING "Texture storage of cooked packs: rgba8 or astc")
+set(MCE_COOK_TEXTURES "${_mce_textures_default}" CACHE STRING "Texture storage of cooked packs: rgba8, bc (desktop only) or astc")
+if(MCE_COOK_TEXTURES STREQUAL "bc" AND (MCE_MOBILE OR EMSCRIPTEN))
+    message(FATAL_ERROR "MCE_COOK_TEXTURES=bc is for desktop packs: phones have no BC textures (use astc) and a web pack "
+                        "serves every browser, phones included (use rgba8)")
+endif()
 set(MCE_COOK_TEXTURE_ARGS)  # the build-time cooks' extra arguments (samples/CMakeLists.txt, MceProject.cmake)
 if(MCE_COOK_TEXTURES STREQUAL "astc")
     set(MCE_COOK_TEXTURE_ARGS --textures astc)
+elseif(MCE_COOK_TEXTURES STREQUAL "bc")
+    set(MCE_COOK_TEXTURE_ARGS --textures bc)
+endif()
+# Cap on PNG/JPG textures in the packs this build cooks (mce_cook --max-texture-size; M-CONTENT 1a): a power of two,
+# empty = no limit. scripts/ship.py --max-texture-size N sets it for one ship.
+set(MCE_COOK_MAX_TEXTURE_SIZE "" CACHE STRING "Largest side of PNG/JPG textures in cooked packs: a power of two from 1 to 16384, empty for no limit")
+if(MCE_COOK_MAX_TEXTURE_SIZE)
+    list(APPEND MCE_COOK_TEXTURE_ARGS --max-texture-size ${MCE_COOK_MAX_TEXTURE_SIZE})
 endif()
 
 if(ANDROID)

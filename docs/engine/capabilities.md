@@ -15,16 +15,16 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | Component | Header | Editor | MCP | Cook | Documented in | Shown in |
 |---|---|---|---|---|---|---|
 | `AudioSource` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/main.cpp |
-| `AudioSpatial` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioSpatial` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `AudioOcclusion` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `AudioDoppler` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioListener` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioListener` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `AudioListenerMix` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: tested in tests/audio; M-VIEWS step 5 shows it in samples/09_coop (a listener per player) |
 | `AudioBusEffects` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `AudioReverb` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioLimiter` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioLimiter` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `AudioDuck` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioSnapshot` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioSnapshot` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ChildOf` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `WorldTransform` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/03-editor.md | projects/MarbleGarden/games/marble_garden/module/marble_garden.cpp |
 | `NetReplicated` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/net_arena/arena.h |
@@ -35,23 +35,36 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Blackboard` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: state the engine writes and games read; nothing to author |
 | `AiBrain` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `AiTokenPool` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard_squad.mcscene |
+| `AmmoPickup3D` | `mce/kit/ammopickup3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Locomotion3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `Aurora` | `mce/kit/aurora.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | projects/MarbleGarden/assets/scenes/garden.mcscene |
+| `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/08_movement/assets/scenes/course.mcscene |
+| `BulletHole3D` | `mce/kit/bullet_hole3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Butterfly` | `mce/kit/butterfly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `SoundCaption` | `mce/kit/captions.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `Caustics3D` | `mce/kit/caustics.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_caustics.mcscene |
+| `ChunkLod3D` | `mce/kit/chunk_lod3d.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/hlod_city/main.cpp |
 | `CameraRail3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
 | `CameraLookAt3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
-| `CameraShake3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `CameraShake3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `CameraBlend3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Cutscene` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
+| `Cirrus` | `mce/kit/cirrus.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `CloudLayer` | `mce/kit/cloud_layer.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `CloudShadow3D` | `mce/kit/cloud_shadow.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_cloudshadow.mcscene |
+| `ColdBreath` | `mce/kit/cold_breath.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Health3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
+| `Weapon3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/roadblock_officer.mcprefab |
+| `Projectile3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp |
 | `Sprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/03_platformer/game/platformer.cpp |
 | `AnimatedSprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/import_demo/assets/scenes/main.mcscene |
 | `TextLabel` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/scene_demo/assets/scenes/demo.mcscene |
-| `UiScreen` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/ui_screens/assets/scenes/main.mcscene |
-| `UiFlow` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | projects/Kindle/assets/scenes/main.mcscene |
+| `UiScreen` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `UiFlow` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Camera2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `Post2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/extras_2d/assets/scenes/extras.mcscene |
 | `TilemapLayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/import_demo/assets/levels/cave.mcscene |
@@ -61,38 +74,89 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `SequencePlayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
-| `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
+| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `ScriptParams` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/EmberScript/assets/scenes/main.mcscene |
 | `CoopGame` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `PlayerSpawn` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/prefabs/player.mcprefab |
 | `PlayerCamera` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `SharedCamera2D` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style |
-| `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
-| `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
-| `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `CraftingStation` | `mce/kit/craft.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/12_loot/assets/scenes/loot.mcscene |
+| `Pedestrian3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
+| `CrowdSpawner3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `DayCycle` | `mce/kit/day_cycle.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `DecalScatter3D` | `mce/kit/decal_scatter.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `DriveReadout3D` | `mce/kit/drive_readout.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `DuskBat` | `mce/kit/dusk_bat.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Dust` | `mce/kit/dust.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/03_platformer/main.cpp |
+| `DynamicResolution3D` | `mce/kit/dynamic_resolution.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_dynres.mcscene |
+| `EdgeOutline3D` | `mce/kit/edge_outline.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_ink.mcscene |
+| `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/08_movement/assets/scenes/course.mcscene |
 | `CameraShake2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `CameraFollow2D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | projects/Glowmoth/assets/scenes/level1.mcscene |
 | `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `EventSfx3D` | `mce/kit/event_sfx3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `FaceVelocity3D` | `mce/kit/face_velocity.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `FallDeath3D` | `mce/kit/fall_death.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Firefly` | `mce/kit/firefly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Floater` | `mce/kit/floater.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: Luau and the 13_water sample arrive with M-FLOAT 55c; remove this line then |
+| `Flock` | `mce/kit/flock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `GiVisibility3D` | `mce/kit/gi_visibility.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Grenade3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `GrenadeLive3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: spawned by the engine at a throw; nothing to author |
+| `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Halo` | `mce/kit/halo.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `HeatHaze3D` | `mce/kit/heat_haze.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_haze.mcscene |
+| `HitMarker3D` | `mce/kit/hit_marker.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `ImpactFx3D` | `mce/kit/impact_fx.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Inventory` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Equipment` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
+| `ItemPickup3D` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/12_loot/assets/scripts/loot.luau |
 | `Joint3D` | `mce/kit/joints3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `MeshRef` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
-| `SpotLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/Room3D/assets/scenes/main.mcscene |
+| `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `SpotLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `ReflectionProbe3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `GiVolume3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `GiVolume3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Camera3DComponent` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Animator` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/cinema_demo/assets/scenes/intro.mcscene |
+| `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `BoxCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `MeshCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/MarbleGarden/assets/scenes/garden.mcscene |
-| `Foliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `Foliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `Terrain3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `TerrainCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `TerrainFoliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/SolsticeReach/assets/scenes/main.mcscene |
-| `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `LeafFall` | `mce/kit/leaf_fall.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `LensFlare3D` | `mce/kit/lens_flare.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/11_daynight/assets/scenes/sunrise.mcscene |
+| `LensRain3D` | `mce/kit/lens_rain.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_lensrain.mcscene |
+| `LightCookie3D` | `mce/kit/light_cookie.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_cookie.mcscene |
+| `SunCookie3D` | `mce/kit/light_cookie.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_cookie.mcscene |
+| `LightFlicker3D` | `mce/kit/light_flicker.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `LightningBolt` | `mce/kit/lightning_bolt.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WeaponPreset3D` | `mce/kit/loadout3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Loadout3D` | `mce/kit/loadout3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `LootDrop` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
+| `ItemHotkey3D` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Container` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
+| `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Melee3D` | `mce/kit/melee3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Meteor` | `mce/kit/meteor.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Midge` | `mce/kit/midge.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `MissionMarker` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `MissionWantedFail` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `MissionRetry` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Moon` | `mce/kit/moon.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `NavMeshSurface3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `NavArea3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `NavLink3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
@@ -100,13 +164,27 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Perceiver` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `Stimulus` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
+| `Pollen` | `mce/kit/pollen.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Precipitation3D` | `mce/kit/precipitation.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Lightning` | `mce/kit/precipitation.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `RichPresence` | `mce/kit/presence.h` | yes | yes | yes | docs/user-guide/26-steam.md | samples/steam_demo/assets/scenes/main.mcscene |
 | `ProcLevel` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | projects/Dungeon/assets/scenes/caves.mcscene |
 | `ProcLevelOwned` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: state the engine writes and games read; nothing to author |
 | `ProcMarker` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | projects/Dungeon/assets/scripts/dungeon.luau |
+| `Progress3D` | `mce/kit/progress3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Goal3D` | `mce/kit/progress3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
+| `RainRipples` | `mce/kit/rain_ripples.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `RainSplash` | `mce/kit/rain_splash.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Rainbow` | `mce/kit/rainbow.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `RenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `ShowRenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `Roadblock3D` | `mce/kit/roadblock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `RoadblockPiece3D` | `mce/kit/roadblock.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand |
+| `RoadNetwork3D` | `mce/kit/roads.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Season` | `mce/kit/season.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `VehicleSeat3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `Rider3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
@@ -115,14 +193,59 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `SnowCover` | `mce/kit/snow_cover.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `SnowSparkle` | `mce/kit/snow_sparkle.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `StaticMerge3D` | `mce/kit/static_merge3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/06_showcase/main.cpp |
+| `StatusEffects` | `mce/kit/status.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | samples/12_loot/assets/scenes/loot.mcscene |
+| `SunShafts3D` | `mce/kit/sun_shafts.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_shafts.mcscene |
+| `ThunderDelay` | `mce/kit/thunder_delay.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `TimedLight3D` | `mce/kit/timed_light.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `Tracer3D` | `mce/kit/tracer3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `TrafficDriver3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `TrafficSpawner3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `UiFlowRules` | `mce/kit/ui_flow.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `VehicleHorn3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `VehicleLights3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `VehicleRam3D` | `mce/kit/vehicle_ram.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `VehicleDriver3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/08_movement/assets/scenes/race.mcscene |
+| `VehicleDriver3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/08_movement/assets/scenes/race.mcscene |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
 | `CameraView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `SplitScreen` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none |
+| `Wanted3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/roadblock_officer.mcprefab |
+| `RespawnPoint3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Respawn3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Wallet3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `CashDrop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing |
+| `MissionReward3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `CarOwner3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `PaySpray3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage |
+| `RepairShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `AmmoShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `HealShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `CashPickup3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `ChopShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Confiscate3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Water` | `mce/kit/water.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/13_water/assets/scenes/water.mcscene |
+| `WaterFlow` | `mce/kit/water_flow.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_river.mcscene |
+| `WaterIce` | `mce/kit/water_ice.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/13_water/assets/scenes/water.mcscene |
+| `Weather` | `mce/kit/weather.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WeatherAudio` | `mce/kit/weather_audio.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WetSurfaces` | `mce/kit/wet_surfaces.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WindDirection` | `mce/kit/wind_direction.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WindGust` | `mce/kit/wind_gust.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WindSway` | `mce/kit/wind_sway.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `EngineAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `WeaponAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `ImpactAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `FootstepAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `SirenAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `ClockAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WorldClock` | `mce/kit/world_clock.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `StagePart` | `mce/kit/novel_components.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md | projects/Undelivered/assets/scenes/main.mcscene |
@@ -131,9 +254,14 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Collider2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/game/platformer.cpp |
 | `CharacterController2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/game/platformer.cpp |
 | `CharacterGround2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/physics2d_headless/main.cpp |
-| `SceneChunk` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/stream_demo/assets/scenes/world.mcscene |
-| `StreamingFocus` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/stream_demo/assets/scenes/world.mcscene |
-| `SceneChunkStatus` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: state the engine writes and games read; nothing to author |
+| `LaunchVelocity2D` | `mce/physics/force2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body |
+| `Impulse2D` | `mce/physics/force2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body |
+| `ConstantForce2D` | `mce/physics/force2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body |
+| `Joint2D` | `mce/physics/joint2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/physics2d_headless/main.cpp |
+| `SceneChunk` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/hlod_city/main.cpp |
+| `StreamingFocus` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `FloatingOrigin3D` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it |
+| `SceneChunkStatus` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/hlod_city/main.cpp |
 
 ## Asset types
 
@@ -141,8 +269,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 |---|---|---|---|---|
 | Mesh | .gltf / .glb | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/08-3d.md |
 | Material | `.mcmat` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
-| Texture | .png / .jpg | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
-| Sfx | .wav / .ogg / .mcsound (sound set) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
+| Texture | .png / .jpg / .tga / .bmp | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
+| Sfx | .wav / .ogg / .mp3 / .flac / .mcsound (sound set) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
 | Font | .ttf | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/05-assets.md |
 | Scene | .mcscene (scene_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | Prefab | .mcprefab (prefab_* tools) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/03-editor.md |
@@ -165,6 +293,9 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | BehaviorTree | `.mcbt` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Skeleton2D | `.mcskel2d` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Script | .luau (Luau source, compiled at cook; MCE_WITH_SCRIPT) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/27-scripting.md |
+| RoadNetwork | `.mcroads` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/05-assets.md |
+| ConvarDefaults | `.mcdefaults` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/12-ui-and-console.md |
+| ItemCatalog | `.mcitems` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/05-assets.md |
 
 ## MCP tools
 
@@ -200,6 +331,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `scene_open` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `scene_save` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `navmesh_bake` | `tools.cpp` | docs/user-guide/08-3d.md |
+| `hlod_bake` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `scene_undo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_redo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `cook_run` | `tools.cpp` | docs/user-guide/05-assets.md |
@@ -208,8 +340,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `run_headless` | `tools.cpp` | docs/user-guide/02-projects.md |
 | `console_list` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `console_exec` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `render_frame` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `render_sheet` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `render_frame` | `tools_agent.cpp` | docs/user-guide/08-3d.md |
+| `render_sheet` | `tools_agent.cpp` | docs/user-guide/08-3d.md |
 | `timeline_preview` | `tools_agent.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `perf_run` | `tools_agent.cpp` | docs/user-guide/03-editor.md |
@@ -242,13 +374,25 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `task_update` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_switch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_documents` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_lint` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_lint_fix` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_lint_all` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_stats` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_find` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `asset_used_by` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `report_friction` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `bt_create` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_add_node` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_set` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `perception_debug_lines` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_trace` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `debug_lines` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
+| `debug_view` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
 | `asset_import` | `tools_import.cpp` | docs/user-guide/05-assets.md |
 | `procgen_run` | `tools_procgen.cpp` | docs/user-guide/28-procedural-levels.md |
+| `roads_info` | `tools_roads.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `roads_generate` | `tools_roads.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `script_check` | `tools_script.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `skel2d_create` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `skel2d_add_bone` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
@@ -260,6 +404,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `terrain_paint` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_import` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_generate` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
+| `asset_thumbnail` | `tools_thumbs.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `timeline_create` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `timeline_add_track` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `timeline_add_key` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |

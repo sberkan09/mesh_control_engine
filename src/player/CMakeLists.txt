@@ -7,7 +7,7 @@
 # The runtime itself is mce_player_runtime (mce/player/player.h), which project hosts made from the
 # project template link too. Where game modules are supported it links the mce_engine umbrella,
 # so a module loaded with -module shares the host's engine; elsewhere it links the libraries.
-add_library(mce_player_runtime STATIC src/player.cpp src/ui_screens.cpp)
+add_library(mce_player_runtime STATIC src/player.cpp src/ui_screens.cpp src/minimap_feed.cpp src/item_grid_feed.cpp)
 add_library(mce::mce_player_runtime ALIAS mce_player_runtime)
 target_include_directories(mce_player_runtime
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -31,6 +31,11 @@ if(MCE_BUILD_TESTS)
     # -help prints the command-line reference (every convar) and exits 0, before any pack is needed.
     add_test(NAME player_help COMMAND mce_player -help)
     set_tests_properties(player_help PROPERTIES PASS_REGULAR_EXPRESSION "usage: mce_player.*-capture_tick <int>.*-pack <string>")
+    # A number list that holds nan or inf is refused up front (the pack need not exist: the lists are read first).
+    add_test(NAME player_view_nonfinite COMMAND mce_player -headless -pack nothing.mcpack -view.free nan,0)
+    set_tests_properties(player_view_nonfinite PROPERTIES PASS_REGULAR_EXPRESSION "-view.free wants")
+    add_test(NAME player_safe_area_nonfinite COMMAND mce_player -headless -pack nothing.mcpack -safe_area inf,0,0,0)
+    set_tests_properties(player_safe_area_nonfinite PROPERTIES PASS_REGULAR_EXPRESSION "-safe_area wants")
 endif()
 
 # Data mods end to end (ADR-0034): mce_cook builds a game pack and a mod pack over it; mce_player
@@ -92,6 +97,14 @@ if(MCE_BUILD_TESTS AND TARGET mce_cook)
              COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
                      -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/perf_test
                      -P ${PROJECT_SOURCE_DIR}/tests/perf/player_perf_test.cmake)
+endif()
+
+# Soak (M-SOAK step 1): 1500 ticks under a capture; the live heap allocation count must not grow.
+if(MCE_BUILD_TESTS AND TARGET mce_cook)
+    add_test(NAME player_soak
+             COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/soak_test -DSLACK=8
+                     -P ${PROJECT_SOURCE_DIR}/tests/perf/player_soak_test.cmake)
 endif()
 
 # Capture without a display and the save folder line (M-WORKFLOW step 4, #380): the save folder is logged once

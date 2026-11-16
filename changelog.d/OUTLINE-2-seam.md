@@ -1,0 +1,1 @@
+- M-OUTLINE step 39a: the render-side data seam for edge outlines (`render::EdgeOutline` and `PostFx::outline` in `scene3d.h`, `Forward3DDesc::edge_outline`, `Forward3DStats::edge_outline` / `edge_outline_taps` and the private outline pipeline and target members in `forward3d.h`, released in the destroy paths), nothing reads it yet, every frame is unchanged.

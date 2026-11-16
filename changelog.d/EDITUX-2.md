@@ -1,0 +1,1 @@
+- M-EDITUX step 2: an undo fuzz over prefab-instance commands (create instance, override edit, revert, delete, duplicate); undo and redo are byte-identical, no defect found.

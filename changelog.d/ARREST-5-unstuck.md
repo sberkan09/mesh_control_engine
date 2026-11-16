@@ -1,0 +1,1 @@
+- Kit (M-ARREST 5): a driven police car (`drive_car` 1 or 2) that cannot move for 2 s reverses for 1.5 s and tries again; road-driving cars no longer flip the wheel between lock and straight when the route ends off the road (`Police3D` +8 bytes: `stuck_time`, `reverse_left`). Record: `docs/milestones/M-ARREST.md`.

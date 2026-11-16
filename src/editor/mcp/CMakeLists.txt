@@ -21,6 +21,7 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/tools_check.cpp
         src/tools_team.cpp
         src/tools_terrain.cpp
+        src/tools_roads.cpp
         src/procgen_check.cpp
         src/tools_procgen.cpp
         src/tools_perf.cpp
@@ -28,7 +29,14 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/tools_skeleton2d.cpp
         src/tools_timeline.cpp
         src/tools_bt.cpp
+        src/tools_debugview.cpp
+        src/tools_thumbs.cpp
         src/tools_friction.cpp
+        src/tools_scene_diff.cpp
+        src/tools_scene_lint.cpp
+        src/tools_scene_stats.cpp
+        src/tools_scene_find.cpp
+        src/tools_asset_used_by.cpp
         src/tools_code.cpp
         src/tools_import.cpp
         src/tools_views.cpp

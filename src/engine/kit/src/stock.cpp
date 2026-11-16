@@ -16,8 +16,43 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/joints3d.h"
 #include "mce/kit/ragdolls3d.h"
+#include "mce/kit/crowd.h"
+#include "mce/kit/roads.h"
+#include "mce/kit/roadblock.h"
+#include "mce/kit/traffic.h"
 #include "mce/kit/sensors3d.h"
 #include "mce/kit/vehicles3d.h"
+#include "mce/kit/seats3d.h"
+#include "mce/kit/combat3d.h"
+#include "mce/kit/map_markers.h"
+#include "mce/kit/inventory.h"
+#include "mce/kit/craft.h"
+#include "mce/kit/status.h"
+#include "mce/kit/loot.h"
+#include "mce/kit/missions.h"
+#include "mce/kit/day_cycle.h"
+#include "mce/kit/timed_light.h"
+#include "mce/kit/drive_readout.h"
+#include "mce/kit/face_velocity.h"
+#include "mce/kit/hit_marker.h"
+#include "mce/kit/impact_fx.h"
+#include "mce/kit/fall_death.h"
+#include "mce/kit/loadout3d.h"
+#include "mce/kit/ammopickup3d.h"
+#include "mce/kit/event_sfx3d.h"
+#include "mce/kit/bullet_hole3d.h"
+#include "mce/kit/tracer3d.h"
+#include "mce/kit/grenade3d.h"
+#include "mce/kit/melee3d.h"
+#include "mce/kit/progress3d.h"
+#include "mce/kit/vehicle_extras.h"
+#include "mce/kit/precipitation.h"
+#include "mce/kit/weather.h"
+#include "mce/kit/world_audio.h"
+#include "mce/kit/world_clock.h"
+#include "mce/kit/wanted3d.h"
+#include "mce/kit/vehicle_ram.h"
+#include "mce/kit/impact_damage.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/presence.h"
@@ -25,9 +60,11 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/skeleton2d.h"
 #include "mce/kit/timeline.h"
+#include "mce/kit/ui_flow.h"
 #include "mce/physics/world2d.h"
 #include "mce/kit/ai.h"
 #include "mce/kit/video.h"
+#include "mce/kit/world_audio.h"
 #include "mce/kit/sprite_anim.h"
 #include "mce/physics/world2d.h"
 #include "mce/scene/scene.h"
@@ -63,20 +100,27 @@ bool pressed(const input::InputState* in, const FixedString<32>& action) {
 // world holds while a pause screen is visible.
 void kit_ui_flow(Frame& f) {
     const input::InputState* in = f.try_resource<input::InputState>();
-    bool hold = false;
     asset::Guid load;
     f.query<const UiFlow&, UiScreen&>().each([&](const UiFlow& flow, UiScreen& screen) {
         if (screen.visible && pressed(in, flow.hide_on)) screen.visible = false;
         else if (!screen.visible && pressed(in, flow.show_on)) screen.visible = true;
         if (!flow.scene.guid.is_null() && pressed(in, flow.load_on) && load.is_null()) load = flow.scene.guid;
         if (pressed(in, flow.quit_on)) scene::request_quit(f.world());
-        hold = hold || (screen.visible && flow.pause);
+    });
+    apply_ui_flow_rules(f, in, load);  // after the actions: a rule sees the screens as UiFlow left them
+    bool hold = false;
+    bool keep = false;
+    f.query<const UiFlow&, const UiScreen&>().each([&](const UiFlow& flow, const UiScreen& screen) {
+        if (!screen.visible || !flow.pause) return;
+        hold = true;
+        keep = keep || flow.keep_audio;
     });
     if (!load.is_null()) {
         scene::request_change(f.world(), load);
-        hold = false;  // the next scene starts from its own screens
+        hold = keep = false;  // the next scene starts from its own screens
     }
     f.world().set_held(hold);
+    if (audio::PauseMix* mix = f.world().try_resource<audio::PauseMix>()) mix->keep = keep;
 }
 
 }  // namespace
@@ -84,7 +128,8 @@ void kit_ui_flow(Frame& f) {
 void install_ui_flow(World& world) {
     if (world.try_resource<UiFlowInstalled>()) return;
     world.set_resource(UiFlowInstalled{});
-    world.register_components<UiScreen, UiFlow>();
+    world.set_resource(audio::PauseMix{});
+    world.register_components<UiScreen, UiFlow, UiFlowRules>();
     world.add_system(Phase::FixedUpdate_Pre, "kit_ui_flow", &kit_ui_flow);
     world.run_when_held(Phase::FixedUpdate_Pre, "kit_ui_flow");
 }
@@ -108,11 +153,46 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_nav3d(world, assets);
     install_joints3d(world, assets);
     install_ragdolls3d(world, assets);
+    install_roads(world, assets);
+    install_traffic(world, assets);
+    install_roadblocks(world, assets);
+    install_crowd(world, assets);  // after the road clock: pedestrians read this tick's lights
     install_vehicles3d(world, assets);
+    install_seats3d(world, assets);
+    install_combat3d(world, assets);
+    install_missions(world, assets);
+    install_inventory(world, assets);
+    install_loot(world, assets);
+    install_crafting(world, assets);
+    install_status(world, assets);
+    install_world_clock(world, assets);
+    install_day_cycle(world, assets);
+    install_timed_light(world, assets);
+    install_vehicle_extras(world, assets);
+    install_weather(world, assets);
+    install_precipitation(world, assets);
+    install_map_markers(world, assets);
+    install_wanted3d(world);
+    install_hit_marker(world, assets);
+    install_face_velocity(world);
+    install_drive_readout(world);
+    install_vehicle_ram(world, assets);
+    install_impact_damage(world, assets);
     install_sensors3d(world, assets);
     install_world_settings(world);
     install_ui_flow(world);
     install_effects(world, assets);
+    install_impact_fx(world);
+    install_fall_death(world);
+    install_loadout3d(world);
+    install_melee3d(world);
+    install_progress3d(world);
+    install_grenade3d(world);
+    install_ammopickup3d(world);
+    install_event_sfx3d(world);
+    install_bullet_holes(world);
+    install_tracers(world);
+    install_world_audio(world);  // after audio_bridge (the player and the editor install audio first): a voice exists when its pitch is set
     install_sprite_animation(world, assets);
     install_skeleton2d(world, assets);  // after the timelines: a key on Skeleton2D.pose poses the same tick
     install_presence(world);

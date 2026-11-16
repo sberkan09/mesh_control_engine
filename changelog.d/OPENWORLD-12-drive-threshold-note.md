@@ -1,0 +1,1 @@
+- Test comment and milestone note for the open-world drive threshold: the early stop is a crowd walker on the sidewalk, not the buildings.

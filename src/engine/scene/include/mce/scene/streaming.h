@@ -28,6 +28,12 @@
 //                                                            // start position needs, now
 //   per tick: scene::pump_streaming(world); world.tick(...);
 //
+// Floating origin (M-OPENWORLD A2): a FloatingOrigin3D on one base-scene entity makes the same pump rebase
+// the world (mce/ecs/origin.h) whenever the first enabled StreamingFocus gets farther than `threshold`
+// metres from the origin, by the focus position rounded to whole `snap` cells. Chunks keep being authored
+// in absolute coordinates: a chunk loaded after a rebase is moved by the origin as it spawns. No
+// FloatingOrigin3D: no rebase, ever.
+//
 // Async (the default in windowed hosts) reads chunk files on the asset loader thread and spreads
 // instantiation over ticks (max_instantiations_per_pump), so when a chunk appears depends on disk
 // speed. Determinism runs (mce_player -headless, the MCP headless run) set async off: loads then
@@ -63,6 +69,20 @@ struct StreamingFocus {
     bool enabled = true;
 };
 MCE_COMPONENT(StreamingFocus, enabled)
+
+// Turns the world rebase on for this scene (one per world; the first one found counts). Layout: padding-free.
+struct FloatingOrigin3D {
+    f32 threshold = 1024.0f;  // rebase when the focus is farther than this from the origin (at least `snap`)
+    f32 snap = 256.0f;        // shifts are whole multiples of this (a power of two keeps textures seamless)
+    u32 vertical = 0;         // 1: rebase on y too (space, very deep or high worlds)
+    u32 enabled = 1;
+};
+static_assert(sizeof(FloatingOrigin3D) == 16);
+MCE_COMPONENT(FloatingOrigin3D,
+    (threshold, Range{16, 100000}, Help{"rebase when the StreamingFocus is this far from the origin"}),
+    (snap, Range{1, 4096}, Help{"shift step in metres; a power of two keeps world-anchored textures seamless"}),
+    (vertical, Help{"1: rebase on the vertical axis too"}),
+    enabled)
 
 enum class ChunkState : u8 { Unloaded, Loading, Loaded, Failed };
 MCE_ENUM(ChunkState, Unloaded, Loading, Loaded, Failed)
@@ -147,6 +167,10 @@ void install_streaming(World& world, asset::AssetSystem& assets, StreamingConfig
 // Host call, once per tick outside phases (structural: it spawns and destroys). No-op when
 // streaming is not installed.
 void pump_streaming(World& world, PumpMode mode = PumpMode::Budgeted);
+
+// The rebase step of pump_streaming, for hosts that do not stream: rebases when a FloatingOrigin3D asks
+// for it (true when it did). Outside phases.
+bool update_floating_origin(World& world);
 
 // Distance from `p` to the box `centre` +- `half` (0 inside).
 f32 distance_to_box(const math::vec3& p, const math::vec3& centre, const math::vec3& half);

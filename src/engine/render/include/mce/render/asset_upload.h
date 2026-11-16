@@ -31,6 +31,10 @@ private:
     const asset::AssetSystem& assets_;
 };
 
+// The one mapping from a cooked texture's format (and Srgb flag) to the RHI format: RGBA8, ASTC 4x4, RGBA16F, and the
+// BC1/BC4/BC5/BC7 block formats (M-CONTENT 1b). BC4 and BC5 are linear data and have no sRGB variant.
+rhi::TextureFormat rhi_format_for(asset::TextureFormat format, bool srgb);
+
 // Uploads a cooked texture payload as `generation` of `key` (what upload_texture does, minus the
 // generation lookup). Validates the chunk; never trusts its sizes.
 Result<rhi::TextureHandle> upload_cooked_texture(TextureStore& store, u32 key, u32 generation, Span<const byte> tex_blob);

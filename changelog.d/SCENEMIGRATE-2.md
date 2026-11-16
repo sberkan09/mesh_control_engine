@@ -1,0 +1,1 @@
+- Editor, M-SCENEMIGRATE: a scene can also load a field under its old name when a rename row says so; `mce_scene_fmt --write` rewrites such files in the current spelling.

@@ -26,6 +26,8 @@ WGPUTextureFormat wgpu_format(TextureFormat f) {
         case TextureFormat::R11G11B10F: return WGPUTextureFormat_RG11B10Ufloat;
         case TextureFormat::BC1_UNorm: return WGPUTextureFormat_BC1RGBAUnorm;
         case TextureFormat::BC3_UNorm: return WGPUTextureFormat_BC3RGBAUnorm;
+        case TextureFormat::BC4_UNorm: return WGPUTextureFormat_BC4RUnorm;
+        case TextureFormat::BC1_SRGB: return WGPUTextureFormat_BC1RGBAUnormSrgb;
         case TextureFormat::BC5_UNorm: return WGPUTextureFormat_BC5RGUnorm;
         case TextureFormat::BC7_UNorm: return WGPUTextureFormat_BC7RGBAUnorm;
         case TextureFormat::BC7_SRGB: return WGPUTextureFormat_BC7RGBAUnormSrgb;
@@ -38,18 +40,10 @@ WGPUTextureFormat wgpu_format(TextureFormat f) {
     return WGPUTextureFormat_RGBA8Unorm;
 }
 
-usize level_bytes(TextureFormat f, u32 w, u32 h) {
-    if (is_compressed_format(f)) {
-        const usize block = f == TextureFormat::BC1_UNorm ? 8 : 16;
-        return usize((w + 3) / 4) * ((h + 3) / 4) * block;
-    }
-    return usize(w) * h * bytes_per_pixel(f);
-}
-
 // Bytes of one row of blocks (compressed) or pixels, and the number of such rows.
 void row_layout(TextureFormat f, u32 w, u32 h, u32& bytes_per_row, u32& rows) {
     if (is_compressed_format(f)) {
-        bytes_per_row = ((w + 3) / 4) * (f == TextureFormat::BC1_UNorm ? 8u : 16u);
+        bytes_per_row = ((w + 3) / 4) * block_bytes(f);
         rows = (h + 3) / 4;
     } else {
         bytes_per_row = w * bytes_per_pixel(f);
@@ -311,6 +305,9 @@ ResultV WebGpuDevice::request_device() {
     caps_.max_compute_group_size[2] = got.maxComputeWorkgroupSizeZ;
     for (u32& n : caps_.max_compute_group_count) n = got.maxComputeWorkgroupsPerDimension;
     caps_.max_storage_image_units = kMaxImageUnits;
+    caps_.texture_bc = wgpuDeviceHasFeature(device_, WGPUFeatureName_TextureCompressionBC);
+    caps_.texture_bc_srgb = caps_.texture_bc;  // the BC feature covers the sRGB variants
+    caps_.texture_astc = wgpuDeviceHasFeature(device_, WGPUFeatureName_TextureCompressionASTC);
     MCE_LOG_INFO("rhi.webgpu: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
     return ok();
 }

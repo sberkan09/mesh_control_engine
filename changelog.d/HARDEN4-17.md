@@ -1,0 +1,1 @@
+- Test-only: item id and name at the 63-byte limit cook, one byte more is a cook error (HARDEN4-17).

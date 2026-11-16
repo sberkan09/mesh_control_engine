@@ -1,0 +1,421 @@
+# 12_weather's headless gates (M-WEATHER step 4), run with cmake -P: mce_player plays the cooked pack and the script's
+# log lines pin the weather (the script's tick counts from 0 and runs after the weather system, so its line at
+# tick N shows the state after N + 1 system ticks; 10 s transitions are 600 ticks). The sun, emitter, lightning and
+# environment numbers are in tests/script/test_weather_demo.cpp. Gates:
+#   1. 600 ticks: clear, then rain from tick 60 (intensity (N - 60) / 600), the same state hash on two plays;
+#   2. 2700 ticks: rain 0.900 at tick 600, storm and snow arrive, clear again at tick 2400, and no problem logged;
+#   3. (M-WINDSWAY 2) the "sway:" lines: the factor Kit3DExtract scales the Foliage3D wind amplitude and frequency by,
+#      1 + (gain - 1) * Weather.wind with the WindSway gains 4 and 1.5, per weather kind;
+#   4. (M-SNOWCOVER 6d) the "snow:" lines: the SnowCover (build 4 s, melt 10 s) is 0 until the snow is in effect (tick
+#      1861), builds while it snows (up to tick 2340) and melts after;
+#   5. (M-RAINFX 7d) the "rain fx:" lines: the RainRipples strength, RainSplash rate and ThunderDelay speed the script reads;
+#   6. (M-WINDDIR 8e) the "wind dir:" lines: the WindDirection heading starts at 0 and turns 6 degrees a minute (0.1 degree a
+#      second, so 0.25 degree per 150 ticks);
+#   7. (M-CLOUDS 9d) the "clouds:" lines: the CloudLayer authoring fields the script reads;
+#   8. (M-WEATHERAUDIO 10c) the "audio:" lines: the rain and wind bed levels the WeatherAudio ramps (3 s fade) toward the
+#      weather's targets (the two looping AudioSource entities have no clip, so the sample is silent);
+#   9. (M-LIGHTNINGBOLT 11d) the "bolt:" lines: the LightningBolt authoring the script reads and the last strike's place
+#      (0 before the first strike at tick 1392, then a hashed point 150..900 m from the camera that stays until the next);
+#  10. (M-WINDGUST 12d) the "gust:" lines: the WindGust level (0 in the calm gaps) and the effective wind the wind bed,
+#      rain slant and sway read; Weather.wind stays smooth, and the wind bed in the "audio:" lines follows the gusted
+#      wind (e.g. 0.371 at tick 450 where the smooth wind is 0.360);
+#  11. (M-GROUNDMIST 13c) the "mist:" lines: the clock starts at 5:00 (a 600 s day, 1 h = 1500 ticks), so the GroundMist level
+#      starts at 0.185 (a dry dawn on the rise toward the 6:00 peak), falls while the rain and its damping set in, and
+#      climbs again as the ground gets wet (0.312 at 5.80 h, tick 1200);
+#  12. (M-NIGHTSKY 14f) the "moon:" lines: the Weather entity carries a default Moon (a full moon, 0.5 is the default phase
+#      offset, so phase 0.507 on day 0 at 5:00): its path is the sun's, 12 h behind, so it hangs in the west and sets
+#      through the dawn. The level starts at 1.000 (full, well up), falls with its height and the rain's damping
+#      (0.469 at tick 450, 0.270 at 600 where the storm is called, 0.121 at 1200) and is 0.000 from tick 1500 (below the
+#      horizon, the sun is coming up). The Moon is pure data: it changes the state hash (a new column) and nothing else.
+#  13. (M-AURORA 16d) the "aurora:" lines: the Aurora on the Weather entity (default gate 55..65 degrees); the script walks
+#      the authored latitude from 45 up by 1 degree per 45 ticks with weather.set_aurora, so the gate is closed (level 0.000)
+#      until tick 450 (55 degrees), is half open at about 60 degrees and fully open from tick 900 (65 degrees, gate 1.000).
+#      The level is the kit's aurora_level on the night fade of the hour (the clock starts at 5:00, so the night fades through
+#      the dawn) and the CloudLayer's cover: 0.512 at tick 900, 0.588 at 1050 and falling to 0.000 from tick 2250 (day). The
+#      Aurora is pure data here: it changes the state hash (a new column) and nothing else; the entity count stays 14.
+#  14. (M-RAINBOW 17d) the "rainbow:" lines: weather.rainbow_level() of the Rainbow on the Weather entity (read only, the script
+#      writes nothing, so the state hash is the 17a one). The level is 0.000 by night (the clock starts at 5:00) and while it
+#      rains or storms, and rises once the sun is up (tick 1500) over the still wet ground: 0.048 at tick 1800 under the
+#      snow, 0.091 at 2250 after the weather is called clear, 0.103 at 2400 (wetness 0.213) and falling again at 2550 as
+#      the ground dries below the bow's wetness gate.
+#  15. (M-METEOR 18d) the "meteor:" lines: weather.meteor_level() of the Meteor on the Weather entity (read only, the script
+#      writes nothing). The clock starts at 5:00 and the night lasts until about 6:00 (tick 1500), so the level is non-zero
+#      through the dark hours: 0.422 at tick 0, falling as the dawn gate closes and as the rain (from tick 60) and the storm
+#      (from tick 600) thicken the cloud cover (0.030 at 450, 0.002 at 600 in the storm), 0.252 at 1050 once the
+#      storm has eased, and exactly 0.000 from sunrise (1500) on, including the clear morning at 2400.
+#  16. (M-SEASONS 19c) the "season:" lines: weather.season_phase() of the Season on the Weather entity (read only, the script
+#      writes nothing). The scene sets year_days 1 (the WorldClock day is 600 s = 36000 ticks, so a 12-day year would not
+#      move in a run): the phase starts at start_phase 0.1 plus 5/24 for the 5:00 start = 0.308 and gains 1/36000 per tick,
+#      0.313 at tick 150 and 0.375 (the centre of summer) at tick 2400; the line also logs the authored spring tint;
+#  17. (M-LEAFFALL 21c) the "leaves:" lines: weather.leaf_falling() of the LeafFall on the Weather entity (read only, the script
+#      writes nothing). The Season only climbs from 0.308 to 0.375 in the run and never reaches the autumn window (0.5 to
+#      0.75), so the LeafFall carries manual 0.6, the floor of the amount: every line is 0.600 and the leaf emitter is drawn
+#      in all the checked frames. The entity count stays 14.
+#  18. (M-FIREFLIES 23c) the "fireflies:" lines: weather.fireflies_glowing() of the Firefly on the Weather entity (read only, the
+#      script writes nothing). The amount is max(manual 0.5, the summer window) times the night gate times (1 - rain): the Season
+#      only climbs from 0.308 to 0.375 (the window is 0.3 to 0.45, so 1.0 from the start), so it is 1.000 at tick 0 in the
+#      dark, falls as the dawn closes the night gate and the rain (from tick 60) and the storm (from 600) thicken (0.850 at tick
+#      150, 0.100 at 600 in the storm), recovers to 0.782 at 1050 once the storm has eased, and is exactly 0.000 from sunrise
+#      (1500) on. The entity count stays 14.
+#  19. (M-POLLEN 24c) the "pollen:" lines: weather.pollen_drifting() of the Pollen on the Weather entity (read only, the script
+#      writes nothing). The amount is max(manual 0.4, the spring window) times the day gate times (1 - rain): the Season only
+#      climbs from 0.308 to 0.375 (the spring window is over at 0.32, so the floor 0.4 is what shows), the day gate is closed
+#      in the dark (0.000 at tick 0 and through the rain and the storm up to the dawn at about 1500), opens with the sun
+#      (0.068 at 1650 in the storm, 0.251 at 1800, 0.380 at 1950) and the amount is the full floor 0.400 from tick 2100
+#      (the snow does not close it). The entity count stays 14.
+#  20. (M-DUSTWIND 25c) the "dust:" lines: weather.dust_blowing() of the Dust on the Weather entity (read only, the script
+#      writes nothing). The amount is max(manual 0.4, smoothstep of the gusted wind) times (1 - rain): the floor 0.400 in the
+#      clear, thinned by the rain (0.240 at tick 300, 0.040 at 600 at the rain's 0.9) and back to 0.240 at 900 and 0.359 at
+#      1200 as the rain fades, 0.359 / 0.398 / 0.359 in the gusty storm and snow wind (1200, 1500, 1800) and the full floor
+#      0.400 from tick 1950 on. The entity count stays 14.
+#  21. (M-BIRDFLOCK 26c) the "flock:" lines: weather.flock_flying() of the Flock on the Weather entity (read only, the
+#      script writes nothing). The amount is max(manual 0.4, migration) times the twilight gate (1 - smoothstep of |sun y|
+#      over 0.25) times (1 - rain): 0.012 at tick 0, 0.046 at 300, 0.169 at 900, 0.328 at 1200, 0.159 at 1500 (the
+#      storm), 0.328 at 1800 and 0.280 at 2100 as the sun climbs out of the twilight. The entity count stays 14.
+#  22. (M-BUTTERFLY 27c) the "butterfly:" lines: weather.butterfly_flying() of the Butterfly on the Weather entity (read
+#      only, the script writes nothing). The amount is max(manual 0.4, summer window) times the day gate (smoothstep of the
+#      daylight over 0.6..1) times the calm gate (the wind) times (1 - rain): 0.000 until the dawn at about tick 1500 (the
+#      clock starts at 5:00, so the night and the storm close it), then 0.035 at tick 1650, 0.508 at 1800, 0.923 at 1950,
+#      0.999 at 2100 and 1.000 from 2250 as the day gate opens. The entity count stays 14.
+#  23. (M-BAT 30c) the "dusk_bat:" lines: weather.dusk_bat_flying() of the DuskBat on the Weather entity (read only, the
+#      script writes nothing). The amount is max(manual 0.4, warm window) times the dusk gate (the night fade of the hour
+#      inside the 0.25..0.85 band, smoothed 0.1 at each edge) times the calm gate (the wind) times (1 - rain): 0.000 while
+#      the sky is dark (the night fade is above the band) and from 1800 once the sun is up (it is below the band), and it
+#      shows only in the two twilights: 0.244 at tick 1200 and 0.540 at 1350 as the night fade falls into the band at the
+#      dawn (the storm closes it again at 1500, 0.000), then 0.493 at 1650 as the sky clears. The entity count stays 14.
+#  24. (M-SNOWSPARKLE 31c) the "snow_sparkle:" lines: weather.snow_sparkle_active() of the SnowSparkle on the Weather entity
+#      (read only, the script writes nothing). The scene has manual 0.3 and no settled cover until the snow, so the amount is
+#      the 0.3 floor times the clear sky (1 - cloud) times (1 - rain): 0.300 at tick 0 under the clear sky, 0.108 at tick
+#      300 in the rain, 0.242 at 1200 and 0.126 at 1350 as the sky clears, 0.048 in the storm at 1500, then 0.260 at 1950, 0.192
+#      at 2100 in the snow (cloud 0.9 times the intensity) and 0.300 at 2400 once it is clear again. The entity count stays 14.
+#  25. (M-MIDGES 33c) the "midge:" lines: weather.midge_active() of the Midge on the Weather entity (read only, the script
+#      writes nothing). The scene has manual 0.3, a Season in the summer window and the signed sun elevation of the clock
+#      (5:00 start), so the amount is max(0.3, window times the twilight gate) times the calm gate (the wind) times (1 - rain):
+#      0.300 at tick 0, 0.169 at tick 300 in the rain, 0.612 at 1200 as the dawn twilight opens the gate over the floor,
+#      0.258 at 1350, exactly 0.000 in the storm at 1500 (the wind is past wind_still), then 0.820 at 1800 and 0.436 at 2400
+#      once the sun has climbed out of the twilight band. The entity count stays 14.
+#  26. (M-COLDBREATH 34c) the "cold_breath:" lines: weather.cold_breath_active() of the ColdBreath on the Weather entity (read
+#      only, the script writes nothing). The scene has manual 0.3 and a one-day Season whose phase only climbs from 0.1 to
+#      about 0.4 in the 2700 ticks, so the winter window (around 0.875) never opens: the amount is max(0.3, smoothed snow
+#      cover) times the calm gate (1 - smoothstep(0.5, 0.95, wind)). It is the 0.3 floor wherever the wind is below 0.5 and
+#      the cover below the smoothed range: 0.300 at tick 0 and at tick 300 (the rain's wind is calm enough), 0.300 through
+#      the clearing, then 0.052 in the storm at 1500 (the floor times the gate, the wind is past wind_calm), 0.300 at 2100
+#      (cover 0.201 is still under the floor), 0.491 at 2250 as the settled cover 0.372 lifts over the floor and 0.300 at 2400
+#      (cover 0.298 under the floor again). The entity count stays 14.
+#  27. (M-CIRRUS 53d) the "cirrus:" lines: weather.cirrus_coverage() of the default Cirrus on the Weather entity (read only, the
+#      script writes nothing; the render side is in the GPU tests). The cover blends the fair 0.45 toward the front 0.7 while a
+#      change of weather is pending or fading in, drops under a heavy deck and carries the WorldClock day's slow variation:
+#      0.508 at tick 0 (settled clear), 0.178 at 600 under the storm's deck, 0.658 at 1050 as the change to the storm eases,
+#      0.686 at 1800 before the snow and 0.498 at 2550 after the clear. The entity count stays 14.
+#  28. (M-HALO 54d) the "halo:" lines: weather.halo_level() of the default Halo on the Weather entity (read only, the script
+#      writes nothing; the ring and the dogs themselves are in the GPU tests). The level is the strength 1.00 times a smoothstep
+#      of the cirrus cover (0 up to 0.1, full from 0.5): 1.000 at tick 0 (cover 0.508), 0.098 at 600 under the storm's deck
+#      (cover 0.178), 0.640 at 750 as the cover climbs back, 0.744 at 1500 (cover 0.368) and 1.000 at 2550 (cover 0.498 is
+#      0.9998 of the smoothstep). The entity count stays 14.
+
+function(play out_var)
+    execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
+                    RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+    if(NOT rc EQUAL 0)
+        message(FATAL_ERROR "mce_player exited ${rc}\n${out}\n${err}")
+    endif()
+    set(${out_var} "${out}${err}" PARENT_SCOPE)
+endfunction()
+
+function(expect text pattern what)
+    if(NOT text MATCHES "${pattern}")
+        message(FATAL_ERROR "${what} (no match for '${pattern}'):\n${text}")
+    endif()
+endfunction()
+
+function(expect_not text pattern what)
+    if(text MATCHES "${pattern}")
+        message(FATAL_ERROR "${what} (unexpected '${pattern}'):\n${text}")
+    endif()
+endfunction()
+
+function(hash_of text out_var)
+    if(NOT text MATCHES "state_hash ([0-9a-f]+)")
+        message(FATAL_ERROR "no state hash:\n${text}")
+    endif()
+    set(${out_var} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+endfunction()
+
+file(REMOVE_RECURSE "${WORK_DIR}")
+file(MAKE_DIRECTORY "${WORK_DIR}")
+
+# 1. The first 600 ticks.
+play(first -ticks 600 -input "${INPUT}")
+play(second -ticks 600 -input "${INPUT}")
+expect("${first}" "600 ticks, 14 entities, state_hash" "the run did not end after 600 ticks with 14 entities")
+expect_not("${first}" "\\[error\\]|\\[warn\\]|does not load|failed at" "the run logged a problem")
+expect("${first}" "script: weather: clear intensity 0.000 wind 0.100 wetness 0.000 at tick 0\n" "the weather did not start clear")
+expect("${first}" "script: sway: amplitude x1.300 frequency x1.050 at tick 0\n" "the clear sway factor is not 1 + 3 * 0.1")
+expect("${first}" "script: sway: amplitude x1.780 frequency x1.130 at tick 300\n" "the rain sway factor did not follow the wind")
+expect("${first}" "script: snow: cover 0.000 at tick 450\n" "it snowed cover in the rain")
+expect("${first}" "script: rain fx: ripples 1.00 splash 1.00 thunder 343 at tick 450\n" "the rain effects are not wired into the scene")
+expect("${first}" "script: wind dir: heading 0.00 drift 6.0 at tick 0\n" "the wind direction did not start at +x")
+expect("${first}" "script: wind dir: heading 0.75 drift 6.0 at tick 450\n" "the wind direction did not turn 6 degrees a minute")
+expect("${first}" "script: clouds: strength 1.00 fair 0.35 overcast 0.90 height 2000 at tick 450\n" "the cloud layer is not wired into the scene")
+expect("${first}" "script: audio: rain 0.000 wind 0.006 max 0/0 dB fade 3 s at tick 0\n" "the audio beds did not start silent")
+expect("${first}" "script: audio: rain 0.650 wind 0.371 max 0/0 dB fade 3 s at tick 450\n" "the rain and wind beds did not follow the weather")
+expect("${first}" "script: bolt: strike at 0, 0 dist 0 m range 150-900 m height 600 m at tick 450\n" "the bolt is not wired into the scene or struck without a storm")
+expect("${first}" "script: gust: level 0.000 wind 0.100 effective 0.100 strength 0.60 at tick 0\n" "the gust did not start calm")
+expect("${first}" "script: gust: level 0.053 wind 0.360 effective 0.371 strength 0.60 at tick 450\n" "the gust is not wired into the scene")
+expect("${first}" "script: mist: level 0.185 hour 5.00 strength 1.00 peak 6.0 h at tick 0\n" "the mist did not start at the dawn level")
+expect("${first}" "script: mist: level 0.114 hour 5.30 strength 1.00 peak 6.0 h at tick 450\n" "the rain did not damp the mist")
+expect("${first}" "script: moon: phase 0.507 illumination 1.000 level 1.000 dir 0.95 -0.22 0.23 at tick 0\n" "the moon did not start full and up")
+expect("${first}" "script: moon: phase 0.507 illumination 0.999 level 0.469 dir 0.97 -0.15 0.19 at tick 450\n" "the rain did not damp the moon as it sinks")
+expect("${first}" "script: aurora: latitude 45.00 gate 0.000 level 0.000 at tick 0\n" "the aurora did not start with a closed gate")
+expect("${first}" "script: aurora: latitude 55.00 gate 0.000 level 0.000 at tick 450\n" "the aurora gate is not closed at its low edge")
+expect("${first}" "script: rainbow: level 0.000 wetness 0.035 at tick 450\n" "the rainbow shows in the rain before dawn")
+expect("${first}" "script: meteor: level 0.422 at tick 0\n" "the meteors did not start at night")
+expect("${first}" "script: meteor: level 0.030 at tick 450\n" "the rain did not damp the meteors")
+expect("${first}" "script: season: phase 0.308 spring tint 0.75 1.05 0.70 at tick 0\n" "the season did not start at the 5:00 phase")
+expect("${first}" "script: season: phase 0.321 spring tint 0.75 1.05 0.70 at tick 450\n" "the season phase did not follow the clock")
+expect("${first}" "script: leaves: 0.600 at tick 0\n" "the leaves did not start at the manual floor")
+expect("${first}" "script: leaves: 0.600 at tick 450\n" "the leaves did not keep the manual floor")
+expect("${first}" "script: fireflies: 1.000 at tick 0\n" "the fireflies did not start at full strength in the dark")
+expect("${first}" "script: fireflies: 0.850 at tick 150\n" "the dawn and the rain did not thin the fireflies")
+string(REGEX MATCHALL "script: fireflies: [0-9.]+ at tick [0-9]+" fireflies600 "${first}")
+list(LENGTH fireflies600 n_fireflies600)
+if(NOT n_fireflies600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 fireflies lines in 600 ticks, got ${n_fireflies600}")
+endif()
+expect("${first}" "script: pollen: 0.000 at tick 0\n" "the pollen shows in the dark")
+string(REGEX MATCHALL "script: pollen: [0-9.]+ at tick [0-9]+" pollen600 "${first}")
+list(LENGTH pollen600 n_pollen600)
+if(NOT n_pollen600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 pollen lines in 600 ticks, got ${n_pollen600}")
+endif()
+expect("${first}" "script: dust: 0.400 at tick 0\n" "the dust is not at the manual floor in the clear")
+expect("${first}" "script: dust: 0.240 at tick 300\n" "the rain did not thin the dust")
+string(REGEX MATCHALL "script: dust: [0-9.]+ at tick [0-9]+" dust600 "${first}")
+list(LENGTH dust600 n_dust600)
+if(NOT n_dust600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 dust lines in 600 ticks, got ${n_dust600}")
+endif()
+expect("${first}" "script: flock: 0.012 at tick 0\n" "the flock is not at the dark-sky level at the start")
+expect("${first}" "script: flock: 0.046 at tick 300\n" "the rain and the twilight did not shape the flock")
+expect("${first}" "script: butterfly: 0.000 at tick 300\n" "the night did not close the butterflies")
+expect("${first}" "script: dusk_bat: 0.000 at tick 300\n" "the dark did not close the dusk bats")
+expect("${first}" "script: snow_sparkle: 0.300 at tick 0\n" "the clear sky did not leave the sparkle at its manual floor")
+expect("${first}" "script: snow_sparkle: 0.108 at tick 300\n" "the rain and the clouds did not thin the snow sparkle")
+string(REGEX MATCHALL "script: flock: [0-9.]+ at tick [0-9]+" flock600 "${first}")
+list(LENGTH flock600 n_flock600)
+if(NOT n_flock600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 flock lines in 600 ticks, got ${n_flock600}")
+endif()
+string(REGEX MATCHALL "script: butterfly: [0-9.]+ at tick [0-9]+" butterfly600 "${first}")
+list(LENGTH butterfly600 n_butterfly600)
+if(NOT n_butterfly600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 butterfly lines in 600 ticks, got ${n_butterfly600}")
+endif()
+string(REGEX MATCHALL "script: dusk_bat: [0-9.]+ at tick [0-9]+" dusk_bat600 "${first}")
+list(LENGTH dusk_bat600 n_dusk_bat600)
+if(NOT n_dusk_bat600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 dusk_bat lines in 600 ticks, got ${n_dusk_bat600}")
+endif()
+string(REGEX MATCHALL "script: snow_sparkle: [0-9.]+ at tick [0-9]+" snow_sparkle600 "${first}")
+list(LENGTH snow_sparkle600 n_snow_sparkle600)
+if(NOT n_snow_sparkle600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 snow_sparkle lines in 600 ticks, got ${n_snow_sparkle600}")
+endif()
+expect("${first}" "script: midge: 0.300 at tick 0\n" "the midge amount is not the manual floor at tick 0")
+expect("${first}" "script: midge: 0.169 at tick 300\n" "the rain and the wind did not thin the midges")
+string(REGEX MATCHALL "script: midge: [0-9.]+ at tick [0-9]+" midge600 "${first}")
+list(LENGTH midge600 n_midge600)
+if(NOT n_midge600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 midge lines in 600 ticks, got ${n_midge600}")
+endif()
+expect("${first}" "script: cold_breath: 0.300 at tick 0\n" "the cold breath amount is not the manual floor at tick 0")
+expect("${first}" "script: cold_breath: 0.300 at tick 300\n" "the rain's wind thinned the cold breath")
+string(REGEX MATCHALL "script: cold_breath: [0-9.]+ at tick [0-9]+" cold_breath600 "${first}")
+list(LENGTH cold_breath600 n_cold_breath600)
+if(NOT n_cold_breath600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 cold_breath lines in 600 ticks, got ${n_cold_breath600}")
+endif()
+string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
+list(LENGTH leaves600 n_leaves600)
+if(NOT n_leaves600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 leaves lines in 600 ticks, got ${n_leaves600}")
+endif()
+expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
+expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
+expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
+hash_of("${first}" hash_a)
+hash_of("${second}" hash_b)
+if(NOT hash_a STREQUAL hash_b)
+    message(FATAL_ERROR "two plays differ: ${hash_a} vs ${hash_b}")
+endif()
+
+# 2. The whole forecast.
+play(forecast -ticks 2700 -input "${INPUT}")
+expect("${forecast}" "script: weather: rain intensity 0.900 wind 0.460 wetness 0.068 at tick 600\n" "rain is not at 0.9 when the storm is called")
+expect("${forecast}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.133 at tick 1050\n" "rain did not fade out for the storm")
+expect("${forecast}" "script: weather: storm intensity 0.602 wind 0.641 wetness 0.165 at tick 1500\n" "the storm is not at 0.602 when snow is called")
+expect("${forecast}" "script: weather: snow intensity 0.400 wind 0.140 wetness 0.209 at tick 2100\n" "snow is not at 0.4 when clear is called")
+expect("${forecast}" "script: weather: clear intensity 0.000 wind 0.100 wetness 0.213 at tick 2400\n" "the weather did not clear")
+expect("${forecast}" "script: sway: amplitude x2.380 frequency x1.230 at tick 600\n" "the sway factor is wrong when the storm is called")
+expect("${forecast}" "script: sway: amplitude x2.924 frequency x1.321 at tick 1500\n" "the storm does not sway the foliage at 2.924 times")
+expect("${forecast}" "script: sway: amplitude x1.420 frequency x1.070 at tick 2100\n" "the snow sway factor is wrong")
+expect("${forecast}" "script: sway: amplitude x1.300 frequency x1.050 at tick 2400\n" "the sway did not return to the clear factor")
+expect("${forecast}" "script: snow: cover 0.000 at tick 1800\n" "snow cover started before the snow")
+expect("${forecast}" "script: snow: cover 0.028 at tick 1950\n" "the snow cover did not start building at tick 1861")
+expect("${forecast}" "script: snow: cover 0.201 at tick 2100\n" "the snow cover is wrong when clear is called")
+expect("${forecast}" "script: snow: cover 0.372 at tick 2250\n" "the snow cover did not keep building")
+expect("${forecast}" "script: snow: cover 0.298 at tick 2400\n" "the snow cover did not start to melt")
+expect("${forecast}" "script: snow: cover 0.048 at tick 2550\n" "the snow cover did not melt away")
+expect("${forecast}" "script: wind dir: heading 4.25 drift 6.0 at tick 2550\n" "the wind direction did not keep turning")
+expect("${forecast}" "script: audio: rain 0.602 wind 0.813 max 0/0 dB fade 3 s at tick 1500\n" "the storm beds are wrong")
+expect("${forecast}" "script: audio: rain 0.000 wind 0.148 max 0/0 dB fade 3 s at tick 2400\n" "the rain bed did not fall silent in clear weather")
+expect("${forecast}" "script: bolt: strike at 0, 0 dist 0 m range 150-900 m height 600 m at tick 1350\n" "a strike had a place before the storm")
+expect("${forecast}" "script: bolt: strike at -730, -478 dist 892 m range 150-900 m height 600 m at tick 1500\n" "the first storm strike has the wrong place")
+expect("${forecast}" "script: bolt: strike at -312, 720 dist 754 m range 150-900 m height 600 m at tick 2550\n" "the last strike did not stay where it struck")
+expect("${forecast}" "script: gust: level 0.062 wind 0.460 effective 0.477 strength 0.60 at tick 600\n" "the gust did not follow the rain")
+expect("${forecast}" "script: gust: level 0.493 wind 0.641 effective 0.831 strength 0.60 at tick 1500\n" "the storm gust is wrong")
+expect("${forecast}" "script: gust: level 0.807 wind 0.100 effective 0.148 strength 0.60 at tick 2400\n" "a gust did not stir the clear day")
+expect("${forecast}" "script: mist: level 0.075 hour 5.40 strength 1.00 peak 6.0 h at tick 600\n" "the mist is wrong when the storm is called")
+expect("${forecast}" "script: mist: level 0.312 hour 5.80 strength 1.00 peak 6.0 h at tick 1200\n" "the wet ground did not feed the mist")
+expect("${forecast}" "script: mist: level 0.367 hour 6.60 strength 1.00 peak 6.0 h at tick 2400\n" "the mist is wrong at the end of the forecast")
+expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.270 dir 0.98 -0.13 0.18 at tick 600\n" "the moon is wrong when the storm is called")
+expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.121 dir 0.99 -0.05 0.13 at tick 1200\n" "the moon did not keep sinking")
+expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.000 dir 0.99 -0.00 0.10 at tick 1500\n" "the moon did not set by tick 1500")
+expect("${forecast}" "script: aurora: latitude 58.33 gate 0.259 level 0.073 at tick 600\n" "the aurora gate did not start to open")
+expect("${forecast}" "script: aurora: latitude 61.67 gate 0.741 level 0.295 at tick 750\n" "the aurora gate is wrong halfway")
+expect("${forecast}" "script: aurora: latitude 65.00 gate 1.000 level 0.512 at tick 900\n" "the aurora gate is not fully open at its high edge")
+expect("${forecast}" "script: aurora: latitude 68.33 gate 1.000 level 0.588 at tick 1050\n" "the aurora level is wrong in the dark")
+expect("${forecast}" "script: aurora: latitude 78.33 gate 1.000 level 0.210 at tick 1500\n" "the dawn did not fade the aurora")
+expect("${forecast}" "script: aurora: latitude 90.00 gate 1.000 level 0.000 at tick 2400\n" "the aurora shows by day")
+expect("${forecast}" "script: rainbow: level 0.000 wetness 0.165 at tick 1500\n" "the rainbow shows at sunrise in the storm")
+expect("${forecast}" "script: rainbow: level 0.048 wetness 0.194 at tick 1800\n" "the rainbow did not start with the sun over the wet ground")
+expect("${forecast}" "script: rainbow: level 0.091 wetness 0.220 at tick 2250\n" "the rainbow did not rise after the weather cleared")
+expect("${forecast}" "script: rainbow: level 0.103 wetness 0.213 at tick 2400\n" "the rainbow is wrong in the clear morning")
+expect("${forecast}" "script: rainbow: level 0.064 wetness 0.193 at tick 2550\n" "the rainbow did not fade as the ground dried")
+expect("${forecast}" "script: meteor: level 0.002 at tick 600\n" "the storm did not damp the meteors")
+expect("${forecast}" "script: meteor: level 0.252 at tick 1050\n" "the meteors are wrong in the dark")
+expect("${forecast}" "script: meteor: level 0.000 at tick 1500\n" "the meteors show at sunrise")
+expect("${forecast}" "script: meteor: level 0.000 at tick 2400\n" "the meteors show by day")
+expect("${forecast}" "script: season: phase 0.350 spring tint 0.75 1.05 0.70 at tick 1500\n" "the season phase is wrong at sunrise")
+expect("${forecast}" "script: season: phase 0.375 spring tint 0.75 1.05 0.70 at tick 2400\n" "the season did not reach the centre of summer")
+expect("${forecast}" "script: leaves: 0.600 at tick 2550\n" "the leaves did not stay at the manual floor")
+string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves2700 "${forecast}")
+list(LENGTH leaves2700 n_leaves2700)
+if(NOT n_leaves2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 leaves lines in 2700 ticks, got ${n_leaves2700}")
+endif()
+expect("${forecast}" "script: fireflies: 0.100 at tick 600\n" "the storm did not damp the fireflies")
+expect("${forecast}" "script: fireflies: 0.782 at tick 1050\n" "the fireflies are wrong in the dark after the storm")
+expect("${forecast}" "script: fireflies: 0.000 at tick 1500\n" "the fireflies show at sunrise")
+expect("${forecast}" "script: fireflies: 0.000 at tick 2400\n" "the fireflies show by day")
+string(REGEX MATCHALL "script: fireflies: [0-9.]+ at tick [0-9]+" fireflies2700 "${forecast}")
+list(LENGTH fireflies2700 n_fireflies2700)
+if(NOT n_fireflies2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 fireflies lines in 2700 ticks, got ${n_fireflies2700}")
+endif()
+expect("${forecast}" "script: pollen: 0.000 at tick 600\n" "the pollen shows in the dark and the storm")
+expect("${forecast}" "script: pollen: 0.000 at tick 1500\n" "the pollen shows before the day gate opens")
+expect("${forecast}" "script: pollen: 0.068 at tick 1650\n" "the day gate and the storm are wrong for the pollen")
+expect("${forecast}" "script: pollen: 0.251 at tick 1800\n" "the pollen did not rise with the daylight")
+expect("${forecast}" "script: pollen: 0.380 at tick 1950\n" "the pollen did not rise with the daylight")
+expect("${forecast}" "script: pollen: 0.400 at tick 2250\n" "the pollen is not at the manual floor by day")
+string(REGEX MATCHALL "script: pollen: [0-9.]+ at tick [0-9]+" pollen2700 "${forecast}")
+list(LENGTH pollen2700 n_pollen2700)
+if(NOT n_pollen2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 pollen lines in 2700 ticks, got ${n_pollen2700}")
+endif()
+expect("${forecast}" "script: dust: 0.040 at tick 600\n" "the rain is not closing the dust at tick 600")
+expect("${forecast}" "script: dust: 0.240 at tick 900\n" "the dust did not recover as the rain faded")
+expect("${forecast}" "script: dust: 0.359 at tick 1200\n" "the gusty wind did not lift the dust")
+expect("${forecast}" "script: dust: 0.398 at tick 1500\n" "the storm wind and rain are wrong for the dust")
+expect("${forecast}" "script: dust: 0.359 at tick 1800\n" "the snow wind is wrong for the dust")
+expect("${forecast}" "script: dust: 0.400 at tick 2100\n" "the dust is not at the manual floor after the storm")
+string(REGEX MATCHALL "script: dust: [0-9.]+ at tick [0-9]+" dust2700 "${forecast}")
+list(LENGTH dust2700 n_dust2700)
+if(NOT n_dust2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 dust lines in 2700 ticks, got ${n_dust2700}")
+endif()
+expect("${forecast}" "script: flock: 0.169 at tick 900\n" "the flock did not open as the sky brightened")
+expect("${forecast}" "script: flock: 0.328 at tick 1200\n" "the flock is wrong at tick 1200")
+expect("${forecast}" "script: flock: 0.159 at tick 1500\n" "the storm rain is wrong for the flock")
+expect("${forecast}" "script: flock: 0.328 at tick 1800\n" "the flock is wrong at tick 1800")
+expect("${forecast}" "script: flock: 0.280 at tick 2100\n" "the flock did not close as the sun climbed")
+string(REGEX MATCHALL "script: flock: [0-9.]+ at tick [0-9]+" flock2700 "${forecast}")
+list(LENGTH flock2700 n_flock2700)
+if(NOT n_flock2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 flock lines in 2700 ticks, got ${n_flock2700}")
+endif()
+expect("${forecast}" "script: butterfly: 0.000 at tick 1500\n" "the butterflies are not closed before the dawn")
+expect("${forecast}" "script: butterfly: 0.035 at tick 1650\n" "the butterflies did not start with the dawn")
+expect("${forecast}" "script: butterfly: 0.508 at tick 1800\n" "the day gate is wrong for the butterflies at tick 1800")
+expect("${forecast}" "script: butterfly: 0.923 at tick 1950\n" "the butterflies did not open with the daylight")
+expect("${forecast}" "script: butterfly: 0.999 at tick 2100\n" "the butterflies are wrong at tick 2100")
+expect("${forecast}" "script: butterfly: 1.000 at tick 2250\n" "the butterflies did not reach full strength by day")
+string(REGEX MATCHALL "script: butterfly: [0-9.]+ at tick [0-9]+" butterfly2700 "${forecast}")
+list(LENGTH butterfly2700 n_butterfly2700)
+if(NOT n_butterfly2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 butterfly lines in 2700 ticks, got ${n_butterfly2700}")
+endif()
+expect("${forecast}" "script: dusk_bat: 0.244 at tick 1200\n" "the dusk bats did not start with the dawn twilight")
+expect("${forecast}" "script: dusk_bat: 0.540 at tick 1350\n" "the dusk gate is wrong for the dusk bats at tick 1350")
+expect("${forecast}" "script: dusk_bat: 0.000 at tick 1500\n" "the storm did not close the dusk bats")
+expect("${forecast}" "script: dusk_bat: 0.493 at tick 1650\n" "the dusk bats did not return in the clearing sky")
+expect("${forecast}" "script: dusk_bat: 0.000 at tick 1800\n" "the dusk bats are not closed by the daylight")
+string(REGEX MATCHALL "script: dusk_bat: [0-9.]+ at tick [0-9]+" dusk_bat2700 "${forecast}")
+list(LENGTH dusk_bat2700 n_dusk_bat2700)
+if(NOT n_dusk_bat2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 dusk_bat lines in 2700 ticks, got ${n_dusk_bat2700}")
+endif()
+expect("${forecast}" "script: snow_sparkle: 0.242 at tick 1200\n" "the clearing sky did not open the snow sparkle")
+expect("${forecast}" "script: snow_sparkle: 0.126 at tick 1350\n" "the cloud gate is wrong for the snow sparkle at tick 1350")
+expect("${forecast}" "script: snow_sparkle: 0.048 at tick 1500\n" "the storm did not thin the snow sparkle")
+expect("${forecast}" "script: snow_sparkle: 0.260 at tick 1950\n" "the snow sparkle is wrong while the snow starts")
+expect("${forecast}" "script: snow_sparkle: 0.192 at tick 2100\n" "the snow did not thin the snow sparkle")
+expect("${forecast}" "script: snow_sparkle: 0.300 at tick 2400\n" "the clear sky did not return the snow sparkle to its floor")
+string(REGEX MATCHALL "script: snow_sparkle: [0-9.]+ at tick [0-9]+" snow_sparkle2700 "${forecast}")
+list(LENGTH snow_sparkle2700 n_snow_sparkle2700)
+if(NOT n_snow_sparkle2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 snow_sparkle lines in 2700 ticks, got ${n_snow_sparkle2700}")
+endif()
+expect("${forecast}" "script: midge: 0.612 at tick 1200\n" "the dawn twilight did not open the midges over their floor")
+expect("${forecast}" "script: midge: 0.258 at tick 1350\n" "the twilight gate is wrong for the midges at tick 1350")
+expect("${forecast}" "script: midge: 0.000 at tick 1500\n" "the storm wind did not ground the midges")
+expect("${forecast}" "script: midge: 0.820 at tick 1800\n" "the midges are wrong in the clearing morning")
+expect("${forecast}" "script: midge: 0.436 at tick 2400\n" "the midges are wrong once the sky is clear")
+string(REGEX MATCHALL "script: midge: [0-9.]+ at tick [0-9]+" midge2700 "${forecast}")
+list(LENGTH midge2700 n_midge2700)
+if(NOT n_midge2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 midge lines in 2700 ticks, got ${n_midge2700}")
+endif()
+expect("${forecast}" "script: cold_breath: 0.052 at tick 1500\n" "the storm wind did not scatter the cold breath")
+expect("${forecast}" "script: cold_breath: 0.300 at tick 2100\n" "the cold breath is not the floor at tick 2100")
+expect("${forecast}" "script: cold_breath: 0.491 at tick 2250\n" "the settled snow cover did not lift the cold breath over its floor")
+expect("${forecast}" "script: cold_breath: 0.300 at tick 2400\n" "the cold breath is wrong once the cover has thinned")
+string(REGEX MATCHALL "script: cold_breath: [0-9.]+ at tick [0-9]+" cold_breath2700 "${forecast}")
+list(LENGTH cold_breath2700 n_cold_breath2700)
+if(NOT n_cold_breath2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 cold_breath lines in 2700 ticks, got ${n_cold_breath2700}")
+endif()
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.508 height 9000 at tick 0\n" "the cirrus cover is wrong in the settled clear sky")
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.178 height 9000 at tick 600\n" "the storm's deck did not hide the cirrus")
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.658 height 9000 at tick 1050\n" "the cirrus did not run ahead of the storm's change")
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.686 height 9000 at tick 1800\n" "the cirrus cover is wrong before the snow")
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.498 height 9000 at tick 2550\n" "the cirrus cover is wrong at the end of the forecast")
+string(REGEX MATCHALL "script: cirrus: strength 1.00 coverage [0-9.]+ height 9000 at tick [0-9]+" cirrus2700 "${forecast}")
+list(LENGTH cirrus2700 n_cirrus2700)
+if(NOT n_cirrus2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 cirrus lines in 2700 ticks, got ${n_cirrus2700}")
+endif()
+expect("${forecast}" "script: halo: strength 1.00 level 1.000 at tick 0\n" "the halo is not full under the settled clear cirrus")
+expect("${forecast}" "script: halo: strength 1.00 level 0.098 at tick 600\n" "the storm's deck did not take the halo away")
+expect("${forecast}" "script: halo: strength 1.00 level 0.640 at tick 750\n" "the halo did not come back as the deck thinned")
+expect("${forecast}" "script: halo: strength 1.00 level 0.744 at tick 1500\n" "the halo level is wrong in the storm")
+expect("${forecast}" "script: halo: strength 1.00 level 1.000 at tick 2550\n" "the halo is not full at the end of the forecast")
+string(REGEX MATCHALL "script: halo: strength 1.00 level [0-9.]+ at tick [0-9]+" halo2700 "${forecast}")
+list(LENGTH halo2700 n_halo2700)
+if(NOT n_halo2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 halo lines in 2700 ticks, got ${n_halo2700}")
+endif()
+expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
+
+message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

@@ -1,0 +1,1 @@
+- Scene tabs, M-SCENETABS step 1: `SceneTabs` in editor core keeps several scene files open; switching parks unsaved changes in the autosave file and restores them. The Scenes panel follows in step 2.

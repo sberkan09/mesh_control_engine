@@ -8,6 +8,7 @@ mce_add_test(test_asset
         test_asset_system.cpp
         test_container.cpp
         test_guid_formats.cpp
+        test_material_translucency.cpp
         test_mods.cpp
     DEPS
         mce::mce_asset)
@@ -17,25 +18,41 @@ target_compile_definitions(test_asset PRIVATE ${MCE_ASSET_TEST_DEFS})
 # Cook side: JSON, audio processing, importers, full project cooks.
 mce_add_test(test_cook UMBRELLA
     SOURCES
+        test_cook_bc.cpp
         test_cook_gltf.cpp
+        test_cook_gltf_ext.cpp
+        test_cook_hdr.cpp
         test_cook_lod.cpp
+        test_cook_mesh_golden.cpp
         test_cook_input.cpp
         test_cook_navmesh.cpp
+        test_cook_hlod.cpp
+        test_cook_impostor.cpp
+        test_cook_font_damage.cpp
         test_cook_json_audio.cpp
         test_cook_mod.cpp
+        test_cook_obj.cpp
         test_cook_project.cpp
         test_cook_shader.cpp
         test_cook_store.cpp
         test_cook_config.cpp
+        test_cook_defaults.cpp
+        test_cook_items.cpp
+        test_cook_roads.cpp
         test_cook_terrain.cpp
+        test_cook_texture_cap.cpp
+        test_cook_texture_formats.cpp
+        test_cook_audio_formats.cpp
         test_cook_video.cpp
         test_cook_vorbis.cpp
         test_cook_sound.cpp
         test_cook_services.cpp
         test_cook_strings.cpp
         test_cook_ui.cpp
+        test_cook_png.cpp
     DEPS
         mce::mce_asset_cook
+        mce_meshopt  # test_cook_gltf_ext.cpp encodes its meshopt fixtures (the "meshopt wall" allows that file)
         mce::mce_audio
         mce::mce_input
         mce::mce_monetize
@@ -43,8 +60,22 @@ mce_add_test(test_cook UMBRELLA
         mce::mce_loc
         mce::mce_physics3d
         mce::mce_ui)
-target_include_directories(test_cook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS})
+target_include_directories(test_cook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src)
+target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS} MCE_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
+# Encoder byte-equality across architectures (M-CONTENT 1b-ii): the pinned x86_64 hash, run by hand on an arm64 host.
+# Slow-labelled: --task skips it, the integration run (local_ci.sh slow) executes it.
+mce_add_test(test_cook_bc_arch UMBRELLA SOURCES test_cook_bc_arch.cpp DEPS mce::mce_asset_cook)
+target_include_directories(test_cook_bc_arch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src)
+mce_mark_slow(test_cook_bc_arch)
+# The ufbx pin (M-IMPORT3D 3a, ADR-0047): links mce_ufbx alone, no engine library (the "ufbx link wall" allows tests/asset/).
+if(TARGET mce_ufbx)
+    target_sources(test_cook PRIVATE test_cook_fbx.cpp)  # the FBX importer exists only where ufbx does (host builds)
+    mce_add_test(test_ufbx_smoke SOURCES test_ufbx_smoke.cpp DEPS mce_ufbx)
+endif()
+# tinyexr's own PIZ / tiled sample files (the FetchContent checkout); read as data at test time, no tinyexr code is linked.
+if(tinyexr_SOURCE_DIR AND EXISTS "${tinyexr_SOURCE_DIR}/test/unit/regression/piz-bug-issue-100.exr")
+    target_compile_definitions(test_cook PRIVATE MCE_TINYEXR_SAMPLES="${tinyexr_SOURCE_DIR}/test/unit/regression")
+endif()
 
 # mce_cook CLI contract (FR-AST-070): exit codes 0 / 1 / 2 and byte-identical re-cooks of the
 # committed sample project (assets.md §10 cook determinism, per PR, every preset).

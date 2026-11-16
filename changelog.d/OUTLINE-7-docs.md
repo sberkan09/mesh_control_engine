@@ -1,0 +1,1 @@
+- M-OUTLINE step 39f: the user guide describes the edge outline (silhouettes and creases from the opaque prepass, before TAA, distance and fog fade, quality tiers, `r.edge_outline`, `Forward3DDesc::edge_outline`, `EdgeOutline3D`, limits), the milestone and the ROADMAP row are closed.

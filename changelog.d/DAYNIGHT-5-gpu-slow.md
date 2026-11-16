@@ -1,0 +1,1 @@
+- `sample_daynight_gpu` is labelled `slow` (integration run only): it timed out in other threads' loaded `--task` runs although it takes 4 s alone; the headless gates stay in `--task`. Noted in `docs/milestones/M-GPU-VERIFY.md`.

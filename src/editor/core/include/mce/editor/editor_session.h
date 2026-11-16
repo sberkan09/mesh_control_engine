@@ -6,6 +6,8 @@
 // Paths: scene paths are absolute (or relative to the working directory); `scene_rel` helpers
 // take paths relative to the project's assets/ folder, which is how the catalog lists them.
 
+#include "mce/cook/impostor.h"
+#include "mce/kit/chunk_lod3d.h"
 #include "mce/physics3d/navmesh3d.h"
 #include "mce/editor/editor_scene.h"
 #include "mce/editor/play_session.h"
@@ -41,13 +43,16 @@ public:
 
     // Cooks the project (pack: also writes <root>/assets.mce) and remounts the preview.
     const cook::CookReport& cook(bool pack = false, bool adopt = false, Span<const cook::String> paths = {},
-                                 bool skip_errors = false);
+                                 bool skip_errors = false, u32 max_texture_size = 0,
+                                 cook::TextureCompression textures = cook::TextureCompression::None);
 
     // ---- autosave + recovery (editor-tools.md §2.11) ----
     // Where the open scene autosaves: <root>/.mce/autosave/<path under assets/>.autosave (an
     // untitled scene uses "untitled.mcscene"), or "<scene file>.autosave" outside a project.
     // Empty when there is nowhere to put it (no project and never saved).
     cook::String autosave_path() const;
+    // The same for any scene file (M-SCENETABS: a parked tab's autosave).
+    cook::String autosave_path_for(StringView scene_path) const;
     // Writes the autosave (atomic) when the scene changed since the last one. True if written.
     bool autosave();
     // Autosaves once `interval` seconds have passed since the last autosave (or since the scene
@@ -111,6 +116,26 @@ public:
     // (+ sidecar; a re-bake keeps the file's GUID), hot-reloads it and points the component's `baked`
     // at it (one undo step). Returns the stats of the bake.
     Result<physics::NavBakeStats3D> bake_navmesh();
+
+    // HLOD bake (M-OPENWORLD A3): for every SceneChunk of the open scene (or only `only`, when not kNoEntity), merges
+    // the area scene's static meshes into one proxy (kit::bake_chunk_hlod, positions relative to the chunk entity),
+    // writes assets/hlod/<scene>/chunk_<entity id>.mchlod (+ sidecar; a re-bake keeps the GUID), hot-reloads it and
+    // points the chunk's ChunkLod3D `proxy` at it, adding the component when missing (one undo step). A chunk whose
+    // area has nothing to merge is left as it is. Returns one row per chunk tried.
+    // With `impostor` set, a chunk that got a proxy also gets an impostor (cook::bake_impostor over the same sources):
+    // chunk_<entity id>_far.png (the atlas, a "texture" sidecar) and chunk_<entity id>_far.mchlod, and ChunkLod3D
+    // `impostor` points at the mesh.
+    struct HlodBakeRow {
+        EntityId chunk = 0;
+        asset::Guid proxy;  // null: nothing merged
+        u32 bytes = 0;
+        kit::HlodBakeStats3D stats;
+        asset::Guid impostor;  // null: none baked
+        u32 impostor_bytes = 0;  // the .mchlod's
+        cook::ImpostorStats impostor_stats;
+    };
+    Result<Array<HlodBakeRow>> bake_hlod(const kit::HlodBakeSettings3D& settings, EntityId only = kNoEntity,
+                                         const cook::ImpostorSettings* impostor = nullptr);
 
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;

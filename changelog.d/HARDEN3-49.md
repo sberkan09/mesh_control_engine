@@ -1,0 +1,1 @@
+- Tests: `WebSocketHost` bad description, full client slot, closed host, `broadcast`, ping / pong and the silent-peer timeout (M-HARDEN3 step 4).

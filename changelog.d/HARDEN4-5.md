@@ -1,0 +1,1 @@
+- The audio device accepts exactly `kMaxClips` registered clips and `kMaxHandles` plays in one tick, refusing the next of each; a released clip slot is reusable (`tests/audio/test_device.cpp`).

@@ -1,0 +1,1 @@
+- Kit (M-VEHICLEHIT): `VehicleRam3D` makes a moving `Vehicle3D` hurt the `Health3D` bodies in front of it (behind it when reversing), with the driver as instigator. Record: `docs/milestones/M-VEHICLEHIT.md`.

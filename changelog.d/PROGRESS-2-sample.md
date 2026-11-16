@@ -1,0 +1,1 @@
+- Sample (M-PROGRESS 2): 09_openworld has five goals with cash rewards and a "GOALS n / 5" HUD line. Record: `docs/milestones/M-PROGRESS.md`.

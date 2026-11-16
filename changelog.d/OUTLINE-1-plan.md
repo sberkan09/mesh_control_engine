@@ -1,0 +1,1 @@
+- M-OUTLINE plan: opt-in edge outlines (ink lines on silhouettes and creases from the opaque prepass, with a colour, thickness and distance and fog fade, drawn before TAA) for a stylized or toon 3D look, render-side only (steps 39a to 39f); nothing is built yet.

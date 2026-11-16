@@ -1,0 +1,1 @@
+- M-AMMOPICKUP closed: five ammo crates in 09_openworld; "no ammo pickups" struck through in M-OPENWORLD-GAPS (M-AMMOPICKUP 3).

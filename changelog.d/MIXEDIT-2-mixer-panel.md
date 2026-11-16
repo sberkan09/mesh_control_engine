@@ -1,0 +1,1 @@
+- Mixer panel, M-MIXEDIT step 2 (closes the milestone): the Mixer panel edits the open scene's bus effects, reverb units, limiter and ducks (On adds or removes the component, sliders, one undo entry per drag); `MixerModel` writes to one item now merge into a single undo entry until the undo is sealed.

@@ -1,0 +1,1 @@
+- Tests: the name helpers of monetize and liveops (`product_type_name`, `ad_format_name`, their parsers, `store_event_name`, `ad_event_name`, `null_store`/`null_ads`, `config_type_name`, `consent_name`, `game_services_event_name`) have tests of their own.

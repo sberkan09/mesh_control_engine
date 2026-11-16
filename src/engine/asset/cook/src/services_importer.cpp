@@ -90,13 +90,7 @@ public:
             error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-services\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kServicesFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported game services version (this cook reads version %u)", kServicesFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kServicesFormatVersion, "game services", file, kStage, diags)) return false;
 
         liveops::ServicesCatalog catalog;
         const JsonValue achievements = doc.get("achievements");

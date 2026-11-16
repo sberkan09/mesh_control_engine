@@ -1,0 +1,1 @@
+- Material panel, M-ASSETLOOK step 3: a double click on a `.mcmat` in Assets opens the Material panel (live swatch, parameters, texture slots, Save cooks first, Revert); the form keeps members it does not own.

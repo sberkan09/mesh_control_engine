@@ -1,0 +1,1 @@
+- Kit (M-CARJACK 2): `CarOwner3D.needs_witness` makes a car theft count only when a police unit sees the car; new `crime_seen`. Record: `docs/milestones/M-CARJACK.md`.

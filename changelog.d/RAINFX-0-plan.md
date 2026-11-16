@@ -1,0 +1,1 @@
+- M-RAINFX milestone record (puddle ripples, rain splashes and distance-delayed thunder, opt-in), planned in `docs/milestones/M-RAINFX.md`.

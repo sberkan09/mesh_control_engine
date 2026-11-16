@@ -1,0 +1,1 @@
+- Player (M-STATUS HUD): Text widgets named `status_1` to `status_8` show the entity's active status effects and item cooldowns with the time left (`elixir 3.5s`); `ItemGridFeed`, user guide chapter 12.

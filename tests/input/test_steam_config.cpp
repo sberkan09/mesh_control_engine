@@ -109,3 +109,21 @@ TEST_CASE("steam input: the action manifest and default configurations come from
     CHECK(x.find("right_trackpad") == std::string::npos);
     CHECK(x.find("\"Game\"\t\t\"Move\"") != std::string::npos);  // a stick group names its action
 }
+
+TEST_CASE("steam input: kMaxFeeds feeds are kept, the ones past the limit are dropped, an empty set clears") {
+    InputSystem in;
+    Array<InputSystem::ActionFeed> feeds;
+    for (u32 i = 0; i < InputSystem::kMaxFeeds + 5; ++i) feeds.push_back({MCE_SID("Jump"), static_cast<f32>(i), 0.f});
+
+    in.set_action_feeds(Span<const InputSystem::ActionFeed>(feeds.data(), InputSystem::kMaxFeeds - 1));
+    CHECK(in.action_feeds().size() == InputSystem::kMaxFeeds - 1);
+    in.set_action_feeds(Span<const InputSystem::ActionFeed>(feeds.data(), InputSystem::kMaxFeeds));
+    CHECK(in.action_feeds().size() == InputSystem::kMaxFeeds);
+    in.set_action_feeds(Span<const InputSystem::ActionFeed>(feeds.data(), InputSystem::kMaxFeeds + 1));
+    CHECK(in.action_feeds().size() == InputSystem::kMaxFeeds);
+    // The first N, in order.
+    CHECK(in.action_feeds()[InputSystem::kMaxFeeds - 1].x == static_cast<f32>(InputSystem::kMaxFeeds - 1));
+
+    in.set_action_feeds(Span<const InputSystem::ActionFeed>(feeds.data(), 0));
+    CHECK(in.action_feeds().empty());  // an empty set replaces the old one
+}

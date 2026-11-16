@@ -392,3 +392,214 @@ TEST_CASE("game services: replays hold with no provider and no file writes") {
         CHECK_FALSE(save::exists("game_services"));
     }
 }
+
+TEST_CASE("game services: game_services_event_name names every event kind") {
+    using K = GameServicesEventKind;
+    const std::pair<K, const char*> all[] = {
+        {K::SignedIn, "SignedIn"},         {K::SignedOut, "SignedOut"},         {K::AchievementSent, "AchievementSent"},
+        {K::ScoreSent, "ScoreSent"},       {K::CloudSaved, "CloudSaved"},       {K::CloudLoaded, "CloudLoaded"},
+        {K::CloudCurrent, "CloudCurrent"}, {K::CloudConflict, "CloudConflict"}, {K::Failed, "Failed"},
+    };
+    for (const auto& [kind, name] : all) CHECK(StringView(game_services_event_name(kind)) == StringView(name));
+}
+
+TEST_CASE("game services: the catalog finds items by id, in order, and reports kNoService when absent") {
+    const ServicesCatalog c = catalog();
+    CHECK(c.find_achievement("first_win") == 0);
+    CHECK(c.find_achievement("win_10") == 1);
+    CHECK(c.find_achievement("nope") == kNoService);
+    CHECK(c.find_achievement("") == kNoService);
+    CHECK(c.find_leaderboard("best_time") == 0);
+    CHECK(c.find_leaderboard("score") == 1);
+    CHECK(c.find_leaderboard("first_win") == kNoService);  // an achievement id is not a board
+    CHECK(c.find_cloud_save("progress") == 0);
+    CHECK(c.find_cloud_save("other") == kNoService);
+
+    const ServicesCatalog empty;
+    CHECK(empty.find_achievement("first_win") == kNoService);
+    CHECK(empty.find_leaderboard("score") == kNoService);
+    CHECK(empty.find_cloud_save("progress") == kNoService);
+}
+
+namespace {
+
+// A provider that only records what the game asked for.
+struct RecordingProvider final : IGameServicesProvider {
+    u32 shown_achievements = 0;
+    Array<u16> shown_leaderboards;
+    u32 interactive_sign_ins = 0;
+    GameServicesSink* sink = nullptr;
+    const char* name() const override { return "recording"; }
+    void start(const ServicesCatalog&, GameServicesSink& s) override { sink = &s; }
+    void sign_in(bool interactive) override {
+        if (interactive) ++interactive_sign_ins;
+        sink->signed_in(interactive);  // the silent attempt fails, the button's succeeds
+    }
+    void report_achievement(u16, u32) override {}
+    void submit_score(u16, i64) override {}
+    void cloud_save(u16, u64, Span<const byte>) override {}
+    void cloud_load(u16) override {}
+    void show_achievements() override { ++shown_achievements; }
+    void show_leaderboard(u16 leaderboard) override { shown_leaderboards.push_back(leaderboard); }
+};
+
+}  // namespace
+
+TEST_CASE("game services: with no provider sign-in and the platform screens do nothing and the catalog is empty") {
+    const fs::path root = fresh("gs_no_provider");
+    use_device(root / "device");
+    Device d;
+    d.start(nullptr);
+    d.step(2);
+    CHECK_FALSE(d.gs().available());
+    CHECK(d.gs().sign_in() == 0);
+    d.gs().show_achievements();  // no provider: nothing to show, nothing breaks
+    d.gs().show_leaderboard("score");
+    d.step();
+    // The game's own catalog still answers for this device; an unbound handle has none.
+    CHECK(GameServices().catalog().find_achievement("first_win") == kNoService);
+    CHECK(GameServices().catalog().find_leaderboard("score") == kNoService);
+}
+
+TEST_CASE("game services: sign_in asks the provider interactively, and the platform screens reach it") {
+    const fs::path root = fresh("gs_screens");
+    use_device(root / "device");
+    RecordingProvider provider;
+    Device d;
+    GameServicesOptions opt;
+    opt.retry_updates = 1000;  // the silent retry stays out of the way
+    d.start(&provider, opt);
+    d.step(2);
+    CHECK(d.gs().available());
+    CHECK_FALSE(d.gs().signed_in());  // the silent attempt failed
+    CHECK(provider.interactive_sign_ins == 0);
+    const u32 id = d.gs().sign_in();
+    CHECK(id != 0);
+    d.step(2);
+    CHECK(provider.interactive_sign_ins == 1);
+    CHECK(d.gs().signed_in());
+
+    d.gs().show_achievements();
+    CHECK(provider.shown_achievements == 1);
+    d.gs().show_leaderboard("score");
+    REQUIRE(provider.shown_leaderboards.size() == 1);
+    CHECK(provider.shown_leaderboards[0] == d.gs().catalog().find_leaderboard("score"));
+    d.gs().show_leaderboard("no_such_board");  // unknown id: the provider is not asked
+    CHECK(provider.shown_leaderboards.size() == 1);
+}
+
+namespace {
+
+// Counts start / stop and keeps the sign-in silent-success; everything else is a no-op.
+struct StopCountingProvider final : IGameServicesProvider {
+    u32 starts = 0;
+    u32 stops = 0;
+    u32 uploads = 0;
+    GameServicesSink* sink = nullptr;
+    const char* name() const override { return "stop-counting"; }
+    void start(const ServicesCatalog&, GameServicesSink& s) override {
+        ++starts;
+        sink = &s;
+    }
+    void stop() override { ++stops; }
+    void sign_in(bool) override { sink->signed_in(true); }
+    void report_achievement(u16, u32) override {}
+    void submit_score(u16, i64) override {}
+    void cloud_save(u16, u64, Span<const byte>) override { ++uploads; }
+    void cloud_load(u16) override {}
+};
+
+}  // namespace
+
+TEST_CASE("game services: an upload with no local save fails and never reaches the provider") {
+    const fs::path root = fresh("gs_no_local_save");
+    use_device(root / "device");
+    StopCountingProvider provider;
+    Device d;
+    d.start(&provider);
+    d.step(3);
+    REQUIRE(d.gs().signed_in());
+    CHECK_FALSE(save::exists("progress"));
+    d.gs().cloud_save("progress");
+    d.step(3);
+    CHECK(provider.uploads == 0);
+    CHECK(d.seen().failed == 1);
+    CHECK(d.seen().saved == 0);
+
+    write_save("progress", "level 1");  // the save appears: the next ask goes through
+    d.gs().cloud_save("progress");
+    d.step(3);
+    CHECK(provider.uploads == 1);
+}
+
+TEST_CASE("game services: shutdown stops the provider once, and a second shutdown does nothing") {
+    const fs::path root = fresh("gs_shutdown");
+    use_device(root / "device");
+    StopCountingProvider provider;
+    {
+        Device d;
+        d.start(&provider);
+        d.step(2);
+        CHECK(provider.starts == 1);
+        d.service.shutdown();
+        CHECK(provider.stops == 1);
+        d.service.shutdown();  // not started any more
+        CHECK(provider.stops == 1);
+    }
+    CHECK(provider.stops == 1);  // the destructor does not stop it again
+}
+
+TEST_CASE("game services: a damaged saved state starts empty or keeps what was read, and never exceeds the catalog") {
+    const fs::path root = fresh("gs_damaged_state");
+    const fs::path platform = root / "platform";
+    use_device(root / "device");
+    LocalGameServices local(StringView(platform.string().c_str()));
+    local.set_offline(true);
+    {
+        Device d;
+        d.start(&local);
+        d.step(3);
+        REQUIRE(d.gs().unlock("first_win"));
+        REQUIRE(d.gs().add_progress("win_10", 4));
+        REQUIRE(d.gs().submit_score("best_time", 4200));
+        d.step(2);
+    }
+    const std::string good = read_save("game_services");
+    REQUIRE(good != "<none>");
+    REQUIRE(good.size() > 16);
+
+    auto start_with = [&](const std::string& bytes, auto&& check) {
+        write_save("game_services", bytes);
+        Device d;
+        d.start(&local);
+        check(d);
+    };
+    // The unchanged file loads.
+    start_with(good, [](Device& d) {
+        CHECK(d.gs().unlocked("first_win"));
+        CHECK(d.gs().progress("win_10") == 4);
+        CHECK(d.gs().best_score("best_time", -1) == 4200);
+    });
+    // A wrong magic and a version from a newer build are not read: the service starts empty.
+    std::string bad_magic = good;
+    bad_magic[0] = static_cast<char>(bad_magic[0] ^ 0x55);
+    start_with(bad_magic, [](Device& d) {
+        CHECK_FALSE(d.gs().unlocked("first_win"));
+        CHECK(d.gs().best_score("best_time", -1) == -1);
+    });
+    std::string newer = good;
+    newer[4] = static_cast<char>(0x7F);
+    newer[5] = static_cast<char>(0x7F);
+    start_with(newer, [](Device& d) { CHECK_FALSE(d.gs().unlocked("first_win")); });
+    // Every cut of the file loads without reading past its end, and never invents progress.
+    for (usize n = 0; n < good.size(); ++n) {
+        start_with(good.substr(0, n), [&](Device& d) {
+            CHECK(d.gs().progress("win_10") <= 4);
+            CHECK(d.gs().progress("first_win") <= 1);
+            const i64 best = d.gs().best_score("best_time", -1);
+            CHECK((best == -1 || best == 4200));
+        });
+    }
+    // An empty file is a damaged one, not a crash.
+    start_with("", [](Device& d) { CHECK_FALSE(d.gs().unlocked("first_win")); });
+}

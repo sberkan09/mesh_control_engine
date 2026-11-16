@@ -1,0 +1,1 @@
+- Sequence form, M-SEQEDIT step 1: `SequenceForm` in editor core turns a `.mcseq` into an editable step list and back, saving only through the cook-first write. The Sequence panel follows in step 2.

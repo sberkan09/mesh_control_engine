@@ -1,0 +1,1 @@
+- Tests: `skeleton2d_slot_interval` (asset), `bone2d_local` and `bone2d_inverse` (kit) have tests of their own.

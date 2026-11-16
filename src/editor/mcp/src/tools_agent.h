@@ -18,7 +18,10 @@ bool timeline_preview(ToolCall& c);
 bool find_player(const Server& server, cook::String& out);
 bool headless_display();
 void script_text(const input::InputScript& s, cook::String& out);
-bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code);
+// `on_line` (optional) gets each complete line the player prints, while it runs (perf_run's progress).
+using PlayerLineFn = void (*)(StringView line, void* user);
+bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code,
+                  PlayerLineFn on_line = nullptr, void* user = nullptr);
 
 // tools_perf.cpp (M-PERF step 3): a performance capture of a scene, judged against a target's budget,
 // and two captures compared.
@@ -68,5 +71,22 @@ bool scene_documents(ToolCall& c);
 
 // tools_friction.cpp (SBA-55): friction notes for the engine's backlog.
 bool report_friction(ToolCall& c);
+
+// tools_scene_diff.cpp (M-SCENEDIFF 3): what changed between two scenes.
+bool scene_diff(ToolCall& c);
+
+// tools_scene_lint.cpp (M-SCENELINT 3): mistakes in a scene that load fine.
+bool scene_lint(ToolCall& c);
+bool scene_lint_fix(ToolCall& c);  // M-LINTFIX 3
+bool scene_lint_all(ToolCall& c);  // M-LINTALL 1
+
+// tools_scene_stats.cpp (M-SCENESTATS 3): what a scene holds at a glance.
+bool scene_stats(ToolCall& c);
+
+// tools_scene_find.cpp (M-SCENEFIND 3): the entities of a scene that match a question.
+bool scene_find(ToolCall& c);
+
+// tools_asset_used_by.cpp (M-ASSETUSEDBY): the assets whose files name a given asset.
+bool asset_used_by(ToolCall& c);
 
 }  // namespace mce::mcp

@@ -1,0 +1,1 @@
+- M-SUNSHAFTS: the accumulation shader drops NaN luminance so one bad HDR texel cannot become a streak; the review follow-ups are recorded in the milestone.

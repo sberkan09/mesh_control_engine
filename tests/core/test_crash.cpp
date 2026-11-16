@@ -103,3 +103,18 @@ TEST_CASE("crash: a handler installed before the engine's still gets the crash")
     fs::remove_all(tmpl);
 }
 #endif
+
+namespace {
+void no_context(void*, crash::ContextPut, void*) {}
+}  // namespace
+
+TEST_CASE("crash: add_context takes up to four writers, then refuses until one is removed") {
+    int users[5] = {};
+    for (int i = 0; i < 4; ++i) CHECK(crash::add_context(no_context, &users[i]));
+    CHECK_FALSE(crash::add_context(no_context, &users[4]));
+    crash::remove_context(&users[1]);
+    CHECK(crash::add_context(no_context, &users[4]));
+    for (int i = 0; i < 5; ++i) crash::remove_context(&users[i]);
+    CHECK(crash::add_context(no_context, &users[0]));  // all slots free again
+    crash::remove_context(&users[0]);
+}

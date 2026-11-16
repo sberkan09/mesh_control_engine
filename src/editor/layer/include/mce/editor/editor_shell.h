@@ -22,6 +22,7 @@
 #include "mce/editor/orbit_camera.h"
 #include "mce/editor/perf_monitor.h"
 #include "mce/editor/preview_renderer.h"
+#include "mce/editor/scene_tabs.h"
 #include "mce/editor/stub_world.h"
 #include "mce/memory/allocator.h"
 #include "mce/platform/window.h"
@@ -30,6 +31,7 @@
 namespace mce::editor {
 
 class EditorShell;
+struct QuickOpenItem;
 
 class IEditorPanel {
 public:
@@ -74,6 +76,8 @@ struct ViewSettings {
     bool tile_paint = false;  // the viewport paints the selected TilemapLayer (Tilemap panel, T)
     bool terrain_sculpt = false;  // the orbit view sculpts the selected Terrain3D (Terrain panel)
     bool show_perception = true;  // while playing, the viewport draws each Perceiver's cone and target (Behavior Tree panel)
+    bool show_roads = true;       // while a 3D game plays, the viewport draws its road networks' lanes, connectors by light
+    bool show_gameplay = false;   // while a 3D game plays, the viewport draws colliders, triggers, joints, vehicles and paths (M-DEBUGVIEW)
 };
 
 class EditorShell {
@@ -99,6 +103,7 @@ public:
     void add_panel(mem::UniquePtr<IEditorPanel> panel);
     IEditorPanel* find_panel(StringView name);
     usize panel_count() const { return panels_.size(); }
+    IEditorPanel* panel_at(usize i) { return i < panels_.size() ? panels_[i].get() : nullptr; }
 
     // Asks before discarding unsaved scene changes (Save / Discard / Cancel).
     void request_quit();
@@ -134,11 +139,23 @@ public:
     // viewport draws its bones, in the panel's previewed pose, on the selected entities that play it.
     Skeleton2DEditor& skeleton2d() { return skeleton2d_; }
     void open_skeleton2d(asset::Guid guid);
+    // The material the Material panel edits (open_material: a double click in Assets). The panel loads the file
+    // itself (a MaterialForm) and saves it with its own button; the shell only carries the request.
+    asset::Guid material_request() const { return material_request_; }
+    void open_material(asset::Guid guid);
+    // The same for the Particle panel (a double click on a particle preset).
+    asset::Guid particle_request() const { return particle_request_; }
+    void open_particle(asset::Guid guid);
+    // And for the Sequence panel (a double click on a sequence).
+    asset::Guid sequence_request() const { return sequence_request_; }
+    void open_sequence(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
     bool open_scene(StringView path);  // absolute, or relative to the project's assets/ (offers autosave recovery)
-    void request_open_scene(StringView path);  // asks first when the open scene is dirty
+    void request_open_scene(StringView path);  // asks first only when the open scene is dirty and has no file yet
+    // The open scene files (M-SCENETABS): opening one parks the dirty scene in its autosave file instead of asking.
+    SceneTabs& scene_tabs() { return tabs_; }
     bool save_scene();                 // Save As prompt when the scene has no file yet
     void new_scene();                  // asks first when the open scene is dirty
     void cook(bool pack = false);
@@ -197,6 +214,17 @@ private:
     void draw_dockspace();
     void draw_popups();
     void handle_shortcuts();
+    void track_recent_scenes();
+    void track_selection_history();
+    void selection_back();
+    void selection_forward();
+    void rename_selection(StringView pattern, u32 first);
+    void save_selection_set(u32 slot);
+    void recall_selection_set(u32 slot);
+    void save_bookmark(u32 slot);
+    void recall_bookmark(u32 slot);
+    void fill_quick_open();
+    void run_quick_open(const QuickOpenItem& item);
     void update_title();
     // `e` as the play world's input sees it (on_event, while playing).
     platform::Event game_event(const platform::Event& e) const;
@@ -221,6 +249,10 @@ private:
     AnimGraphEditor anim_graph_;
     BtEditor bt_;
     Skeleton2DEditor skeleton2d_;
+    asset::Guid material_request_;
+    SceneTabs tabs_;
+    asset::Guid particle_request_;
+    asset::Guid sequence_request_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;
@@ -234,7 +266,17 @@ private:
     const char* focus_panel_ = nullptr;
     FixedString<256> perf_capture_request_;
     // Pending modal popups (opened on the next frame, inside the ImGui frame).
-    enum class Popup : u8 { None, OpenScene, SaveAs, ConfirmQuit, ConfirmNew, ConfirmOpen, Recover };
+    enum class Popup : u8 {
+        None,
+        OpenScene,
+        SaveAs,
+        ConfirmQuit,
+        ConfirmNew,
+        ConfirmOpen,
+        Recover,
+        QuickOpen,
+        BatchRename
+    };
     Popup popup_ = Popup::None;
     bool popup_opened_ = false;
     char save_as_buf_[256] = {};

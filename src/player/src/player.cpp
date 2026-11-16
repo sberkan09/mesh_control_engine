@@ -125,6 +125,7 @@
 #include "mce/platform/screen_reader.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
+#include "mce/render/dynres.h"
 #include "mce/render/quality.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
@@ -133,6 +134,7 @@
 #include "mce/scene/scene.h"
 #include "mce/scene/streaming.h"
 #include "mce/ui/access.h"
+#include "mce/ui/document_data.h"
 #include "mce/ui/subtitles.h"
 #include "mce/ui/ui.h"
 #include "ship_paths.h"
@@ -144,6 +146,10 @@ using namespace mce;
 using namespace mce::math;
 
 MCE_CVAR(cv_pack, "pack", "", "Cooked pack (assets.mce) or cooked/ directory to mount (a host's default: assets.mce beside it)",
+         CVarFlags::None);
+MCE_CVAR(cv_defaults, "defaults", "",
+         "A file of 'name value' lines that become the convars' defaults (a project's own; a saved option and the command line "
+         "still win). Default: defaults.cfg in the folder of the pack (inside it, for a cooked/ directory), when there is one",
          CVarFlags::None);
 MCE_CVAR(cv_module, "module", "", "Game module to install on top of the engine systems (a host's default: its own module)",
          CVarFlags::None);
@@ -246,6 +252,14 @@ MCE_CVAR(cv_language, "language", "",
 MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
          "UI size on top of the display's own scale (1 = as the display asks; lowered when the screen is too small)",
          CVarFlags::Saved);
+MCE_CVAR(cv_ui_reference_height, "ui.reference_height", 0.0f,
+         "UI authored for a window this tall (720): the UI grows with the window's short side over it, so it is not tiny "
+         "at 1080p (0 = off, the UI scale follows the display only)",
+         CVarFlags::Saved);
+MCE_CVAR(cv_ui_overlay_theme, "ui.overlay_theme", "",
+         "GUID of a .mcuitheme whose Body font (else Title font) draws the subtitles, sound captions and the cutscene "
+         "skip prompt; empty or a theme that does not load: the built-in pixel font",
+         CVarFlags::None);
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
@@ -286,6 +300,10 @@ MCE_CVAR(cv_console_open, "console_open", false, "Start with the developer conso
 MCE_CVAR(cv_uniform_ring, "r.uniform_ring_mb", 4,
          "Per-frame uniform memory in MiB (a 3D frame with thousands of draws and shadow cascades needs more than 1)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_frame_arena, "mem.frame_arena_mb", 16,
+         "Windowed: per-frame scratch memory in MiB, one arena per frame in flight (raise it if the log reports a "
+         "LinearArena 'frame' overflow)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_msaa, "r.msaa", 4, "3D games: MSAA samples of the 3D frame (1 = off)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_lod, "r.lod", true, "3D games: draw coarser mesh levels with distance (meshes cooked with LODs)", CVarFlags::None);
 MCE_CVAR(cv_lod_pixels, "r.lod_pixels", 1.0f, "3D games: the largest LOD error allowed on screen, in pixels", CVarFlags::None);
@@ -301,6 +319,10 @@ MCE_CVAR(cv_perf_capture, "perf_capture", "",
          "and system, render counters (M-PERF; never changes the state hash)",
          CVarFlags::RequiresRestart);
 MCE_CVAR(cv_perf_warmup, "perf_warmup", 0, "-perf_capture: leave the run's first N frames out (loading, first uploads)",
+         CVarFlags::RequiresRestart);
+MCE_CVAR(cv_split_views, "split_views", 0,
+         "3D: draw the primary camera's view N times (2-4) in split-screen cells, to measure what N players' views cost "
+         "(-perf_capture); adds N-1 cameras to the world, so the state hash differs (0 = off)",
          CVarFlags::RequiresRestart);
 MCE_CVAR(cv_mouse_look, "mouse_look", true, "3D games: let a Camera3DComponent with mouse_look capture the mouse", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
@@ -454,7 +476,9 @@ public:
         MCE_TRY(parse_capture_and_view());
         mount_mods();
         const StringView roots[1] = {pack.view()};
-        MCE_TRY(assets_.mount(Span<const StringView>(roots, 1)));
+        asset::MountOptions game_opt;
+        game_opt.allow_code = true;  // the game's own pack is the one place bytecode is trusted
+        MCE_TRY(assets_.mount(Span<const StringView>(roots, 1), game_opt));
         MCE_LOG_INFO("{}: pack mounted from {}", desc_.app_name, pack.view());  // the phone smoke runs look for it
         const StringView want_scene = !cv_scene.get_string().empty() ? cv_scene.get_string()
                                       : desc_.start_scene                ? StringView(desc_.start_scene)
@@ -467,7 +491,13 @@ public:
         audio::install(world_, audio_, &clips_);
         kit::install_stock(world_, &assets_);
 #if MCE_HAS_SCRIPT
-        script::install_scene_scripts(world_, &assets_);  // the scene's ScriptSystems (M-SCRIPT 1)
+        // The hidden-state check (M-SCRIPT3 2) runs everywhere but in a shipped game's window: the pack found beside the
+        // executable, not -pack or the build tree's. A player cannot fix a script, and the check costs; -script.state_check 1 forces it.
+        script::ScriptBudget script_budget;
+        const bool shipped_pack = cv_pack.get_string().empty() && desc_.pack &&
+                                  pack.view() != StringView(desc_.pack_fallback ? desc_.pack_fallback : "");
+        script_budget.check_state = window_ == nullptr || !shipped_pack;
+        script::install_scene_scripts(world_, &assets_, script_budget);  // the scene's ScriptSystems (M-SCRIPT 1)
 #endif
         if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());  // the entitlements live there too
         MCE_LOG_INFO("{}: save folder {}", desc_.app_name, save::root().c_str());  // -save_dir, else the per-user default
@@ -500,6 +530,29 @@ public:
         // (goldens, render_frame) stay on the defaults.
         settings_on_ = device_ && cv_settings.get_bool() && cv_capture.get_string().empty() && cv_capture_tick.get_int() == 0 &&
                        cv_capture_ticks.get_string().empty();
+        {   // the project's own defaults, under the player's saved choices and the command line
+            // The pack's convar-defaults chunks first (every platform carries them), in pack order; defaults.cfg
+            // beside the pack overrides them for a developer's tweak.
+            for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
+                if (assets_.info(k).type != asset::ChunkType::ConvarDefaults) continue;
+                const Result<asset::AssetHandle<asset::ConvarDefaultsChunk>> h =
+                    assets_.load_sync<asset::ConvarDefaultsChunk>(k);
+                if (!h) continue;  // the asset system already warned
+                const Span<const byte> bytes = assets_.resolve(h.value());
+                console::set_defaults_text(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+                MCE_LOG_INFO("{}: convar defaults {}", desc_.app_name, assets_.info(k).path);
+                assets_.release(asset::AnyHandle(h.value()));
+            }
+            FixedString<1024> defaults(cv_defaults.get_string());
+            if (defaults.empty() && !pack.empty()) {
+                std::error_code ec;
+                const std::filesystem::path pack_path(pack.c_str());
+                const std::filesystem::path folder = std::filesystem::is_directory(pack_path, ec) ? pack_path : pack_path.parent_path();
+                defaults.assign(folder.generic_string().c_str());
+                defaults.append(defaults.empty() ? "defaults.cfg" : "/defaults.cfg");
+            }
+            if (!defaults.empty()) (void)console::set_defaults(defaults.view());  // a missing file is no error
+        }
         if (settings_on_) {
             if (Result<void> r = console::load_settings(settings_path().view()); !r) {
                 FixedString<512> why;
@@ -710,10 +763,12 @@ public:
         // the debug view overrides (-view.*), the UI preview and a fullscreen film keep the single
         // view. The views are known before the UI updates: a UiScreenView lays out in its view.
         if (!ui_preview_) render_textures_.sync(world_, capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
+        if (cv_split_views.get_int() >= 2 && !ui_preview_) apply_split_views();
         const bool have_views = !ui_preview_ && view_entity().is_null() && view_free_.empty() &&
                                 kit::collect_views(world_, bb, views_, &kit::render_texture_size, &render_textures_);
         if (!have_views) views_.clear();
-        screens_.set_views(world_, views_.span(), window_->display_scale(), cv_ui_scale.get_float());
+        screens_.set_views(world_, views_.span(), window_->display_scale(), cv_ui_scale.get_float(),
+                           cv_ui_reference_height.get_float());
         update_ui_screens(bb);
         // Video pictures step to their players' playheads before the extracts draw them.
         if (!ui_preview_) videos_.update(world_);
@@ -737,7 +792,16 @@ public:
         bool draw_3d = three_d_ && !ui_preview_ && extract3d_.camera(world_, alpha, cam3, &cam3_info);
         if (three_d_ && !ui_preview_) draw_3d = view_override_3d(alpha, cam3) || draw_3d;
         update_mouse_look(draw_3d && cam3_info.mouse_look != 0);
-        rhi::CommandBuffer cmd(mem::frame());
+        // The frame's stream lives on the heap and keeps its capacity. Grown in the frame arena, every doubling left
+        // the old block behind: the city's 2 MB stream with the GI probe captures took about 7 MB of the 16 MiB
+        // arena, and the frame overflowed it (null allocations in SpriteBatch and CommandBuffer, GPU round r10).
+        rhi::CommandBuffer& cmd = frame_cmd_;
+        cmd.reset();
+        // The frame's GPU span for -perf_capture: what a 2D or split-screen frame has (the 3D stages time
+        // the first 3D view only).
+        const bool frame_timestamps = !cv_perf_capture.get_string().empty() &&
+                                      (device_->caps().timestamp_queries || device_->caps().fence_timestamps);
+        if (frame_timestamps) cmd.write_timestamp(kFrameTimestampBegin);
         const bool multi = have_views && !film_;
         if (!multi && !ui_preview_) render_textures_.clear_new(cmd);
         if (multi) {
@@ -753,9 +817,13 @@ public:
             vc.lod.enabled = cv_lod.get_bool();
             vc.lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
             vc.lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
+            vc.collect_draw_causes = perf_on_;
             const kit::ViewRecordStats vs = kit::record_views(cmd, world_, views_.span(), vc);
             if (vs.views_3d > 0) {
-                stats3d_ = vs.first_3d;
+                stats3d_ = vs.first_3d;  // the renderer's numbers of that same view, not the last one recorded
+                runs_instanced3d_ = vs.first_3d_runs_instanced;
+                draws_instanced3d_ = vs.first_3d_draws_instanced;
+                for (u32 k = 0; k < kDrawCauseCount; ++k) draw_causes3d_[k] = vs.first_3d_draw_causes[k];
                 drew_3d_ = true;
             }
             batch_stats_ = vs.first_2d;
@@ -779,12 +847,15 @@ public:
             lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
             lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
             scene3.set_lod(lod);
+            scene3.set_collect_draw_causes(perf_on_);
             // Auto exposure adapts by the frame's wall time (a capture frame by a fixed step, to repeat).
             extract3d_.set_frame_dt(capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
             extract3d_.extract(world_, scene3, alpha);
             scene3.build();
+            extract3d_.note_built(scene3);  // one warning when decals were dropped
             renderer_.record_3d(cmd, scene3);
             stats3d_ = scene3.stats();
+            take_draw_causes();
             drew_3d_ = true;
         }
 
@@ -830,6 +901,7 @@ public:
         }
         }  // !multi
         renderer_.end_views();
+        if (frame_timestamps) cmd.write_timestamp(kFrameTimestampEnd);
         device_->submit(cmd);
 
         // The run ends on the Nth frame (-frames) or on the first frame after the last capture tick
@@ -890,6 +962,21 @@ public:
     }
 
     u64 state_hash() { return world_.state_hash(); }
+    // Scripts the run disabled (an error, the step budget, a hidden-state change): a headless run exits non-zero for them.
+    u32 failed_scripts() {
+#if MCE_HAS_SCRIPT
+        u32 n = 0;
+        if (const script::ScriptHost* host = script::scene_script_host(world_))
+            for (const script::ScriptInfo& info : host->scripts())
+                if (info.state == script::ScriptState::Failed) {
+                    ++n;
+                    std::fprintf(stderr, "%s: script failed: %s\n", desc_.app_name, info.error.c_str());
+                }
+        return n;
+#else
+        return 0;
+#endif
+    }
     input::InputSystem& input() { return input_; }
 
     // -input's script, read by the sim's own tick count: a capture hold, a pause or an ad holds
@@ -962,7 +1049,8 @@ private:
         for (usize i = found.mods.size(); i-- > 0;) {
             const asset::ModEntry& m = found.mods[i];
             const StringView root[1] = {m.path.view()};
-            if (Result<void> r = assets_.mount(Span<const StringView>(root, 1)); !r) {
+            asset::MountOptions mod_opt;  // allow_code stays false: a mod is data (M-SCRIPT2 0)
+            if (Result<void> r = assets_.mount(Span<const StringView>(root, 1), mod_opt); !r) {
                 FixedString<512> msg;
                 format_error(r.error(), msg);
                 MCE_LOG_WARN("{}: mod skipped: {} (cannot mount: {})", desc_.app_name, m.path.view(), msg.view());
@@ -1630,7 +1718,8 @@ private:
     // ---- the developer console (FR-UI-045) ----------------------------------------------------
 
     // The UI scale for this framebuffer: the display's scale times -ui_scale, fitted (M-MOBILE 11b).
-    f32 ui_scale(rhi::Extent2D bb) const { return ui::compute_ui_scale(bb, window_->display_scale(), cv_ui_scale.get_float()); }
+    f32 ui_scale(rhi::Extent2D bb) const { return ui::compute_ui_scale(bb, window_->display_scale(), cv_ui_scale.get_float(), {360, 640},
+                                                                       cv_ui_reference_height.get_float()); }
     // The accessibility settings every UI document draws with (M-ACCESS): text scale, high contrast.
     static void apply_access(ui::UpdateContext& ctx) {
         const render::AccessibilitySettings a = render::accessibility_settings();
@@ -1735,7 +1824,38 @@ private:
         }
     }
 
+    // ui.overlay_theme: the font of the text that belongs to no UI document (subtitles, the skip prompt).
+    void load_overlay_font() {
+        overlay_font_ = nullptr;
+        if (!device_) return;
+        subtitles_.set_skin(skin_.skin);
+        const StringView want = cv_ui_overlay_theme.get_string();
+        if (want.empty()) return;
+        const Result<asset::Guid> g = asset::parse_guid(want);
+        const Result<asset::AssetHandle<asset::UiTheme>> th = g ? assets_.load_sync<asset::UiTheme>(g.value())
+                                                                : Result<asset::AssetHandle<asset::UiTheme>>(g.error());
+        ui::ThemeData theme;
+        bool decoded = false;
+        if (th) {
+            decoded = static_cast<bool>(ui::decode_ui_theme(assets_.resolve(th.value()), theme));
+            assets_.release(asset::AnyHandle(th.value()));
+        }
+        const asset::Guid font = decoded ? theme.overlay_font() : asset::Guid{};
+        const render::Font* f = font.is_null() ? nullptr : extract_.font(font);
+        if (!f) {
+            MCE_LOG_WARN("player: ui.overlay_theme {}: {}; the subtitles and the skip prompt use the built-in font", want,
+                         decoded ? "its Body and Title fonts are not set or do not load" : "it is not a theme that loads");
+            return;
+        }
+        overlay_font_ = f;
+        ui::Skin look = skin_.skin;
+        look.font = f;
+        subtitles_.set_skin(look);
+    }
+    const render::Font* overlay_font_ = nullptr;
+
     Result<void> load_ui_screens() {
+        load_overlay_font();
         const ui::Skin* skin = device_ ? &skin_.skin : nullptr;
         kit::SpriteExtract* extract = device_ ? &extract_ : nullptr;
         if (const StringView preview = cv_ui_preview.get_string(); !preview.empty()) {
@@ -1868,7 +1988,8 @@ private:
         render::TextLayout layout(mem::frame());
         render::TextLayoutDesc desc;
         desc.size_px = 14.0f * scale;
-        render::layout_text(skin_.font.face, c->skip_prompt.view(), desc, layout);
+        const render::Font& prompt_font = overlay_font_ ? *overlay_font_ : skin_.font;
+        render::layout_text(prompt_font.face, c->skip_prompt.view(), desc, layout);
         const f32 track = 64.0f * scale, thick = 3.0f * scale;
         const f32 right = w - margin - static_cast<f32>(safe_insets_.right);
         const f32 top = margin + static_cast<f32>(safe_insets_.top);
@@ -1877,7 +1998,7 @@ private:
         p.sort_layer = kLayer;
         p.sort_order = 2;
         p.tint = Color{1.0f, 1.0f, 1.0f, 0.8f};
-        hud.add_text(skin_.font, layout, p);
+        hud.add_text(prompt_font, layout, p);
         const f32 y = top + 0.5f * layout.height;
         for (u32 i = 0; i < 2; ++i) {  // the track, then the fill
             const f32 len = i == 0 ? track : track * cutscene_.skip_progress;
@@ -1978,6 +2099,7 @@ private:
         render::Forward3DDesc fd;
         render::apply_quality(quality, fd);
         fd.msaa = math::min(fd.msaa, static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8)));
+        hold_dynres_for_capture();
         MCE_TRY(renderer_.init_3d(fd));
         extract3d_.init(renderer_.meshes(), &assets_);
         extract3d_.set_texture_store(&renderer_.textures());
@@ -1989,6 +2111,28 @@ private:
         three_d_ = true;
         MCE_LOG_INFO("{}: 3D path on ({} quality, {}x MSAA)", desc_.app_name, render::quality_tier_name(tier), fd.msaa);
         return {};
+    }
+
+    // M-DYNRES 46d: a capture (-capture, -capture_tick(s): the goldens, render_frame and render_sheet) must not depend on
+    // the machine. The measured GPU time would move the render scale of a scene with a DynamicResolution3D, so the
+    // controller is held at the ceiling (r.dynres 0, which apply_quality and the renderer read every frame) unless
+    // r.dynres.inject gives it a fixed schedule, which is reproducible. A capture run never saves the options
+    // (settings_on_), so the player's own r.dynres is untouched.
+    void hold_dynres_for_capture() {
+        const bool capture = !cv_capture.get_string().empty() || cv_capture_tick.get_int() > 0 ||
+                             !cv_capture_ticks.get_string().empty();
+        if (!capture) return;
+        // Only a schedule that parses keeps the controller on: the renderer ignores a malformed one and measures.
+        const ConVar* inject = ConVar::find(MCE_SID("r.dynres.inject"));
+        render::DynResInject schedule;
+        if (inject && render::dynres_parse_inject(inject->get_string(), schedule)) return;
+        ConVar* dynres = ConVar::find(MCE_SID("r.dynres"));
+        if (!dynres || !dynres->get_bool()) return;
+        if (dynres->from_command_line())  // an explicit -r.dynres 1
+            MCE_LOG_INFO("{}: capture run: r.dynres 1 is overridden (the render scale holds at the tier's; give "
+                         "-r.dynres.inject a cost schedule to run the controller)",
+                         desc_.app_name);
+        dynres->set_string("0");
     }
 
     // Relative mouse while a mouse-look camera plays; the cursor comes back for the pause overlay,
@@ -2056,7 +2200,7 @@ private:
             std::memcpy(buf, item.data(), item.size());
             char* stop = nullptr;
             const f64 v = std::strtod(buf, &stop);
-            if (stop == buf || *stop != 0) return false;
+            if (stop == buf || *stop != 0 || !std::isfinite(v)) return false;
             out.push_back(v);
             start = end + 1;
         }
@@ -2487,19 +2631,86 @@ private:
         if (drew_3d_) {
             f.counters.triangles = stats3d_.triangles;
             f.counters.meshes = stats3d_.visible;
+            f.counters.runs_instanced = runs_instanced3d_;  // the renderer's drawn numbers, with the causes
+            f.counters.draws_instanced = draws_instanced3d_;
+            for (u32 k = 0; k < kDrawCauseCount; ++k) f.counters.draw_causes[k] = draw_causes3d_[k];
+            f.counters.merged_groups = extract3d_.stats().merged_groups;
+            f.counters.merged_children = extract3d_.stats().merged_children;
+            f.counters.decals_dropped = stats3d_.decals_dropped;
         }
         f.counters.sprites = batch_stats_.quads + batch_stats_.tile_quads;
         f.counters.sprite_batches = batch_stats_.groups;
         f.counters.heap_allocations = mem::heap_live_allocations();
 
         if (perf_seen_++ >= static_cast<u64>(math::max<i64>(cv_perf_warmup.get_int(), 0))) perf_.frames.push_back(f);
+        print_perf_progress();
         perf_frame_ = perf::Frame{};
         drew_3d_ = false;
         batch_stats_ = {};
     }
 
+    // One line "<app>: perf warmup N/M" or "perf capturing N/M" about ten times per phase (the frame counts decide,
+    // so the lines repeat run to run); perf_run reads them off the player's stdout as its progress.
+    void print_perf_progress() {
+        const u64 warm = static_cast<u64>(math::max<i64>(cv_perf_warmup.get_int(), 0));
+        const i64 want = cv_frames.get_int() > 0 ? cv_frames.get_int() : cv_ticks.get_int();
+        if (want <= 0) return;
+        const u64 total = static_cast<u64>(want);
+        const u64 seen = perf_seen_;  // frames finished, warmup included
+        const bool warming = seen <= warm && warm > 0;
+        const u64 done = warming ? seen : seen - warm;
+        const u64 of = warming ? warm : (total > warm ? total - warm : 1);
+        const u64 step = math::max<u64>(of / 10, 1);
+        if (done % step != 0 && done != of) return;
+        std::printf("%s: perf %s %llu/%llu\n", desc_.app_name, warming ? "warmup" : "capturing", static_cast<unsigned long long>(done),
+                    static_cast<unsigned long long>(of));
+        std::fflush(stdout);
+    }
+
+    // -split_views N: N-1 cameras that show the primary 3D camera's view (a CameraBlend3D held at its
+    // `from`), each with the primary in a split-screen cell. Once per scene: the primary then has a CameraView.
+    void apply_split_views() {
+        Entity primary;
+        kit::Camera3DComponent pc;
+        world_.query<const kit::Camera3DComponent&>().each([&](Entity e, const kit::Camera3DComponent& c) {
+            if (primary.is_null() && c.primary != 0) {
+                primary = e;
+                pc = c;
+            }
+        });
+        if (primary.is_null() || primary == split_primary_) return;
+        if (world_.try_get<kit::CameraView>(primary)) {
+            if (!split_views_warned_)
+                MCE_LOG_WARN("{}: -split_views: the primary camera already has a CameraView; the scene's views are kept",
+                             desc_.app_name);
+            split_views_warned_ = true;
+            return;
+        }
+        const u32 n = static_cast<u32>(math::clamp<i64>(cv_split_views.get_int(), 2, 4));
+        kit::CameraView view;
+        view.split = 1;
+        world_.add(primary, view);
+        split_primary_ = primary;
+        for (u32 i = 1; i < n; ++i) {
+            const Entity e = world_.spawn();
+            kit::Camera3DComponent c = pc;
+            c.primary = 0;
+            c.mouse_look = 0;
+            world_.add(e, c);
+            world_.add(e, LocalTransform{});
+            kit::CameraBlend3D hold;
+            hold.from = primary;
+            hold.duration = 1e9f;  // weight 0 for the run: the primary's view
+            world_.add(e, hold);
+            view.split = i + 1;
+            world_.add(e, view);
+        }
+        MCE_LOG_INFO("{}: -split_views: the primary camera drawn {} times", desc_.app_name, n);
+    }
+
     // GPU timestamps arrive frames late: the newest completed set goes to the captured frame it was
-    // written in. The 3D path names its stages; a 2D frame has its first-to-last timestamp span.
+    // written in. The 3D path names its stages (of its first view); gpu_ms is the whole frame's span
+    // (2D, split screen and overlays included), else the 3D total, else the first-to-last span.
     void attach_gpu_times() {
         const rhi::GpuTimestamps& ts = device_->last_gpu_timestamps();
         if (ts.written == 0 || ts.frame_index == ~u64(0)) return;
@@ -2518,8 +2729,12 @@ private:
             for (usize i = 0; i < std::size(stages); ++i)
                 target->gpu_stage_ms[i] = static_cast<f32>(stages[i]);
             if (g.total >= 0) target->gpu_ms = static_cast<f32>(g.total);
-            if (g.total >= 0) return;
         }
+        if (const f64 span = ts.ms(kFrameTimestampBegin, kFrameTimestampEnd); span >= 0.0) {
+            target->gpu_ms = static_cast<f32>(span);
+            return;
+        }
+        if (target->gpu_ms >= 0.0f) return;
         u32 first = ~0u, last = 0;
         for (u32 i = 0; i < rhi::kMaxTimestamps; ++i)
             if (ts.has(i)) {
@@ -2742,6 +2957,7 @@ private:
     Array<f32> audio_record_;
     asset::AssetSystem assets_;
     render::Renderer renderer_;
+    rhi::CommandBuffer frame_cmd_{mem::heap()};  // render_frame's stream, reset every frame
     render::AssetUploadSink sink_;
     audio::ClipBank clips_;
     kit::SpriteExtract extract_;
@@ -2752,8 +2968,22 @@ private:
     bool film_ = false;
     kit::Kit3DExtract extract3d_;
     render::Scene3D::Stats stats3d_;
+    // M-CONTENT 2: what the renderer drew of stats3d_'s view (Forward3DStats): instanced runs and draws, and the
+    // draws that were not instanced by cause. With these, sum(causes) + draws_instanced = the view's scene draws.
+    u32 runs_instanced3d_ = 0, draws_instanced3d_ = 0;
+    u32 draw_causes3d_[kDrawCauseCount] = {};
+    void take_draw_causes() {  // the single-view path: the frame's only 3D view just recorded
+        const render::Forward3DStats& fs = renderer_.forward_3d().last_stats();
+        runs_instanced3d_ = fs.runs_instanced;
+        draws_instanced3d_ = fs.draws_instanced;
+        for (u32 k = 0; k < kDrawCauseCount; ++k) draw_causes3d_[k] = fs.draw_causes[k];
+    }
     bool three_d_ = false;         // the 3D path is on (a scene with a Camera3DComponent)
     bool three_d_failed_ = false;  // init_3d failed once: the game runs 2D-only
+    bool split_views_warned_ = false;
+    Entity split_primary_;  // the camera -split_views last split
+    static constexpr u32 kFrameTimestampBegin = rhi::kMaxTimestamps - 2;  // past Forward3D's [0, kStageCount]
+    static constexpr u32 kFrameTimestampEnd = rhi::kMaxTimestamps - 1;
     bool relative_mouse_ = false;
     render::Font font_;
     ui::BuiltinSkin skin_;
@@ -2971,8 +3201,9 @@ int run_headless(const player::PlayerDesc& pd) {
     desc.max_ticks = static_cast<u64>(cv_ticks.get_int() > 0 ? cv_ticks.get_int() : 600);
     PlayerApp::ScriptBySimTick by_sim(app, script.value());
     desc.input_source = script.value() ? static_cast<app::IInputSource*>(&by_sim) : nullptr;
-    const int rc = app::run(app, desc);
-    if (rc == 0)
+    int rc = app::run(app, desc);
+    if (rc == 0 && app.failed_scripts() != 0) rc = 3;  // after the state_hash line below, so determinism logs still show it
+    if (rc == 0 || rc == 3)
         std::printf("%s: %llu ticks, %zu entities, state_hash %016llx\n", pd.app_name, static_cast<unsigned long long>(app.ticks()),
                     app.entity_count(), static_cast<unsigned long long>(app.state_hash()));
     if (rc == 0 && !record.empty() && !write_audio_record(pd, record, app.audio_recording())) return 1;
@@ -3019,6 +3250,7 @@ int run_windowed(const player::PlayerDesc& pd) {
     desc.name = pd.app_name;
     desc.platform = &app;
     desc.fences = device.value().get();
+    desc.frame_arena_size = static_cast<usize>(math::clamp<i64>(cv_frame_arena.get_int(), 1, 1024)) * MiB;
     PlayerApp::ScriptBySimTick by_sim(app, script.value());
     desc.input_source = script.value() ? static_cast<app::IInputSource*>(&by_sim) : &app.input();
     if (cv_run_ticks.get_int() > 0) desc.max_ticks = static_cast<u64>(cv_run_ticks.get_int());

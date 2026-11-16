@@ -1,0 +1,1 @@
+- Editor, M-HIERFILTER: the Hierarchy has a "Filter by name" box; it shows the entities whose name contains every word typed, with their parents, hits in colour.

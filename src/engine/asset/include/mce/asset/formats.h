@@ -48,6 +48,7 @@ inline constexpr u8 SKELETON2D_MINOR_ANIMATIONS = 1;  // minor of a CHNK_SKEL2D 
 inline constexpr u8 SKELETON2D_MINOR_ATTACHMENTS = 2;  // minor of a CHNK_SKEL2D with Skeleton2DHeaderFlags::Attachments (M-ANIM2D 3)
 inline constexpr u8 SKELETON2D_MINOR_IK = 3;  // minor of a CHNK_SKEL2D with Skeleton2DHeaderFlags::IK (M-ANIM2D 4)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
+inline constexpr u8 CONVAR_DEFAULTS_VERSION = 1;  // CHNK_CVARS: a project's convar defaults, "name value" lines (M-WORKFLOW 7)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
 // GUID -> {logical path, content hash, primary chunk type}. Entries sorted by GUID (the sort is
@@ -101,9 +102,14 @@ void write_manifest(Span<ManifestItem> items, Array<byte>& out);
 // ------------------------------------------------------------------ texture (CHNK_TEX)
 
 enum class TextureFormat : u32 {
-    RGBA8 = 1,     // MVP; BC1/BC5/BC7 at v0.5
+    RGBA8 = 1,     // MVP
     ASTC_4x4 = 2,  // phones (M-MOBILE step 8, mce_cook --textures astc): 16-byte blocks of 4x4 texels
     RGBA16F = 3,   // M-VISUAL3 4: half-float RGBA, linear (HDR skies and environment maps); never Srgb
+    // Desktop block compression (M-CONTENT 1b): 4x4 blocks, sRGB stays a flag. BC4/BC5 never Srgb.
+    BC1 = 4,       // 8 bytes per block, opaque colour
+    BC4 = 5,       // 8 bytes per block, one channel (R)
+    BC5 = 6,       // 16 bytes per block, two channels (normal maps)
+    BC7 = 7,       // 16 bytes per block, colour with alpha
 };
 
 // Bytes of one layer of a w x h level in `format` (0 for an unknown format).
@@ -325,6 +331,13 @@ enum : u32 {
     OcclusionInMR = 1u << 4,
     // The MetallicRoughness slot holds an occlusion-only map: R is AO, G/B are not data.
     OcclusionOnly = 1u << 5,
+    // M-TRANSLUCENT 41a: two quantized factors, 0..255 for 0..1 (accessors in mce/asset/material_translucency.h): bits 8..15 the
+    // translucency (light through a thin surface), bits 16..23 the diffuse wrap. 0, 0 (every material cooked before) is off.
+    // Bits 6, 7 and 24..31 stay free.
+    TranslucencyShift = 8,
+    TranslucencyMask = 0xFFu << 8,
+    WrapShift = 16,
+    WrapMask = 0xFFu << 16,
 };
 }
 

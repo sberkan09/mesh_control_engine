@@ -22,6 +22,7 @@ Ordered by layer, bottom up (the L column is the layer each library's `CMakeList
 | [scene](scene.md) | L2 | `mce_scene` | cooked scene chunk → entities, chunk streaming (`streaming.h`) |
 | [render](render.md) | L3 | `mce_render` | 2D sprite path, 3D forward path (PBR, Forward+, shadows, post, skinning — M-SKIN) |
 | [kit](kit.md) | L3 | `mce_gameplay_kit` | starter-kit components, particles, sequences, FSM, 2D extract |
+| [script](script.md) | L3 | `mce_script` + `mce_script_compiler` | Luau scripts as systems, the `mce` API and `mce.d.luau`, the limits |
 | [ui](ui.md) | L4 | `mce_ui` | retained widget documents, the shipped developer console |
 | [net](net.md) | L3 | `mce_net` (optional) | opt-in multiplayer: UDP hosts, the message codec, snapshot replication |
 | [modules](modules.md) | — | `mce_engine` + module host | the shared engine library, game modules, the player runtime (`mce_player`, L6) |

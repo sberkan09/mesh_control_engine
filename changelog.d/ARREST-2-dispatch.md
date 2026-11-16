@@ -1,0 +1,1 @@
+- Kit (M-ARREST 2): idle police within `Police3D::dispatch_range` of an offender's last known place are sent there, so units with a higher `min_level` arrive as reinforcements. Record: `docs/milestones/M-ARREST.md`.

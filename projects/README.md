@@ -27,3 +27,5 @@ from a one-paragraph brief by AI agents over MCP, with no person after the brief
 pixel-art platformer) by one agent; Marble Garden (a 3D marble game) by three agents sharing the project
 (level, code and art). Their `.mctest` suites and render goldens run in local CI through
 `scripts/agent_demo/demo_gate.py`.
+
+`Pursuit/` is the 3D script-only demo (M-SCRIPT2): a chase over a navmesh written in Luau and data, with no C++. `Dungeon/` is its 2D twin: procedural levels (ProcLevel) with chasers.

@@ -38,6 +38,12 @@ struct PointLight {
     // M-VISUAL 4: asks for a shadow map (one atlas tile for a spot, six cube faces for a point).
     // Granted per frame by screen importance within LocalShadowSettings' budget.
     bool cast_shadows = false;
+    // M-LIGHTCOOKIE 40a: a texture projected along the cone that shapes the light (spot only; a point light ignores these).
+    // Nothing reads them until 40c to 40e.
+    u32 cookie = ~0u;               // TextureStore key of the cookie (rgb used); ~0u = none
+    f32 cookie_strength = 1.0f;     // 0..1: 0 = the plain light, 1 = fully shaped
+    f32 cookie_roll = 0.0f;         // radians: rotation of the projection about the cone axis
+    f32 cookie_edge = 0.0f;         // 0..1: fades the cookie toward the frustum border (0 = off)
 };
 
 struct ClusterGridDesc {

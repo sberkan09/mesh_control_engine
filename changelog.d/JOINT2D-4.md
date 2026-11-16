@@ -1,0 +1,1 @@
+- Physics, M-JOINT2D: the `Joint2D` header comments for `lower` and `upper` state the -180..180 range.

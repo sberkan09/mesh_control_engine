@@ -1,0 +1,1 @@
+- Editor, M-GROUP: Ctrl+G groups the selected entities under a new parent and Ctrl+Shift+G dissolves selected parents; both are in the Edit menu and keep every entity where it is in the scene.

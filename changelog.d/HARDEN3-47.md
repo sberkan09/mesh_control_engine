@@ -1,0 +1,1 @@
+- Tests: `encode_ui_theme` / `decode_ui_theme` round trip and refusals (M-HARDEN3 step 2).

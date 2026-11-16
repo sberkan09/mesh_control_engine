@@ -7,6 +7,7 @@
 #include "mce/log.h"
 #include "mce/render/renderer.h"
 #include "mce/ui/document_data.h"
+#include "mce/ui/minimap.h"
 
 namespace mce::ui {
 namespace {
@@ -150,10 +151,14 @@ Result<BuiltinSkin*> create_builtin_skin(render::Renderer& renderer, BuiltinSkin
 
 // ---- UI scale ----------------------------------------------------------------------------------
 
-f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale, vec2 min_logical) {
-    f32 s = (display_scale > 0.0f ? display_scale : 1.0f) * (user_scale > 0.0f ? user_scale : 1.0f);
+f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale, vec2 min_logical, f32 reference_height) {
+    const f32 user = user_scale > 0.0f ? user_scale : 1.0f;
+    f32 s = (display_scale > 0.0f ? display_scale : 1.0f) * user;
     const f32 w = static_cast<f32>(viewport.width), h = static_cast<f32>(viewport.height);
     const f32 short_px = w < h ? w : h, long_px = w < h ? h : w;
+    // A game authored for a reference height grows with the window: the short side over it, on top of the
+    // user's setting. A phone whose display scale already asks for more keeps that (no double scaling).
+    if (reference_height > 0.0f && short_px > 0.0f && short_px / reference_height * user > s) s = short_px / reference_height * user;
     const f32 short_min = min_logical.x < min_logical.y ? min_logical.x : min_logical.y;
     const f32 long_min = min_logical.x < min_logical.y ? min_logical.y : min_logical.x;
     if (short_min > 0.0f && short_px > 0.0f && short_px / short_min < s) s = short_px / short_min;
@@ -215,7 +220,7 @@ WidgetId Document::add(WidgetId parent, WidgetKind kind, StringView name) {
     n.kind = kind;
     n.name.assign(name);
     if (kind == WidgetKind::Stack || kind == WidgetKind::Grid || kind == WidgetKind::Text || kind == WidgetKind::Scroll ||
-        kind == WidgetKind::Tabs)
+        kind == WidgetKind::Tabs || kind == WidgetKind::Minimap)
         for (Style& s : n.styles) s.draw_quad = false;
     if (kind == WidgetKind::Console) {
         ConsoleData* c = mem::make_unique<ConsoleData>(alloc_).release();
@@ -533,7 +538,7 @@ bool Document::bind_property(WidgetId w, const World& world, Entity entity, Stri
         return false;
     }
     const refl::FieldKind k = ref.value().kind;
-    const bool numeric = k == refl::FieldKind::Bool || (k >= refl::FieldKind::I8 && k <= refl::FieldKind::F64);
+    const bool numeric = k == refl::FieldKind::Bool || k == refl::FieldKind::Enum || (k >= refl::FieldKind::I8 && k <= refl::FieldKind::F64);  // an enum reads as its number
     if (!numeric || ref.value().count != 1) {
         MCE_LOG_ERROR("ui: property '{}' is not a numeric or bool leaf", path);
         return false;
@@ -555,8 +560,10 @@ bool Document::bind_property(WidgetId w, const World& world, Entity entity, Stri
 }
 
 namespace {
-f64 read_number(const void* p, refl::FieldKind k) {
+f64 read_number(const void* p, refl::FieldKind k, u32 size) {
     switch (k) {
+        case refl::FieldKind::Enum:  // the underlying integer (reflected enums are unsigned or small)
+            return size == 1 ? *static_cast<const u8*>(p) : size == 2 ? *static_cast<const u16*>(p) : size == 4 ? *static_cast<const u32*>(p) : 0.0;
         case refl::FieldKind::Bool: return *static_cast<const bool*>(p) ? 1.0 : 0.0;
         case refl::FieldKind::I8: return *static_cast<const i8*>(p);
         case refl::FieldKind::I16: return *static_cast<const i16*>(p);
@@ -588,7 +595,7 @@ void Document::sync_properties() {
         if (b.component == ecs::kInvalidComponent) continue;
         const void* obj = b.world->get_raw(b.entity, b.component);
         if (!obj) continue;
-        const f64 v = read_number(static_cast<const byte*>(obj) + b.ref.offset, b.ref.kind);
+        const f64 v = read_number(static_cast<const byte*>(obj) + b.ref.offset, b.ref.kind, b.ref.size);
         if (b.has_last && v == b.last) continue;
         b.last = v;
         b.has_last = true;
@@ -597,6 +604,8 @@ void Document::sync_properties() {
             char text[96];
             std::snprintf(text, sizeof(text), b.format.empty() ? "%g" : b.format.c_str(), v);
             set_text(b.widget, text);
+        } else if (n->kind == WidgetKind::Panel || n->kind == WidgetKind::Image) {
+            set_visible(b.widget, static_cast<f32>(v) >= n->lo && static_cast<f32>(v) <= n->hi);  // shown while lo <= value <= hi: a wanted star, a mission state
         } else {
             n->value = static_cast<f32>(v) < n->lo ? n->lo : (static_cast<f32>(v) > n->hi ? n->hi : static_cast<f32>(v));
         }
@@ -702,6 +711,21 @@ u8 Document::own_style(WidgetId w) const {
 void Document::set_own_style(WidgetId w, u8 own) {
     if (Node* n = node(w)) n->own_style = own;
 }
+void Document::set_minimap(WidgetId w, const Minimap& m) {
+    if (Node* n = node(w)) n->minimap = m;
+}
+const Minimap& Document::minimap(WidgetId w) const {
+    static const Minimap none;
+    const Node* n = node(w);
+    return n ? n->minimap : none;
+}
+void Document::set_minimap_view(WidgetId w, const MinimapView& view, Span<const MinimapMarker> markers) {
+    Node* n = node(w);
+    if (!n) return;
+    n->minimap_view = view;
+    n->minimap_markers.clear();
+    for (const MinimapMarker& m : markers) n->minimap_markers.push_back(m);
+}
 const render::Font* Document::node_font(const Node& n) const { return skin_.font_for(resolve_font_role(n.kind, n.font_role)); }
 StringView Document::binding(WidgetId w) const {
     const Node* n = node(w);
@@ -712,7 +736,15 @@ StringView Document::binding_format(WidgetId w) const {
     return n ? n->binding_format.view() : StringView();
 }
 void Document::set_action(WidgetId w, StringView action) {
-    if (Node* n = node(w)) n->action.assign(action);
+    Node* n = node(w);
+    if (!n) return;
+    FixedString<32> a;
+    a.assign(action);
+    if (a.truncated()) {  // a cut action name would fire a different action
+        MCE_LOG_ERROR("ui: action '{}' on '{}' is over 31 bytes and is refused", action, n->name.c_str());
+        return;
+    }
+    n->action = a;
 }
 void Document::set_binding(WidgetId w, StringView path, StringView format) {
     if (Node* n = node(w)) {
@@ -862,6 +894,7 @@ vec2 Document::measure(u32 index, f32 avail_width) const {
                         g.cell.y * static_cast<f32>(rows) + g.spacing.y * static_cast<f32>(rows - 1));
         }
         case WidgetKind::Tabs: return n->first_child != kNone ? measure(n->first_child, avail_width) : vec2();
+        case WidgetKind::Minimap: return vec2(160.0f, 160.0f);
         case WidgetKind::Panel:
         case WidgetKind::Image: break;
     }
@@ -1516,6 +1549,7 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
                 }
                 break;
             }
+            case WidgetKind::Minimap: draw_minimap(batch, n, st, quad_layer, order); break;
             case WidgetKind::Panel:
             case WidgetKind::Image:
             case WidgetKind::Stack:
@@ -1525,6 +1559,46 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
         }
     }
     draw_clip_ = nullptr;
+}
+
+// The map: the background, then the markers (flat squares, or the skin region named by the marker's icon) and
+// the tracked entity's arrow (a dot in the accent colour and a nose toward its heading) at the centre.
+void Document::draw_minimap(render::SpriteBatch& batch, const Node& n, const Style& st, i16 layer, i32 order) const {
+    const Minimap& m = n.minimap;
+    const Rect& r = n.rect;
+    draw_quad(batch, r, m.background, layer, order);
+    const f32 px = m.marker_px * scale_;
+    const vec2 half(px * 0.5f, px * 0.5f);
+    Array<MinimapShown> shown;
+    minimap_layout(m, n.minimap_view, n.minimap_markers.span(), r, shown);
+    for (const MinimapShown& s : shown) {
+        const MinimapMarker& k = n.minimap_markers[s.marker];
+        // The rect clips the markers it clamps; a marker on the rim keeps its whole square inside.
+        Rect q{s.point - half, s.point + half};
+        if (s.on_rim) {
+            const vec2 c = r.center();
+            const vec2 d = c - s.point;
+            const f32 len = std::sqrt(d.x * d.x + d.y * d.y);
+            if (len > 0.0f) {
+                const vec2 in = d * (half.x / len);
+                q.min = q.min + in;
+                q.max = q.max + in;
+            }
+        }
+        if (k.icon != 0) draw_region(batch, q, k.color, k.icon, layer, order + 1);
+        else draw_quad(batch, q, k.color, layer, order + 1);
+    }
+    if (m.full_map) {
+        const MinimapPoint p = minimap_project_full(n.minimap_view.tracked, m.world_min, m.world_max, r);
+        if (p.inside) draw_quad(batch, Rect{p.point - half, p.point + half}, st.accent, layer, order + 2);
+        return;
+    }
+    const vec2 c = r.center();
+    const f32 h = m.rotate_with_heading ? 0.0f : n.minimap_view.heading;
+    const vec2 nose = c + vec2(-std::sin(h), -std::cos(h)) * px;
+    const vec2 qh = half * 0.6f;
+    draw_quad(batch, Rect{c - half, c + half}, st.accent, layer, order + 2);
+    draw_quad(batch, Rect{nose - qh, nose + qh}, st.accent, layer, order + 2);
 }
 
 // ---- Builder -----------------------------------------------------------------------------------

@@ -468,3 +468,63 @@ TEST_CASE("navmesh3d: crowd agents reach their targets, avoid each other, and re
     CHECK(mid.agent_count() == 0);
     CHECK_FALSE(mid.agent_status(a, st));
 }
+
+TEST_CASE("navmesh3d: add_mesh transforms the vertices, stamps the area and drops out-of-range triangles") {
+    const vec3 quad[4] = {{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}};
+    const u32 tris[] = {0, 1, 2, 0, 2, 3, 0, 1, 9};  // the last triangle names a vertex that is not there
+    NavGeometry3D g;
+    g.add_mesh(Span<const vec3>(quad, 4), Span<const u32>(tris, 9), at({10.0f, 2.0f, 0.0f}), kNavAreaBlocked);
+    CHECK(g.triangle_count() == 2);
+    REQUIRE(g.areas.size() == 2);
+    CHECK(g.areas[0] == kNavAreaBlocked);
+    CHECK(g.areas[1] == kNavAreaBlocked);
+    const math::aabb3 b = g.bounds();
+    CHECK(b.min.x == doctest::Approx(10.0f));
+    CHECK(b.max.x == doctest::Approx(11.0f));
+    CHECK(b.min.y == doctest::Approx(2.0f));
+    CHECK(b.max.z == doctest::Approx(1.0f));
+    g.add_mesh(Span<const vec3>(quad, 4), Span<const u32>(tris, 3), at({0.0f, 0.0f, 0.0f}));
+    CHECK(g.triangle_count() == 3);
+    CHECK(g.areas[2] == kNavAreaGround);  // the default area
+}
+
+TEST_CASE("navmesh3d: set_origin_offset is read back and moves the frame the queries answer in") {
+    NavMesh3D nav = load(level());
+    CHECK(nav.origin_offset().x == 0.0f);
+    CHECK(nav.origin_offset().z == 0.0f);
+    const auto here = nav.nearest_point({10.0f, 0.0f, 0.0f});
+    REQUIRE(here.has_value());
+    nav.set_origin_offset({100.0f, 0.0f, -5.0f});
+    CHECK(nav.origin_offset().x == doctest::Approx(100.0f));
+    CHECK(nav.origin_offset().z == doctest::Approx(-5.0f));
+    // The caller's point that lands on the same mesh spot is the old one minus the offset.
+    const auto moved = nav.nearest_point({-90.0f, 0.0f, 5.0f});
+    REQUIRE(moved.has_value());
+    CHECK(moved->x == doctest::Approx(here->x - 100.0f).epsilon(0.01));
+    CHECK(moved->z == doctest::Approx(here->z + 5.0f).epsilon(0.01));
+}
+
+TEST_CASE("navmesh3d: set_agent_params takes a slower speed at once and refuses an unknown agent") {
+    NavMesh3D slow = load(level(false));
+    NavMesh3D fast = load(level(false));
+    const i32 a = slow.add_agent({-15.0f, 0.0f, 0.0f});
+    const i32 b = fast.add_agent({-15.0f, 0.0f, 0.0f});
+    REQUIRE(a >= 0);
+    REQUIRE(b >= 0);
+    NavAgentParams3D p;
+    p.max_speed = 0.5f;
+    slow.set_agent_params(a, p);
+    slow.set_agent_params(99, p);  // no such agent: ignored
+    slow.set_agent_params(-1, p);
+    CHECK(slow.set_agent_target(a, {15.0f, 0.0f, 0.0f}));
+    CHECK(fast.set_agent_target(b, {15.0f, 0.0f, 0.0f}));
+    for (u32 t = 0; t < 60 * 4; ++t) {
+        slow.update(1.0f / 60.0f);
+        fast.update(1.0f / 60.0f);
+    }
+    NavAgentStatus3D sa, sb;
+    REQUIRE(slow.agent_status(a, sa));
+    REQUIRE(fast.agent_status(b, sb));
+    CHECK(sa.position.x < sb.position.x - 4.0f);
+    CHECK(sa.position.x < -15.0f + 0.5f * 4.5f);  // never faster than the new cap
+}

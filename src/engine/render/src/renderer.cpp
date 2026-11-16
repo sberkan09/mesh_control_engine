@@ -47,8 +47,14 @@ layout(location = 1) in vec4 v_color;
 layout(location = 2) flat in uint v_packed;
 layout(location = 3) in vec2 v_world;
 layout(location = 0) out vec4 o_color;
+// BC5 normal maps sample as (x, y, 0, 1): z is rebuilt only when b == 0.0, so RGBA8 maps keep their bits (M-CONTENT 1b).
+vec3 unpack_normal(vec4 t) {
+    vec3 n = t.xyz * 2.0 - 1.0;
+    if (t.b == 0.0) n.z = sqrt(max(1.0 - dot(n.xy, n.xy), 0.0));
+    return n;
+}
 vec3 shade(float layer) {
-    vec3 n = texture(u_normal, vec3(v_uv, layer)).xyz * 2.0 - 1.0;
+    vec3 n = unpack_normal(texture(u_normal, vec3(v_uv, layer)));
     uint o = (v_packed >> 8) & 0xFFFFu;
     if ((o & 0x4000u) != 0u) n.x = -n.x;
     if ((o & 0x8000u) != 0u) n.y = -n.y;

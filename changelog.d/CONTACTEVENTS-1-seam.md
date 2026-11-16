@@ -1,0 +1,1 @@
+- Physics (M-CONTACTEVENTS 1): `ContactEvent3D`, `World3D::set_contact_events` / `contact_events` and `max_contact_events_per_tick` declared (seam; the listener follows). Record: `docs/milestones/M-CONTACTEVENTS.md`.

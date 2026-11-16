@@ -1,0 +1,1 @@
+- Input action feeds keep exactly `kMaxFeeds` entries (the first ones, in order) and an empty set clears them (`tests/input/test_steam_config.cpp`).

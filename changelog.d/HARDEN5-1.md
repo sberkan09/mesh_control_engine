@@ -1,0 +1,1 @@
+- Fix: the items cooker refuses a stat name longer than 31 bytes instead of cutting it, so two long names can no longer merge into one stat (HARDEN5-1).

@@ -283,3 +283,33 @@ TEST_CASE("UI document editor: the inspector edits a widget and the document thr
     REQUIRE(ed.save(session).has_value());
     CHECK(session.cook().ok());
 }
+
+TEST_CASE("UI document editor: subtree_end and is_inside follow the widget tree") {
+    const std::string root = ui_project("ui_document_tree");
+    EditorSession session;
+    REQUIRE(session.open_project(root).has_value());
+    UiDocumentEditor ed;
+    REQUIRE(ed.create(session, "ui/tree.mcui").has_value());
+    // stack(0) { panel(1) { button(2), button(3) }, text(4) }
+    REQUIRE(ed.add_widget(ui::kNoWidgetIndex, ui::WidgetKind::Stack));
+    REQUIRE(ed.add_widget(0, ui::WidgetKind::Panel));
+    REQUIRE(ed.add_widget(1, ui::WidgetKind::Button));
+    REQUIRE(ed.add_widget(1, ui::WidgetKind::Button));
+    REQUIRE(ed.add_widget(0, ui::WidgetKind::Text));
+    REQUIRE(ed.data().widgets.size() == 5);
+
+    CHECK(ed.subtree_end(0) == 5);
+    CHECK(ed.subtree_end(1) == 4);
+    CHECK(ed.subtree_end(2) == 3);
+    CHECK(ed.subtree_end(3) == 4);
+    CHECK(ed.subtree_end(4) == 5);
+    CHECK(ed.subtree_end(9) == 5);  // past the end: the end
+
+    CHECK(ed.is_inside(2, 1));
+    CHECK(ed.is_inside(3, 0));
+    CHECK(ed.is_inside(1, 1));  // a widget is inside itself
+    CHECK_FALSE(ed.is_inside(1, 2));
+    CHECK_FALSE(ed.is_inside(4, 1));
+    CHECK_FALSE(ed.is_inside(2, 3));  // siblings
+    CHECK_FALSE(ed.is_inside(9, 0));  // out of range
+}

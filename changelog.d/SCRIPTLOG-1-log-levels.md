@@ -1,0 +1,1 @@
+- `mce.log(msg, level?)` takes "info" (default), "warn" or "error"; warnings and errors count in `.mctest` log checks, M-SCRIPTLOG.

@@ -74,7 +74,9 @@ void cook_scripts(Cooked& c) {
     REQUIRE(r.ok());
     c.dir = root + "/cooked";
     const StringView roots[] = {StringView(c.dir.c_str())};
-    REQUIRE(c.assets.mount(Span<const StringView>(roots, 1)));
+    asset::MountOptions own;
+    own.allow_code = true;
+    REQUIRE(c.assets.mount(Span<const StringView>(roots, 1), own));
 }
 
 asset::Guid guid(const char* s) { return asset::parse_guid(StringView(s)).value(); }
@@ -125,6 +127,23 @@ TEST_CASE("scene scripts: a syntax error fails the cook at file:line:col") {
     CHECK(std::strstr(bad.error().path.c_str(), "broken.luau:2:13:") != nullptr);
 }
 
+TEST_CASE("scene scripts: a pack mounted without allow_code never runs its scripts (bytecode is trusted from the game's own pack only)") {
+    Cooked c;
+    cook_scripts(c);
+    asset::AssetSystem plain;  // default MountOptions: data only
+    const StringView roots[] = {StringView(c.dir.c_str())};
+    REQUIRE(plain.mount(Span<const StringView>(roots, 1)));
+    CHECK(plain.find(guid(kPush)) == asset::kInvalidAssetKey);  // the Script entries were dropped at mount
+
+    World w;
+    w.register_components<LocalTransform, kit::ScriptSystem>();
+    const Entity mover = w.spawn_with(LocalTransform{});
+    add_script(w, kPush, 0);
+    script::install_scene_scripts(w, &plain);
+    w.tick(1.0 / 60, 1);
+    CHECK(x_of(w, mover) == doctest::Approx(0.0f));  // nothing from that pack ran
+}
+
 TEST_CASE("scene scripts: ScriptSystems run by phase and order, and swap when the set changes") {
     Cooked c;
     cook_scripts(c);
@@ -155,6 +174,33 @@ TEST_CASE("scene scripts: ScriptSystems run by phase and order, and swap when th
     w.tick(1.0 / 60, 5);
     CHECK(x_of(w, mover) == doctest::Approx(6.0f));
     CHECK(script::scene_script_host(w) == nullptr);
+}
+
+TEST_CASE("scene scripts: during_cutscenes scripts run through a cutscene hold, others do not (M-WORKFLOW 7)") {
+    Cooked c;
+    cook_scripts(c);
+    World w;
+    w.register_components<LocalTransform, kit::ScriptSystem>();
+    const Entity mover = w.spawn_with(LocalTransform{});
+    add_script(w, kPush, 0);
+    const Entity flagged = add_script(w, kDouble, 1);
+    w.try_get_mut<kit::ScriptSystem>(flagged)->during_cutscenes = true;
+    script::install_scene_scripts(w, &c.assets);
+    w.tick(1.0 / 60, 1);  // (0 + 1) * 2
+    CHECK(x_of(w, mover) == doctest::Approx(2.0f));
+
+    w.set_cutscene_held(true);  // only the flagged one runs: 2 * 2
+    w.tick(1.0 / 60, 2);
+    CHECK(x_of(w, mover) == doctest::Approx(4.0f));
+    w.set_cutscene_held(false);
+
+    w.set_held(true);  // a pause hold stops both
+    w.tick(1.0 / 60, 3);
+    CHECK(x_of(w, mover) == doctest::Approx(4.0f));
+    w.set_held(false);
+
+    w.tick(1.0 / 60, 4);  // unflagged first, then flagged: (4 + 1) * 2
+    CHECK(x_of(w, mover) == doctest::Approx(10.0f));
 }
 
 TEST_CASE("scene scripts: a script that is not cooked is skipped, the others run") {

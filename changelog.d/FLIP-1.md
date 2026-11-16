@@ -1,0 +1,1 @@
+- Editor, M-FLIP: Edit > Flip horizontally / vertically mirrors the selected entities across the middle of the selection and negates their scale on that axis.

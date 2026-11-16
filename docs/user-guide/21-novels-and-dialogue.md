@@ -226,6 +226,9 @@ line gives it a new key, so its old translation stops showing until it is redone
 missing-key warning lists what is left. `mce story compile --check` fails while `en.csv` is out of
 date with the script.
 
+The editor's Strings panel (a double click on a `.csv` in Assets) shows all locales side by side, so the
+missing translations are one filter away and are edited in place.
+
 The novel stage, the backlog and the dialogue box show the language the player chose (chapter
 on languages, `loc::Localization`), and switch with it at once. A translated statement keeps the
 page count of its base line, so a playthrough is the same in every language and saves stay valid

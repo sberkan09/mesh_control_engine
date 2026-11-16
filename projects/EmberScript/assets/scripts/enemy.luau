@@ -6,7 +6,7 @@ local VARS = mce.field("ScriptVars", "v")
 local POS = mce.field("LocalTransform", "position")
 
 local PATROL, CHASE, RETURN = 0, 1, 2
-local PATROL_SPEED = 1.6
+local PATROL_SPEED = 1.6  -- the defaults; the scene's ScriptParams on an enemy overrides them (mce.param)
 local CHASE_SPEED = 3.4
 local GRAVITY = -30.0
 
@@ -31,12 +31,12 @@ function update()
         local dy = player and (player.p.y - p.y) or 1e9
         local sees = math.abs(dx) < sight and math.abs(dy) < 1.5
 
-        local speed = PATROL_SPEED
+        local speed = mce.param(e, "patrol_speed", PATROL_SPEED)
         if state == PATROL then
             if sees then state = CHASE end
             if p.x > home + half then dir = -1 elseif p.x < home - half then dir = 1 end
         elseif state == CHASE then
-            speed = CHASE_SPEED
+            speed = mce.param(e, "chase_speed", CHASE_SPEED)
             dir = dx >= 0 and 1 or -1
             if not sees then state = RETURN end
         else

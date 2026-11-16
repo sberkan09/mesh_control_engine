@@ -1,15 +1,36 @@
 #include "mce/cook/fs.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <filesystem>
 #include <system_error>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace mce::cook::fs {
 
 namespace stdfs = std::filesystem;
 
 namespace {
+unsigned long process_id() {
+#if defined(_WIN32)
+    return static_cast<unsigned long>(::GetCurrentProcessId());
+#else
+    return static_cast<unsigned long>(::getpid());
+#endif
+}
+
 stdfs::path to_path(StringView s) { return stdfs::path(s.begin(), s.end()); }
 
 String from_path(const stdfs::path& p) {
@@ -48,8 +69,14 @@ Result<void> write_file_atomic(StringView path, Span<const byte> bytes) {
         stdfs::create_directories(target.parent_path(), ec);
         if (ec) return Error(Errc::IoError, "cook.fs.mkdir", path, static_cast<u32>(ec.value()));
     }
+    // A name of its own per call: two editor servers cooking one project write the same content-addressed file at
+    // once, and on Windows a shared ".tmp" (or a rename over a file the other process holds open) fails.
+    static std::atomic<u32> counter{0};
     String tmp(path);
-    tmp += ".tmp";
+    char suffix[48];
+    std::snprintf(suffix, sizeof(suffix), ".%lu.%u.tmp", static_cast<unsigned long>(process_id()),
+                  static_cast<unsigned>(counter.fetch_add(1, std::memory_order_relaxed)));
+    tmp += StringView(suffix);
     std::FILE* f = std::fopen(tmp.c_str(), "wb");
     if (!f) return Error(Errc::AccessDenied, "cook.fs.write", tmp.view());
     const bool wrote = bytes.empty() || std::fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();

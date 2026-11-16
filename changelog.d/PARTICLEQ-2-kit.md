@@ -1,0 +1,1 @@
+- Kit (M-PARTICLEQ 28b): the six opt-in weather particle emitters (leaves, fireflies, pollen, dust, flocks, butterflies) read `QualitySettings::particle_scale` instead of guessing the Low tier; `is_low_quality` is removed and Low output is unchanged. Record: `docs/milestones/M-PARTICLEQ.md`.

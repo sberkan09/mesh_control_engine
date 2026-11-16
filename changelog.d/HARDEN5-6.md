@@ -1,0 +1,1 @@
+- ui: `Document::set_action` now refuses an action name of 32 bytes or more and keeps the old one, instead of cutting it to a different action.

@@ -1,0 +1,1 @@
+- Script and sample (M-CRAFT 3): Luau `inventory.can_craft(e, recipe, station?)` and `inventory.craft(e, recipe, station?)`, typed; `samples/12_loot` gets two recipes and a `Workbench` (tonic by hand, potion pack at the station) pinned in its headless test. Docs: `27-scripting.md`, `18-samples.md`, `kit.md`.

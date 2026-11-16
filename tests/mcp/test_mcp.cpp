@@ -651,6 +651,38 @@ TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
     CHECK(c.ok("cook_run").v().get("ok").as_bool());  // registered now: a plain cook is clean
 }
 
+TEST_CASE("mcp tools: cook_run max_texture_size and the sizes report") {
+    const std::string root = demo_project("mcp_cap");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    auto plain = c.ok("cook_run");
+    REQUIRE(plain.v().get("ok").as_bool());
+    const cook::JsonValue sizes = plain.v().get("sizes");
+    REQUIRE(sizes.valid());
+    CHECK(sizes.get("textures").as_number() > 0);
+    CHECK(sizes.get("total").as_number() >= sizes.get("textures").as_number());
+    CHECK(sizes.get("texture_count").as_number() >= 1);
+    CHECK(sizes.get("textures_downscaled").as_number() == 0);
+    CHECK(sizes.get("largest").is_array());
+    CHECK(sizes.get("largest").size() <= 5);
+    CHECK(sizes.get("largest").at(0).get("bytes").as_number() > 0);
+    CHECK(sizes.get("largest").at(0).get("path").is_string());
+    // the demo's textures are 4x4 (or so): a cap of 1 halves them all, and a bad cap is the cook's error
+    auto cut = c.ok("cook_run", R"({"max_texture_size":1})");
+    REQUIRE(cut.v().get("ok").as_bool());
+    CHECK(cut.v().get("sizes").get("textures_downscaled").as_number() >= 1);
+    CHECK(cut.v().get("sizes").get("textures").as_number() < sizes.get("textures").as_number());
+    auto bad = c.ok("cook_run", R"({"max_texture_size":100})");
+    CHECK_FALSE(bad.v().get("ok").as_bool());
+    CHECK(compact(bad.v().get("diagnostics")).find("power of two") != std::string::npos);
+    CHECK(c.fails("cook_run", R"({"max_texture_size":"big"})").find("max_texture_size") != std::string::npos);
+    // M-CONTENT 1b-iv: "textures" picks the storage; bc is accepted, anything else is an argument error
+    CHECK(c.ok("cook_run", R"({"textures":"bc"})").v().get("ok").as_bool());
+    CHECK(c.ok("cook_run", R"({"textures":"rgba8"})").v().get("ok").as_bool());
+    CHECK(c.fails("cook_run", R"({"textures":"astc"})").find("textures") != std::string::npos);
+}
+
 TEST_CASE("mcp tools: cook_run paths and skip_errors") {
     const std::string root = demo_project("mcp_cook_paths");
     std::filesystem::copy_file(root + "/assets/textures/ball.png", root + "/assets/textures/new_ball.png");
@@ -738,7 +770,7 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     // Every type asset_schema lists is created from its template and cooks clean.
     auto listed = c.ok("asset_schema");
     const cook::JsonValue types = listed.v().get("types");
-    REQUIRE(types.size() == 17);
+    REQUIRE(types.size() == 20);
     for (u32 i = 0; i < types.size(); ++i) {
         const std::string type = str(types.at(i).get("type")), ext = str(types.at(i).get("extension"));
         auto schema = c.ok("asset_schema", R"({"type":")" + type + R"("})");
@@ -1406,4 +1438,42 @@ TEST_CASE("mcp fuzz: mutated and random requests always get well-formed answers"
     // Deep nesting is refused by the codec's depth limit, not by the stack.
     const std::string deep = std::string(100000, '[') + std::string(100000, ']');
     CHECK(error_code(*c.send(deep)) == kParseError);
+}
+
+TEST_CASE("mcp tools: roads_generate writes a street grid, roads_info reports it and finds dead ends (M-OPENWORLD B1)") {
+    const std::string root = demo_project("mcp_roads");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+
+    auto made = c.ok("roads_generate", R"({"path":"city/grid.mcroads","columns":3,"rows":3,"block":80,"control":"signal","sidewalk":2})");
+    CHECK(str(made.v().get("type")) == "RoadNetwork");
+    CHECK(made.v().get("nodes").as_number() == 9);
+    CHECK(made.v().get("roads").as_number() == 12);
+    CHECK(c.fails("roads_generate", R"({"path":"city/grid.mcroads"})").find("replace: true") != std::string::npos);
+    const std::string guid = str(made.v().get("guid"));
+    auto again = c.ok("roads_generate", R"({"path":"city/grid.mcroads","columns":2,"rows":2,"replace":true})");
+    CHECK(str(again.v().get("guid")) == guid);  // replaced in place: the GUID stays
+    c.ok("roads_generate", R"({"path":"city/grid.mcroads","columns":3,"rows":3,"block":80,"replace":true})");
+
+    auto info = c.ok("roads_info", R"({"path":"city/grid.mcroads"})");
+    CHECK(info.v().get("nodes").as_number() == 9);
+    CHECK(info.v().get("roads").as_number() == 12);
+    CHECK(info.v().get("road_lanes").as_number() == 24);
+    CHECK(info.v().get("signals").as_number() == 5);  // the four T junctions and the centre
+    CHECK(info.v().get("junctions").size() == 9);
+    CHECK(info.v().get("dead_ends").size() == 0);
+    CHECK(info.v().get("ok").as_bool());
+
+    // A one-way street that ends nowhere: traffic on it has no way on.
+    c.ok("asset_create", R"({"path":"city/bad.mcroads","content":{"nodes":[{"name":"a","at":[0,0,0]},{"name":"b","at":[100,0,0]},{"name":"c","at":[100,0,100]}],"roads":[{"name":"main","from":"a","to":"b","lanes":1},{"name":"spur","from":"b","to":"c","lanes":[1,0]}]}})");
+    auto bad = c.ok("roads_info", R"({"path":"city/bad.mcroads"})");
+    CHECK_FALSE(bad.v().get("ok").as_bool());
+    CHECK(bad.v().get("no_way_on_count").as_number() == 1);
+    CHECK(compact(bad.v().get("no_way_on")).find("spur lane 0 forward") != std::string::npos);
+    CHECK(compact(bad.v().get("dead_ends")).find("\"a\"") != std::string::npos);
+
+    CHECK(c.fails("roads_info", R"({"path":"scenes/demo.mcscene"})").find("not a road network") != std::string::npos);
+    CHECK(c.fails("roads_generate", R"({"path":"city/x.mcroads","columns":1})").find("columns") != std::string::npos);
+    CHECK(c.fails("roads_generate", R"({"path":"city/x.mcroads","control":"lights"})").find("control") != std::string::npos);
 }

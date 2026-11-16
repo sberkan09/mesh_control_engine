@@ -1,0 +1,1 @@
+- GitHub Pages for the docs (M-PLATFORM-CI 6d): `.github/workflows/pages.yml` builds `docs/` with MkDocs (`mkdocs.yml`, `docs/index.md`); the deploy job waits for the repository variable `PAGES_ENABLED=true` and Pages source "GitHub Actions".

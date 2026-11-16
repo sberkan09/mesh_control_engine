@@ -1,0 +1,1 @@
+- Tests: input's `write_bindings`/`read_bindings` (round trip, unknown and missing fields, malformed files) and `InputScript::clear_segments` get direct tests.

@@ -44,7 +44,10 @@ public:
     }
 
     bool visit(Luau::AstStatLocal* node) override {
-        for (usize i = 0; i < node->vars.size && i < node->values.size; ++i) note_object_local(node->vars.data[i], node->values.data[i]);
+        for (usize i = 0; i < node->vars.size && i < node->values.size; ++i) {
+            note_object_local(node->vars.data[i], node->values.data[i]);
+            note_alias(node->vars.data[i], node->values.data[i]);
+        }
         return true;
     }
 
@@ -91,6 +94,29 @@ private:
         if (object_count_ < kMaxObjectLocals) object_locals_[object_count_++] = local;
     }
 
+    // A local inside a function bound to part of a top-level local (`local row = grid[i]`): writing through it
+    // changes the same table. Only index chains count; a call's result is a new value as far as this check sees.
+    void note_alias(Luau::AstLocal* local, Luau::AstExpr* value) {
+        if (depth_ == 0 || alias_count_ >= kMaxObjectLocals) return;
+        const Luau::AstLocal* root = alias_root(value);
+        if (root) aliases_[alias_count_++] = {local, root};
+    }
+
+    const Luau::AstLocal* alias_root(Luau::AstExpr* e) const {
+        for (;;) {
+            if (auto* g = e->as<Luau::AstExprGroup>()) e = g->expr;
+            else if (auto* n = e->as<Luau::AstExprIndexName>()) e = n->expr;
+            else if (auto* x = e->as<Luau::AstExprIndexExpr>()) e = x->expr;
+            else break;
+        }
+        const auto* l = e->as<Luau::AstExprLocal>();
+        if (!l) return nullptr;
+        if (l->local->functionDepth == 0) return l->local;
+        for (usize i = 0; i < alias_count_; ++i)
+            if (aliases_[i].local == l->local) return aliases_[i].root;
+        return nullptr;
+    }
+
     bool object_like(Luau::AstExpr* e) const {
         while (auto* g = e->as<Luau::AstExprGroup>()) e = g->expr;
         if (e->is<Luau::AstExprTable>() || e->is<Luau::AstExprFunction>()) return true;
@@ -115,7 +141,28 @@ private:
             else if (auto* x = e->as<Luau::AstExprIndexExpr>()) e = x->expr, through_table = true;
             else break;
         }
+        if (const auto* g = e->as<Luau::AstExprGlobal>()) {
+            if (!through_table) return;  // assigning a global is refused by the sandbox at run time
+            char msg[256];
+            std::snprintf(msg, sizeof(msg),
+                          "a function %s the global '%s', which would keep state between ticks; keep it in a component",
+                          verb ? verb : "writes into", g->name.value);
+            fail(at, msg);
+            return;
+        }
         const auto* l = e->as<Luau::AstExprLocal>();
+        if (l && l->local->functionDepth != 0 && through_table) {
+            for (usize i = 0; i < alias_count_; ++i) {
+                if (aliases_[i].local != l->local) continue;
+                char msg[256];
+                std::snprintf(msg, sizeof(msg),
+                              "a function %s the table '%s' points into, which belongs to top-level local '%s' and would keep "
+                              "state between ticks; keep it in a component",
+                              verb ? verb : "writes into", l->local->name.value, aliases_[i].root->name.value);
+                fail(at, msg);
+                return;
+            }
+        }
         if (!l || l->local->functionDepth != 0) return;
         char msg[256];
         if (through_table)
@@ -150,6 +197,12 @@ private:
     u32 depth_ = 0;
     Luau::AstLocal* object_locals_[kMaxObjectLocals] = {};
     usize object_count_ = 0;
+    struct Alias {
+        const Luau::AstLocal* local;
+        const Luau::AstLocal* root;
+    };
+    Alias aliases_[kMaxObjectLocals] = {};
+    usize alias_count_ = 0;
 };
 
 }  // namespace

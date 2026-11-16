@@ -214,8 +214,9 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
         diags.error(Errc::VersionTooNew, file, ver.line(), ver.col(), kStage, msg);
         return false;
     }
-    // Older versions migrate here (assets.md §6: migration happens at editor load). Version 1 is
-    // the first format, so the migrator table is empty.
+    // Older versions migrate here (assets.md §6: migration happens at editor load): component
+    // renames are looked up per record below. Version 1 is the first format, so the table is empty.
+    const u32 file_version = static_cast<u32>(ver.as_number());
 
     const cook::JsonValue g = root.get("guid");
     Result<asset::Guid> parsed = g.is_string() ? asset::parse_guid(g.as_string()) : Result<asset::Guid>(Error(Errc::ParseError, kStage));
@@ -268,7 +269,12 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
             continue;
         }
         for (u32 c = 0; c < comps.size(); ++c) {
-            const StringView tname = comps.key_at(c);
+            StringView tname = comps.key_at(c);
+            for (usize r = 0; r < rename_count_; ++r)
+                if (file_version <= renames_[r].up_to_version && tname == StringView(renames_[r].old_name)) {
+                    tname = StringView(renames_[r].new_name);
+                    break;
+                }
             const refl::TypeRecord* t = refl::find_type(StringId(tname));
             if (!t || !t->is_component()) {
                 cook::String msg("unknown component type '");
@@ -288,10 +294,37 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
             cook::String path;
             cook::appendf(path, "entities[%u].", i);
             path += tname;
-            cook::read_scene_component(*t, comps.at(c), dc->data(), count, file, path, diags);
+            // Renamed fields: the object is rebuilt under the new keys and read from that (a
+            // diagnostic inside a migrated record then points into the rebuilt text).
+            cook::JsonDoc migrated;
+            cook::JsonValue body = comps.at(c);
+            if (field_rename_count_ != 0 && body.is_object()) {
+                cook::String rebuilt("{");
+                bool any = false;
+                for (u32 k = 0; k < body.size(); ++k) {
+                    StringView key = body.key_at(k);
+                    for (usize r = 0; r < field_rename_count_; ++r) {
+                        const FieldRename& fr = field_renames_[r];
+                        if (file_version <= fr.up_to_version && tname == StringView(fr.component) && key == StringView(fr.old_field)) {
+                            key = StringView(fr.new_field);
+                            any = true;
+                            break;
+                        }
+                    }
+                    if (k != 0) rebuilt += ", ";
+                    rebuilt += "\"";
+                    rebuilt += key;
+                    rebuilt += "\": ";
+                    cook::write_json(body.at(k), rebuilt, true);
+                }
+                rebuilt += "}";
+                cook::JsonError merr;
+                if (any && migrated.parse(rebuilt.view(), merr)) body = migrated.root();
+            }
+            cook::read_scene_component(*t, body, dc->data(), count, file, path, diags);
             // An instance overrides exactly the fields its file names.
             if (!find(id)->prefab.is_null()) {
-                const cook::JsonValue obj = comps.at(c);
+                const cook::JsonValue obj = body;
                 for (u32 k = 0; obj.is_object() && k < obj.size(); ++k)
                     for (usize fi = 0; fi < t->fields.size() && fi < 64; ++fi)
                         if (obj.key_at(k) == StringView(t->fields[fi].name_str)) dc->overrides |= u64(1) << fi;

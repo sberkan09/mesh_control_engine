@@ -1,0 +1,1 @@
+- Kit (M-TRAFFICAVOID): `TrafficDriver3D::offset`, a saved sideways offset inside the lane that pure pursuit steers for (nothing sets it yet). Record: `docs/milestones/M-TRAFFICAVOID.md`.

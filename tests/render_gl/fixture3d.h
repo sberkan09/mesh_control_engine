@@ -6,14 +6,19 @@
 #include <doctest/doctest.h>
 
 #include <cstdio>
+#include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 
 #include "../render/mesh_fixture.h"
+#include "mce/asset/material_translucency.h"
+#include "mce/convar.h"
 #include "mce/core.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/renderer.h"
+#include "mce/render/static_merge.h"
 #include "mce/rhi/default_device.h"
 
 namespace mce::render_test {
@@ -30,7 +35,10 @@ struct Rgb {
 };
 
 struct Fixture3D {
-    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true, bool ibl = true, f32 render_scale = 1.0f) {
+    // `desc` (optional) replaces the Forward3DDesc the other arguments make, shadow_size aside; `device_desc`
+    // (optional) replaces the default device's DeviceDesc.
+    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true, bool ibl = true, f32 render_scale = 1.0f,
+                       const Forward3DDesc* desc = nullptr, const rhi::DeviceDesc* device_desc = nullptr) {
         REQUIRE(platform::init().has_value());
         platform::WindowDesc wd;
         wd.title = "test_render3d_gl";
@@ -41,7 +49,7 @@ struct Fixture3D {
         auto w = platform::Window::create(wd);
         REQUIRE(w.has_value());
         window = std::move(w).value();
-        auto d = rhi::create_default_device(*window);
+        auto d = rhi::create_default_device(*window, device_desc ? *device_desc : rhi::DeviceDesc{});
         REQUIRE(d.has_value());
         device = std::move(d).value();
         REQUIRE(renderer.init(*device).has_value());
@@ -51,6 +59,10 @@ struct Fixture3D {
         fd.gpu_light_clusters = gpu_clusters;
         fd.ibl = ibl;
         fd.render_scale = render_scale;
+        if (desc) {
+            fd = *desc;
+            fd.shadow_size = 1024;
+        }
         REQUIRE(renderer.init_3d(fd).has_value());
         rhi::TextureDesc td;
         td.size = {kW, kH};
@@ -89,7 +101,8 @@ struct Fixture3D {
 
     // `setup` runs after the defaults (sun, fog, ground, box) and before build().
     void render(f32 fog_density = 0.0f, bool shadows = true, const std::function<void(Scene3D&)>& setup = {}) {
-        camera = orbit_camera({0, 0.5f, 0}, 0.0f, math::radians(pitch_deg), 7.0f);
+        camera = orbit_camera(look_at + world_offset, math::radians(yaw_deg), math::radians(pitch_deg), 7.0f);
+        if (far_z > 0.0f) camera.far_z = far_z;
         device->begin_frame(frame++);
         Scene3D scene(renderer.meshes(), mem::heap());
         scene.begin(camera, {kW, kH});
@@ -103,11 +116,14 @@ struct Fixture3D {
         ShadowSettings ss;
         ss.resolution = 1024;  // = Forward3DDesc::shadow_size below
         scene.set_shadows(ss);
+        const bool offset = world_offset.x != 0.0f || world_offset.y != 0.0f || world_offset.z != 0.0f;
         MeshInstance ground;
         ground.mesh = 2;
+        if (offset) ground.world = math::translation(world_offset);
         scene.add(ground);
         MeshInstance box;
         box.mesh = 1;
+        if (offset) box.world = math::translation(world_offset);
         scene.add(box);
         if (setup) setup(scene);
         scene.build();
@@ -146,6 +162,10 @@ struct Fixture3D {
     rhi::TextureHandle target;
     Array<u8> pixels;
     f32 pitch_deg = 35.0f;
+    f32 yaw_deg = 0.0f;                   // the orbit camera's yaw (M-NIGHTSKY 14d: the star field under a slow turn)
+    vec3 look_at{0.0f, 0.5f, 0.0f};       // the orbit camera's target (M-CLOUDS 9b: raised for a camera that looks up)
+    vec3 world_offset{0.0f, 0.0f, 0.0f};  // moves the camera, the ground and the box (M-WETSURFACE 5b: a rebased world)
+    f32 far_z = 0.0f;                     // > 0 replaces the orbit camera's far plane (M-CLOUDSHADOW 51c: a wide ground)
     Camera3D camera;
     View3D view;
     rhi::FrameStats gpu;
@@ -223,6 +243,1357 @@ inline void gi_wall_scene(Scene3D& s, bool gi) {
     m.mesh = 8;
     s.add(m);
     if (gi) s.set_gi_volume(room_gi());
+}
+
+// M-GI2 50e: two rooms either side of a 0.2 m wall (mesh 62, every part a closed single-sided box). The dark room
+// (x -3..3, y 0..5, z -2..5.8, roofed) is lit only by a dim blue emissive back wall (z 5.8..6); the sunlit room on the
+// other side of the shared wall (z -2.2..-2) is open to the sky, its floor and the wall's far face in a bright sun.
+// thin_wall_gi spans both rooms with 2 m between probes (more than the wall): a plane of probes 0.4 m in front of the
+// sunlit face and one 1.4 m inside the dark room, so a floor point 0.5 m inside takes about 45 % of its trilinear weight
+// from the sunlit probes. The fixture's 1 m box is released (no probe inside it). The camera stands inside the dark
+// room looking at the shared wall.
+inline constexpr u32 kThinWallMesh = 62;
+inline constexpr f32 kThinWallZ = -2.0f;  // the shared wall's face toward the dark room
+
+inline void upload_thin_wall_rooms(Fixture3D& f) {
+    f.renderer.meshes().release(1);
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    const auto wall = [&b](vec3 lo, vec3 hi, f32 grey) {
+        mesh_fixture::Box w;
+        w.center = (lo + hi) * 0.5f;
+        w.half = (hi - lo) * 0.5f;
+        w.color[0] = w.color[1] = w.color[2] = grey;
+        b.add_box(w);
+    };
+    wall({-3.2f, 0.0f, -2.2f}, {3.2f, 5.0f, kThinWallZ}, 0.7f);  // the shared wall
+    wall({-3.2f, 0.0f, kThinWallZ}, {-3.0f, 5.0f, 5.8f}, 0.7f);  // the dark room's side walls
+    wall({3.0f, 0.0f, kThinWallZ}, {3.2f, 5.0f, 5.8f}, 0.7f);
+    wall({-3.2f, 5.0f, -2.2f}, {3.2f, 5.2f, 6.0f}, 0.7f);        // its roof
+    wall({-3.2f, 0.0f, 5.8f}, {3.2f, 5.0f, 6.0f}, 0.0f);         // its back wall, a dim blue light
+    b.submeshes.back().material.emissive[0] = 0.05f;
+    b.submeshes.back().material.emissive[1] = 0.25f;
+    b.submeshes.back().material.emissive[2] = 1.0f;
+    REQUIRE(f.renderer.meshes().upload(kThinWallMesh, 1, b.build().span()).has_value());
+    // The orbit camera at (0, 4, 4.5), 35 degrees down toward -z (as underwater_place_camera places it).
+    const f32 p = math::radians(35.0f);
+    f.pitch_deg = 35.0f;
+    f.look_at = {0.0f, 4.0f - 7.0f * std::sin(p), 4.5f - 7.0f * std::cos(p)};
+}
+
+inline void thin_wall_scene(Scene3D& s) {
+    DirectionalLight sun;
+    sun.direction = {0.0f, -1.0f, 0.6f};  // toward +z: the shared wall's far face and the sunlit floor
+    sun.intensity = 3.0f;
+    sun.ambient_sky = sun.ambient_ground = {0, 0, 0};
+    s.set_light(sun);
+    Sky sky;
+    sky.enabled = false;
+    sky.specular_ambient = 0.0f;
+    s.set_sky(sky);
+    Fog fog;
+    fog.color = {0, 0, 0};
+    s.set_fog(fog);
+    MeshInstance m;
+    m.mesh = kThinWallMesh;
+    s.add(m);
+}
+
+// Probes at x -2, 0, 2; y 0.6, 2.6, 4.6; z -4.6, -2.6 (sunlit room), -0.6, 1.4, 3.4 (dark room).
+inline GiVolume thin_wall_gi(bool visibility) {
+    GiVolume g;
+    g.enabled = true;
+    g.bounds = {{-2.0f, 0.6f, -4.6f}, {2.0f, 4.6f, 3.4f}};
+    g.counts[0] = 3;
+    g.counts[1] = 3;
+    g.counts[2] = 5;
+    g.probes_per_frame = 16;
+    g.visibility = visibility;
+    return g;
+}
+
+// The reference: the same spacing, every probe inside the dark room (z -1.8 .. 4.2).
+inline GiVolume thin_wall_inside_gi() {
+    GiVolume g = thin_wall_gi(false);
+    g.bounds.min.z = -1.8f;
+    g.bounds.max.z = 4.2f;
+    g.counts[2] = 4;
+    return g;
+}
+
+
+// M-VISUAL3 2: a 12 m tiled floor (mesh 20, just above the ground slab) whose [normal, height] array and albedo
+// carry one brick pattern, with the material both ways: `on` (parallax) and `off` (the same maps, flat).
+struct ParallaxFloor {
+    MaterialOverride on, off;
+    u32 albedo = ~0u, array = ~0u;
+};
+
+inline ParallaxFloor make_parallax_floor(Fixture3D& f, bool tilted_normals = false) {
+    constexpr u32 N = 64;
+    Array<u8> albedo, layers;
+    for (u32 y = 0; y < N; ++y)
+        for (u32 x = 0; x < N; ++x) {
+            const bool groove = (x % 16) < 3 || (y % 16) < 3;
+            const u8 c = groove ? 40 : 220;
+            albedo.push_back(c);
+            albedo.push_back(c);
+            albedo.push_back(c);
+            albedo.push_back(255);
+        }
+    for (u32 i = 0; i < N * N; ++i) {  // layer 0: a flat normal map
+        layers.push_back(tilted_normals ? 238 : 128);  // 60 degrees toward +x, or flat
+        layers.push_back(128);
+        layers.push_back(tilted_normals ? 191 : 255);
+        layers.push_back(255);
+    }
+    for (u32 y = 0; y < N; ++y)  // layer 1: the height map, grooves low
+        for (u32 x = 0; x < N; ++x) {
+            const u8 h = ((x % 16) < 3 || (y % 16) < 3) ? 0 : 255;
+            layers.push_back(h);
+            layers.push_back(h);
+            layers.push_back(h);
+            layers.push_back(255);
+        }
+    ParallaxFloor p;
+    const TextureMipUpload amip{N, N, std::as_bytes(albedo.span())};
+    TextureUpload aup;
+    aup.mips = Span<const TextureMipUpload>(&amip, 1);
+    p.albedo = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(p.albedo, 1, aup).has_value());
+    const TextureMipUpload lmip{N, N, std::as_bytes(layers.span())};
+    TextureUpload lup;
+    lup.layers = 2;
+    lup.mips = Span<const TextureMipUpload>(&lmip, 1);
+    p.array = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(p.array, 1, lup).has_value());
+
+    mesh_fixture::Builder floor;
+    floor.add_node(-1);
+    mesh_fixture::Box fb;
+    fb.center = {0, -0.098f, 0};
+    fb.half = {6, 0.1f, 6};
+    fb.uvs = true;
+    floor.add_box(fb);
+    REQUIRE(f.renderer.meshes().upload(20, 1, floor.build().span()).has_value());
+
+    p.off.albedo_key = p.albedo;
+    p.off.params.base_color[0] = p.off.params.base_color[1] = p.off.params.base_color[2] = p.off.params.base_color[3] = 1.0f;
+    p.off.params.roughness = 0.9f;
+    p.off.params.uv_scale_half = asset::MaterialChunk::pack_uv_scale(4.0f, 4.0f);
+    p.on = p.off;
+    p.on.normal_key = p.array;
+    p.on.parallax = true;
+    p.on.parallax_normal = tilted_normals;
+    p.on.ext.set_height(asset::Guid{1, 2});
+    p.on.ext.height_scale = 0.08f;
+    return p;
+}
+
+
+// ---- M-VISUAL3 4: HDR sky ------------------------------------------------------------------------
+
+// IEEE half from a finite, non-negative float below 65520, round to nearest even.
+inline u16 to_half_bits(f32 f) {
+    u32 x;
+    std::memcpy(&x, &f, 4);
+    const i32 e = i32((x >> 23) & 0xFFu) - 127 + 15;
+    u32 m = x & 0x7FFFFFu;
+    if (e <= 0) {
+        if (e < -10) return 0;
+        m |= 0x800000u;
+        const u32 shift = u32(14 - e);
+        return u16((m + (1u << (shift - 1)) - 1 + ((m >> shift) & 1u)) >> shift);
+    }
+    const u32 h = (u32(e) << 10) | (m >> 13);
+    return u16(h + ((m & 0x1FFFu) > 0x1000u || ((m & 0x1FFFu) == 0x1000u && (h & 1u)) ? 1u : 0u));
+}
+
+// The grey 64x32 equirect of the HDR sky cases: `base` everywhere and a 8x4 patch of `hot` on the horizon
+// at u = 0.5 (world +X before any rotation; equirect u = atan(z, x) / 2pi + 0.5), solid angle ~0.31 sr.
+inline Array<f32> hot_sky_texels(f32 base, f32 hot, u32 hot_center_x = 32) {
+    Array<f32> t;
+    t.resize(64 * 32, base);
+    for (u32 y = 14; y < 18; ++y)
+        for (u32 x = hot_center_x - 4; x < hot_center_x + 4; ++x) t[y * 64 + x] = hot;
+    return t;
+}
+
+// Uploads the grey map with a full box-filtered mip chain (averaged in float): as RGBA16F when `hdr`, else as an
+// RGBA8 copy clamped to 1 (what an 8-bit sky can hold). Returns the TextureStore key.
+inline u32 upload_grey_sky(Fixture3D& f, const Array<f32>& grey, bool hdr) {
+    Array<Array<u8>> bytes;
+    Array<TextureMipUpload> mips;
+    Array<f32> cur = grey;
+    for (u32 w = 64, h = 32;;) {
+        Array<u8>& b = bytes.emplace_back();
+        for (u32 i = 0; i < w * h; ++i) {
+            const f32 v = cur[i];
+            if (hdr) {
+                const u16 q = to_half_bits(v), one = to_half_bits(1.0f);
+                for (u16 c : {q, q, q, one}) {
+                    b.push_back(u8(c & 0xFF));
+                    b.push_back(u8(c >> 8));
+                }
+            } else {
+                const u8 q = u8(std::lround(math::min(v, 1.0f) * 255.0f));
+                for (u8 c : {q, q, q, u8(255)}) b.push_back(c);
+            }
+        }
+        if (w == 1 && h == 1) break;
+        const u32 nw = w > 1 ? w / 2 : 1, nh = h > 1 ? h / 2 : 1;
+        Array<f32> next;
+        next.resize(nw * nh);
+        for (u32 y = 0; y < nh; ++y)
+            for (u32 x = 0; x < nw; ++x) {
+                const u32 x0 = math::min(x * 2, w - 1), x1 = math::min(x * 2 + 1, w - 1);
+                const u32 y0 = math::min(y * 2, h - 1), y1 = math::min(y * 2 + 1, h - 1);
+                next[y * nw + x] = (cur[y0 * w + x0] + cur[y0 * w + x1] + cur[y1 * w + x0] + cur[y1 * w + x1]) * 0.25f;
+            }
+        cur = next;
+        w = nw;
+        h = nh;
+    }
+    u32 w = 64, h = 32;
+    for (const Array<u8>& b : bytes) {
+        mips.push_back(TextureMipUpload{w, h, std::as_bytes(b.span())});
+        w = w > 1 ? w / 2 : 1;
+        h = h > 1 ? h / 2 : 1;
+    }
+    TextureUpload up;
+    up.format = hdr ? rhi::TextureFormat::RGBA16F : rhi::TextureFormat::RGBA8_UNorm;
+    up.mips = mips.span();
+    up.debug_name = hdr ? "test.hdr_sky" : "test.ldr_sky";
+    const u32 key = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(key, 1, up).has_value());
+    return key;
+}
+
+// A white matte UV sphere as mesh `key`: `center`, `radius` baked into the submesh.
+inline void upload_sphere(Fixture3D& f, u32 key, vec3 center, f32 radius, f32 metallic = 0.0f, f32 roughness = 0.8f) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    asset::MeshSubmesh sm{};
+    sm.first_index = 0;
+    sm.base_vertex = 0;
+    sm.node = 0;
+    sm.center[0] = center.x;
+    sm.center[1] = center.y;
+    sm.center[2] = center.z;
+    sm.extent[0] = sm.extent[1] = sm.extent[2] = radius;
+    sm.uv_scale[0] = sm.uv_scale[1] = 1.0f;
+    for (int i = 0; i < 4; ++i) sm.material.base_color[i] = 1.0f;
+    sm.material.roughness = roughness;
+    sm.material.metallic = metallic;
+    constexpr u32 kSeg = 32, kRings = 16;
+    for (u32 r = 0; r <= kRings; ++r) {
+        const f32 th = math::kPi * f32(r) / f32(kRings);
+        for (u32 s = 0; s <= kSeg; ++s) {
+            const f32 ph = 2.0f * math::kPi * f32(s) / f32(kSeg);
+            const vec3 n{std::sin(th) * std::cos(ph), std::cos(th), std::sin(th) * std::sin(ph)};
+            asset::MeshVertex q{};
+            q.position[0] = mesh_fixture::Builder::snorm(n.x);
+            q.position[1] = mesh_fixture::Builder::snorm(n.y);
+            q.position[2] = mesh_fixture::Builder::snorm(n.z);
+            const f32 inv = 1.0f / (std::fabs(n.x) + std::fabs(n.y) + std::fabs(n.z));
+            f32 ox = n.x * inv, oy = n.y * inv;
+            if (n.z < 0) {
+                const f32 tx = (1.0f - std::fabs(oy)) * (ox >= 0 ? 1.0f : -1.0f), ty = (1.0f - std::fabs(ox)) * (oy >= 0 ? 1.0f : -1.0f);
+                ox = tx;
+                oy = ty;
+            }
+            q.normal[0] = mesh_fixture::Builder::snorm(ox);
+            q.normal[1] = mesh_fixture::Builder::snorm(oy);
+            b.vertices.push_back(q);
+        }
+    }
+    for (u32 r = 0; r < kRings; ++r)
+        for (u32 s = 0; s < kSeg; ++s) {
+            const u16 a = u16(r * (kSeg + 1) + s), c = u16(a + kSeg + 1);
+            for (u16 i : {a, u16(a + 1), c, u16(a + 1), u16(c + 1), c}) b.indices.push_back(i);
+        }
+    sm.vertex_count = u32(b.vertices.size());
+    sm.index_count = u32(b.indices.size());
+    b.submeshes.push_back(sm);
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// M-VISUAL3 5a: mesh `key`, a 0.5 m crate (a body and a darker lid, two submeshes) standing on the origin,
+// and a grid of `cols` x `rows` copies of it 1.1 m apart around the fixture's box (instancing's subject).
+inline void upload_crate(Fixture3D& f, u32 key) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    mesh_fixture::Box body;
+    body.center = {0, 0.22f, 0};
+    body.half = {0.25f, 0.22f, 0.25f};
+    body.color[0] = 0.6f;
+    body.color[1] = 0.42f;
+    body.color[2] = 0.22f;
+    b.add_box(body);
+    mesh_fixture::Box lid;
+    lid.center = {0, 0.47f, 0};
+    lid.half = {0.27f, 0.03f, 0.27f};
+    lid.color[0] = 0.35f;
+    lid.color[1] = 0.24f;
+    lid.color[2] = 0.12f;
+    b.add_box(lid);
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+inline void add_crate_grid(Scene3D& s, u32 key, u32 cols = 5, u32 rows = 4) {
+    for (u32 z = 0; z < rows; ++z)
+        for (u32 x = 0; x < cols; ++x) {
+            const f32 px = (f32(x) - 0.5f * f32(cols - 1)) * 1.1f, pz = (f32(z) - 0.5f * f32(rows - 1)) * 1.1f + 0.8f;
+            if (std::fabs(px) < 0.8f && std::fabs(pz) < 0.8f) continue;  // leave the fixture's box free
+            MeshInstance m;
+            m.mesh = key;
+            m.world =
+                math::trs({px, 0.0f, pz}, math::quat_from_axis_angle({0, 1, 0}, 0.15f * f32((x + z) % 3)), {1, 1, 1});
+            s.add(m);
+        }
+}
+
+
+// ---- M-VISUAL3 5b: static merge --------------------------------------------------------------------------------
+
+// A modular kit around the fixture's box: four small pieces (a wall, a pillar and a crate in stone, a beam in wood:
+// two materials) placed 32 times, in two cells split at x = 0. Pieces are meshes 30..33, the merged cells meshes
+// 40 and 41; add_merge_kit() draws either the pieces one by one or the two cells.
+struct MergeKit {
+    struct Placement {
+        u32 piece;
+        vec3 at;
+        f32 yaw;
+    };
+    Array<Placement> placements;
+    Array<Array<byte>> blobs;         // the pieces' payloads
+    Array<asset::MeshView> views;     // ... read
+    Array<u32> cell_keys;             // the merged cells' mesh keys
+    u32 cells = 0, materials = 2;
+};
+
+inline void upload_merge_kit(Fixture3D& f, MergeKit& kit) {
+    struct P {
+        vec3 half, center;
+        f32 r, g, b;
+    };
+    const P pieces[4] = {{{0.6f, 0.5f, 0.08f}, {0, 0.5f, 0}, 0.55f, 0.5f, 0.45f},  // wall, stone
+                         {{0.12f, 0.7f, 0.12f}, {0, 0.7f, 0}, 0.55f, 0.5f, 0.45f},  // pillar, stone
+                         {{0.6f, 0.06f, 0.1f}, {0, 0.06f, 0}, 0.45f, 0.28f, 0.14f},  // beam, wood
+                         {{0.2f, 0.2f, 0.2f}, {0, 0.2f, 0}, 0.55f, 0.5f, 0.45f}};    // crate, stone
+    kit.blobs.clear();
+    kit.views.clear();
+    for (u32 i = 0; i < 4; ++i) {
+        mesh_fixture::Builder b;
+        b.add_node(-1);
+        mesh_fixture::Box box;
+        box.center = pieces[i].center;
+        box.half = pieces[i].half;
+        box.color[0] = pieces[i].r;
+        box.color[1] = pieces[i].g;
+        box.color[2] = pieces[i].b;
+        b.add_box(box);
+        kit.blobs.push_back(b.build());
+        REQUIRE(f.renderer.meshes().upload(30 + i, 1, kit.blobs.back().span()).has_value());
+    }
+    for (const Array<byte>& blob : kit.blobs) kit.views.push_back(asset::MeshView::read(blob.span()).value());
+    kit.placements.clear();
+    for (u32 i = 0; i < 5; ++i) {  // a back wall of walls, pillars between them and beams across the top
+        const f32 x = (f32(i) - 2.0f) * 1.2f;
+        kit.placements.push_back({0, {x, 0.0f, -2.2f}, 0.0f});
+        kit.placements.push_back({1, {x - 0.6f, 0.0f, -2.2f}, 0.0f});
+        kit.placements.push_back({2, {x, 1.0f, -2.2f}, 0.0f});
+    }
+    kit.placements.push_back({1, {3.0f, 0.0f, -2.2f}, 0.0f});
+    for (u32 i = 0; i < 4; ++i) {  // side walls turned a quarter and crates on the floor
+        const f32 z = -1.2f + f32(i) * 1.1f;
+        kit.placements.push_back({0, {-3.1f, 0.0f, z}, 1.5707963f});
+        kit.placements.push_back({0, {3.1f, 0.0f, z}, 1.5707963f});
+        kit.placements.push_back({3, {-2.3f + 0.3f * f32(i), 0.0f, z + 0.5f}, 0.3f * f32(i)});
+        kit.placements.push_back({3, {1.9f - 0.2f * f32(i), 0.0f, z + 0.3f}, 0.2f * f32(i)});
+    }
+    // Two cells, split at x = 0 (a piece belongs to the cell of its origin).
+    Array<render::MergeSource> cell[2];
+    for (const MergeKit::Placement& p : kit.placements) {
+        render::MergeSource s;
+        s.mesh = &kit.views[p.piece];
+        s.world = math::trs(p.at, math::quat_from_axis_angle({0, 1, 0}, p.yaw), {1, 1, 1});
+        cell[p.at.x < 0.0f ? 0 : 1].push_back(s);
+    }
+    kit.cell_keys.clear();
+    for (u32 c = 0; c < 2; ++c) {
+        Array<byte> blob;
+        REQUIRE(render::build_merged_mesh(cell[c].span(), blob));
+        const u32 key = 40 + c;
+        REQUIRE(f.renderer.meshes().upload(key, 1, blob.span()).has_value());
+        kit.cell_keys.push_back(key);
+    }
+    kit.cells = 2;
+}
+
+inline void add_merge_kit(Scene3D& s, const MergeKit& kit, bool merged) {
+    if (merged) {
+        for (u32 key : kit.cell_keys) {
+            MeshInstance m;
+            m.mesh = key;
+            s.add(m);
+        }
+        return;
+    }
+    for (const MergeKit::Placement& p : kit.placements) {
+        MeshInstance m;
+        m.mesh = 30 + p.piece;
+        m.world = math::trs(p.at, math::quat_from_axis_angle({0, 1, 0}, p.yaw), {1, 1, 1});
+        s.add(m);
+    }
+}
+
+
+// ---- M-WETSURFACE 5b: wet surfaces ------------------------------------------------------------------------------
+
+// The wet plaza: the fixture's rough (0.8) grey ground and its box, a white metal sphere (mesh 50, roughness 0.25)
+// beside the box and a rough stone wall (mesh 51) on the left whose +x face looks across the ground. A low sun from
+// behind the box puts its reflection on the open ground in front of it; a gradient sky lights everything through IBL.
+inline constexpr vec3 kWetSphere{1.7f, 0.7f, -0.4f};
+inline constexpr f32 kWetSphereRadius = 0.7f;
+
+inline void upload_wet_plaza(Fixture3D& f) {
+    upload_sphere(f, 50, kWetSphere, kWetSphereRadius, 1.0f, 0.25f);
+    mesh_fixture::Builder wall;
+    wall.add_node(-1);
+    mesh_fixture::Box w;
+    w.center = {-2.6f, 1.0f, -0.8f};
+    w.half = {0.15f, 1.0f, 1.6f};
+    w.color[0] = 0.62f;
+    w.color[1] = 0.56f;
+    w.color[2] = 0.5f;
+    wall.add_box(w);
+    REQUIRE(f.renderer.meshes().upload(51, 1, wall.build().span()).has_value());
+}
+
+inline WetSurfaces wet_plaza_wet(f32 wetness, f32 puddles) {
+    WetSurfaces w;
+    w.wetness = wetness;
+    w.puddles = puddles;
+    return w;
+}
+
+// `world_offset`: as Fixture3D::world_offset (the sphere and the wall move with the rest).
+inline void wet_plaza_scene(Scene3D& s, const WetSurfaces& wet, vec3 world_offset = {0.0f, 0.0f, 0.0f}) {
+    DirectionalLight sun;
+    sun.direction = {0.16f, -0.72f, 0.676f};
+    s.set_light(sun);
+    s.set_exposure(0.55f);  // the dry ground mid-grey, not near white: the darkening is measured in 8 bits
+    Sky sky;
+    sky.zenith = {0.2f, 0.35f, 0.8f};
+    sky.horizon = {0.75f, 0.7f, 0.65f};
+    sky.ground = {0.35f, 0.34f, 0.32f};
+    sky.ibl = true;
+    s.set_sky(sky);
+    const bool offset = world_offset.x != 0.0f || world_offset.y != 0.0f || world_offset.z != 0.0f;
+    for (u32 mesh : {50u, 51u}) {
+        MeshInstance m;
+        m.mesh = mesh;
+        if (offset) m.world = math::translation(world_offset);
+        s.add(m);
+    }
+    s.set_wet_surfaces(wet);
+}
+
+// ---- M-SNOWCOVER 6b: snow cover ---------------------------------------------------------------------------------
+
+// The snow plaza is the wet plaza (upload_wet_plaza) under snow: `cover` with coverage 0.8, 2 m noise cells and
+// wind bias 0.5, at a lower exposure than the wet plaza's so 0.9 white snow in the sun stays below 8-bit white.
+inline SnowCover snow_plaza_snow(f32 cover) {
+    SnowCover s;
+    s.cover = cover;
+    s.noise_scale = 2.0f;
+    return s;
+}
+
+inline void snow_plaza_scene(Scene3D& s, const SnowCover& snow, const WetSurfaces& wet,
+                             vec3 world_offset = {0.0f, 0.0f, 0.0f}) {
+    wet_plaza_scene(s, wet, world_offset);
+    s.set_exposure(0.35f);
+    s.set_snow_cover(snow);
+}
+
+// ---- M-RAINFX 7b: rain ripples ------------------------------------------------------------------------------------
+
+// Ripples at `strength` with the defaults (density 0.5, speed 1, ring width 0.15).
+inline Ripples ripple_plaza_ripples(f32 strength) {
+    Ripples r;
+    r.strength = strength;
+    return r;
+}
+
+// The ripple plaza is the wet plaza (upload_wet_plaza) with ripples at the scene time `time` (seconds).
+inline void ripple_plaza_scene(Scene3D& s, const Ripples& ripples, const WetSurfaces& wet, f32 time,
+                               vec3 world_offset = {0.0f, 0.0f, 0.0f}) {
+    wet_plaza_scene(s, wet, world_offset);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_ripples(ripples);
+}
+
+// ---- M-CLOUDS 9b: the cloud layer --------------------------------------------------------------------------------
+
+// The cloud sky: the fixture's box and ground under the default gradient sky, the camera raised and looking 15
+// degrees up (Fixture3D::look_at and pitch_deg, set by cloud_sky_camera) so the frame is two thirds sky; the sun
+// high on the camera's right front, inside the frame's corner region but not in it. `clouds` as given, at scene time
+// `time` (seconds).
+inline void cloud_sky_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 3.0f, 0.0f};
+    f.pitch_deg = -15.0f;
+}
+
+inline Clouds cloud_sky_clouds(f32 coverage) {
+    Clouds c;
+    c.coverage = coverage;
+    return c;
+}
+
+inline void cloud_sky_scene(Scene3D& s, const Clouds& clouds, f32 time) {
+    DirectionalLight sun;
+    sun.direction = {-0.45f, -0.55f, 0.7f};
+    s.set_light(sun);
+    s.set_exposure(0.6f);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_clouds(clouds);
+}
+
+// ---- M-NIGHTSKY 14d: the moon and the stars ----------------------------------------------------------------------
+
+// The night sky: the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up toward -z), a dark gradient
+// sky and ambient, the frame's light a dim cool one from below the horizon behind the camera (its disk out of view, as
+// the night key of a DayCycle), and the moon 25 degrees up on the camera's right front. `night` as given.
+inline constexpr vec3 kNightMoonDir{0.25f, 0.42f, -0.87f};  // toward the moon (normalized by the upload)
+
+inline NightSky night_sky_carrier(f32 phase, f32 star_density, f32 moon_intensity = 6.0f) {
+    NightSky n;
+    n.moon_dir = kNightMoonDir;
+    n.moon_cos_size = 0.998f;  // about 3.6 degrees across: a 19 pixel disk in the 160 x 120 frame
+    n.moon_intensity = moon_intensity;
+    n.moon_color = {0.9f, 0.93f, 1.0f};
+    n.moon_phase = phase;
+    n.star_density = star_density;
+    n.star_brightness = 1.0f;
+    n.star_twinkle = 0.3f;
+    n.star_time = 12.25f;
+    return n;
+}
+
+inline void night_sky_scene(Scene3D& s, const NightSky& night) {
+    DirectionalLight light;
+    light.direction = {0.0f, 0.5f, -0.8660254f};  // from a source 30 degrees under the horizon behind the camera
+    light.color = {0.55f, 0.65f, 1.0f};
+    light.intensity = 0.05f;
+    light.ambient_sky = {0.01f, 0.012f, 0.02f};
+    light.ambient_ground = {0.005f, 0.005f, 0.005f};
+    s.set_light(light);
+    Sky sky;
+    sky.zenith = {0.004f, 0.005f, 0.012f};
+    sky.horizon = {0.01f, 0.012f, 0.02f};
+    sky.ground = {0.005f, 0.005f, 0.005f};
+    s.set_sky(sky);
+    s.set_exposure(1.0f);
+    s.set_night_sky(night);
+}
+
+// ---- M-WATER 15c: the water plane --------------------------------------------------------------------------------
+
+// The water scene: the fixture's box and ground under a sea at `level_y` 0.6 (the ground slab's top 0.6 m under water,
+// the box standing 0.4 m out of it: a steep shore for the foam; past the slab's 6 m edge nothing is behind the water,
+// the open sea), seen from a low camera (water_camera: 2.5 m up, looking 8 degrees down, so the sea runs to the
+// horizon in the upper third of the frame).
+// M-WATER2 49c/49d: r.water.reflect and r.water.refract for one scope (both reset on exit). The water goldens and the
+// M-WATER cases whose scene stands in or lies under the water render with both off: their frames stay the ones from
+// before the scene reflected and refracted.
+struct WaterOptics {
+    WaterOptics(bool reflect, bool refract) {
+        set("r.water.reflect", reflect);
+        set("r.water.refract", refract);
+    }
+    ~WaterOptics() {
+        for (const char* n : {"r.water.reflect", "r.water.refract"})
+            if (ConVar* cv = ConVar::find(StringId(n))) cv->reset();
+    }
+    WaterOptics(const WaterOptics&) = delete;
+    WaterOptics& operator=(const WaterOptics&) = delete;
+    static void set(const char* name, bool on) {
+        ConVar* cv = ConVar::find(StringId(name));
+        REQUIRE(cv != nullptr);
+        cv->set_string(on ? "1" : "0");
+    }
+};
+
+inline void water_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 1.5f, 0.0f};
+    f.pitch_deg = 8.0f;
+}
+
+inline WaterSurface water_carrier(f32 amplitude, f32 time = 12.5f) {
+    WaterSurface w;
+    w.enabled = true;
+    w.level_y = 0.6f;
+    w.amplitude = amplitude;
+    w.time = time;
+    return w;
+}
+
+// The day sea: the default gradient sky, the sun 20 degrees up in front of the camera and to its left (its disk out
+// of the frame, its glint on the water).
+inline void water_day_scene(Scene3D& s, const WaterSurface& w) {
+    DirectionalLight sun;
+    sun.direction = {0.25f, -0.35f, 0.9f};
+    s.set_light(sun);
+    s.set_exposure(0.7f);
+    s.set_water(w);
+}
+
+// The night sea: night_sky_scene's sky, moon and stars, with the frame's light handed to the moon (as the kit's moon
+// does at night: M-NIGHTSKY 14b), so the moon's glint lies on the water under its reflection.
+inline void water_night_scene(Scene3D& s, const NightSky& night, const WaterSurface& w) {
+    night_sky_scene(s, night);
+    DirectionalLight moon;
+    moon.direction = {-kNightMoonDir.x, -kNightMoonDir.y, -kNightMoonDir.z};
+    moon.color = {0.55f, 0.65f, 1.0f};
+    moon.intensity = 0.15f;
+    moon.ambient_sky = {0.01f, 0.012f, 0.02f};
+    moon.ambient_ground = {0.005f, 0.005f, 0.005f};
+    s.set_light(moon);
+    s.set_water(w);
+}
+
+// ---- M-AURORA 16c: the aurora curtains -------------------------------------------------------------------------
+
+// The aurora as the kit extract hands it over: level 1, the default curtains (base 0.18, span 0.35, three curtains,
+// green base and violet top, speed 1), the arc 70 degrees wide centred toward -z (where cloud_sky_camera and
+// water_camera look), at a fixed clock.
+inline AuroraSky aurora_carrier(f32 level = 1.0f, f32 time = 12.25f) {
+    AuroraSky a;
+    a.level = level;
+    a.azimuth = {0.0f, -1.0f};
+    a.half_width_cos = 0.81915204f;  // cos 35 degrees
+    a.time = time;
+    a.enabled = true;
+    return a;
+}
+
+// The aurora night: night_sky_scene's dark sky with the star field (density 0.6, no moon) and the curtains.
+inline void aurora_sky_scene(Scene3D& s, const AuroraSky& aurora) {
+    night_sky_scene(s, night_sky_carrier(0.5f, 0.6f, 0.0f));
+    s.set_aurora(aurora);
+}
+
+// ---- M-RAINBOW 17c: the rainbow ----------------------------------------------------------------------------------
+
+// The rainbow sky: the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up toward -z) under a
+// rain-washed grey-blue gradient, the sun 10 degrees up behind the camera on its left, so the anti-solar point is 10
+// degrees under the horizon, 35 degrees right of the view: the primary bow (42 degrees from it) crosses the frame's
+// lower half and the secondary (51 degrees) its middle, diagonally. The light travels toward the anti-solar point.
+inline constexpr vec3 kRainbowAntiSolar{0.56486252f, -0.17364818f, -0.80670728f};  // (sin 35 cos 10, -sin 10, ...)
+
+// The rainbow as the kit extract hands it over: `level`, the default band width and the full secondary bow.
+inline RainbowSky rainbow_carrier(f32 level = 1.0f, f32 band_width = 1.0f, f32 secondary = 1.0f) {
+    RainbowSky r;
+    r.level = level;
+    r.band_width = band_width;
+    r.secondary = secondary;
+    r.anti_solar = kRainbowAntiSolar;
+    r.enabled = true;
+    return r;
+}
+
+inline void rainbow_sky_scene(Scene3D& s, const RainbowSky& rainbow) {
+    DirectionalLight sun;
+    sun.direction = kRainbowAntiSolar;
+    s.set_light(sun);
+    Sky sky;
+    sky.zenith = {0.10f, 0.13f, 0.22f};
+    sky.horizon = {0.30f, 0.33f, 0.38f};
+    s.set_sky(sky);
+    s.set_exposure(1.0f);
+    s.set_rainbow(rainbow);
+}
+
+// The same sky over a calm sea (water_camera: low, looking 8 degrees down toward -z), the bows above the horizon and
+// their reflection below it.
+inline void rainbow_water_scene(Scene3D& s, const RainbowSky& rainbow, const WaterSurface& w) {
+    rainbow_sky_scene(s, rainbow);
+    s.set_water(w);
+}
+
+// ---- M-METEOR 18c: the meteors -----------------------------------------------------------------------------------
+
+// The meteor sky: aurora_sky_scene's night (night_sky_scene's dark sky with the star field at density 0.6, no moon)
+// seen through the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up toward -z). At the default
+// clock and seed (rate 30: two or three candidates per 5 s slot) slot 8 is 1.938 s in and all three of its streaks
+// are in flight inside the frame (kit::meteor_make: heads at about 19, 34 and 25 degrees up, 20 right, 4 left and 5
+// right of the view, envelopes 0.79, 0.91 and 0.94).
+inline constexpr f32 kMeteorSkyTime = 41.938f;
+inline constexpr u32 kMeteorSkySeed = 17427;
+// The meteor sea (water_camera: low, looking 8 degrees down toward -z): slot 6 is 0.276 s in, one streak rises from
+// 6 to 13 degrees up a little right of the view (envelope 0.99), over the horizon and in the reflection under it.
+inline constexpr f32 kMeteorWaterTime = 30.276f;
+inline constexpr u32 kMeteorWaterSeed = 7;
+
+// The meteors as the kit extract hands them over: `level`, the maximum rate (30 per minute), the default brightness,
+// length and speed, the wrapped clock `time` and `seed`.
+inline MeteorSky meteor_carrier(f32 level = 1.0f, f32 time = kMeteorSkyTime, u32 seed = kMeteorSkySeed) {
+    MeteorSky m;
+    m.level = level;
+    m.rate = 30.0f;
+    m.brightness = 1.0f;
+    m.length = 1.0f;
+    m.speed = 1.0f;
+    m.time = time;
+    m.seed = seed;
+    m.enabled = true;
+    return m;
+}
+
+inline void meteor_sky_scene(Scene3D& s, const MeteorSky& meteor) {
+    night_sky_scene(s, night_sky_carrier(0.5f, 0.6f, 0.0f));
+    s.set_meteor(meteor);
+}
+
+// The same night over a calm sea (water_camera), the streak above the horizon and its reflection below it.
+inline void meteor_water_scene(Scene3D& s, const MeteorSky& meteor, const WaterSurface& w) {
+    meteor_sky_scene(s, meteor);
+    s.set_water(w);
+}
+
+// ---- M-LENSFLARE 38c: the sun lens flare ---------------------------------------------------------------------------
+
+// The flare sky: the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up), the sun placed where the
+// view ray through the frame's uv (u, v) points (fullscreen-pass convention: v = 0 is the bottom row, so (0.3, 0.7)
+// is the upper left; asymmetric on purpose, a flipped v moves the ghosts). The unit direction toward the sun.
+inline vec3 lens_flare_toward(const View3D& view, f32 u, f32 v) {
+    const math::vec4 w = math::inverse(view.view_proj) * math::vec4(u * 2.0f - 1.0f, v * 2.0f - 1.0f, 1.0f, 1.0f);
+    return math::normalize(vec3{w.x / w.w, w.y / w.w, w.z / w.w} - view.position);
+}
+
+inline constexpr f32 kFlareSunU = 0.3f, kFlareSunV = 0.7f;
+
+// The flare the cases draw: a tight halo (cut to 0 at 3 radii, 0.24 of the view height), four ghosts at twice the
+// table's gain, a wide occlusion disk (0.05 of the view height: three texels of the 60-texel half-resolution depth),
+// no starburst.
+inline LensFlare lens_flare_setting() {
+    LensFlare fl;
+    fl.enabled = true;
+    fl.halo_radius = 0.08f;
+    fl.ghost_intensity = 2.0f;
+    fl.occlusion_radius = 0.05f;
+    return fl;
+}
+
+// The sun toward `toward_sun`, `flare` (null: the default, disabled), bloom as asked; FXAA off (its edge search would
+// carry a changed pixel to its neighbours).
+inline void lens_flare_scene(Scene3D& s, vec3 toward_sun, const LensFlare* flare, bool bloom = false) {
+    DirectionalLight sun;
+    sun.direction = -toward_sun;
+    s.set_light(sun);
+    PostFx post = s.post();
+    post.bloom = bloom;
+    post.bloom_intensity = 0.3f;
+    post.fxaa = false;
+    post.flare = flare ? *flare : LensFlare{};
+    s.set_post(post);
+}
+
+// A 1 m box 3 m out along the sun's ray, turned to face the camera along it. `shift` moves it sideways in units of
+// its width: 0 covers the sun's whole occlusion disk; -0.5 puts its right edge (the plane through the ray) on the sun,
+// covering half of the disk.
+inline void lens_flare_occluder(Scene3D& s, vec3 toward_sun, f32 shift) {
+    const vec3 z = -toward_sun;  // the box's +z faces back toward the camera
+    const vec3 x = math::normalize(math::cross(vec3{0.0f, 1.0f, 0.0f}, z));
+    const vec3 y = math::cross(z, x);
+    const vec3 p = s.view().position + toward_sun * 3.0f;
+    const vec3 t = p + x * shift - y * 0.5f;  // the mesh's box spans local y 0..1
+    MeshInstance box;
+    box.mesh = 1;
+    const vec3 cols[4] = {x, y, z, t};
+    for (u32 c = 0; c < 4; ++c) {
+        box.world.c[c][0] = cols[c].x;
+        box.world.c[c][1] = cols[c].y;
+        box.world.c[c][2] = cols[c].z;
+    }
+    s.add(box);
+}
+
+// ---- M-OUTLINE 39c: edge outlines --------------------------------------------------------------------------------
+
+// Mesh 30: a 0.6 m box, placed by outline_scene at kOutlineBoxAt, in the upper left of the fixture's frame (asymmetric
+// on purpose: a flipped v in the outline pass would put its lines on the lower left, over the open ground slab).
+inline constexpr u32 kOutlineBoxMesh = 30;
+inline const vec3 kOutlineBoxAt{-3.5f, 0.0f, -4.0f};
+
+inline void upload_outline_box(Fixture3D& f) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    mesh_fixture::Box box;
+    box.center = {0.0f, 0.3f, 0.0f};
+    box.half = {0.3f, 0.3f, 0.3f};
+    box.color[0] = 0.3f;
+    box.color[1] = 0.5f;
+    box.color[2] = 0.8f;
+    b.add_box(box);
+    REQUIRE(f.renderer.meshes().upload(kOutlineBoxMesh, 1, b.build().span()).has_value());
+}
+
+// The outline the cases draw: the defaults (dark lines, 1 px, the default thresholds and fade), enabled.
+inline EdgeOutline outline_setting() {
+    EdgeOutline o;
+    o.enabled = true;
+    return o;
+}
+
+// The fixture's box and slab plus the small box (upload_outline_box first), `outline` (null: the default, disabled);
+// bloom and FXAA off (both would carry a changed pixel to its neighbours), TAA as asked.
+inline void outline_scene(Scene3D& s, const EdgeOutline* outline, bool taa = false) {
+    PostFx post = s.post();
+    post.bloom = false;
+    post.fxaa = false;
+    post.taa = taa;
+    post.outline = outline ? *outline : EdgeOutline{};
+    s.set_post(post);
+    MeshInstance b;
+    b.mesh = kOutlineBoxMesh;
+    b.world = math::translation(kOutlineBoxAt);
+    s.add(b);
+}
+
+// ---- M-TRANSLUCENT 41d: thin cards ------------------------------------------------------------------------------
+
+// Mesh `key`: one quad of 2 half x 2 half metres in its local xy plane, its normal +z (counter-clockwise seen from +z);
+// `reversed` stores the normal -z with the same winding (a surface whose normal points away from the side it faces).
+inline void upload_card(Fixture3D& f, u32 key, f32 half, bool reversed = false) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    asset::MeshSubmesh sm{};
+    sm.extent[0] = sm.extent[1] = half;
+    sm.extent[2] = 0.01f;
+    sm.uv_scale[0] = sm.uv_scale[1] = 1.0f;
+    for (int i = 0; i < 4; ++i) sm.material.base_color[i] = 1.0f;
+    sm.material.roughness = 0.9f;
+    const f32 xs[4] = {-1, 1, 1, -1}, ys[4] = {-1, -1, 1, 1};
+    for (int c = 0; c < 4; ++c) {
+        asset::MeshVertex q{};
+        q.position[0] = mesh_fixture::Builder::snorm(xs[c]);
+        q.position[1] = mesh_fixture::Builder::snorm(ys[c]);
+        q.normal[0] = q.normal[1] = reversed ? 32767 : 0;  // octahedral (1, 1) = -z, (0, 0) = +z
+        b.vertices.push_back(q);
+    }
+    for (u16 i : {u16(0), u16(1), u16(2), u16(0), u16(2), u16(3)}) b.indices.push_back(i);
+    sm.vertex_count = 4;
+    sm.index_count = 6;
+    b.submeshes.push_back(sm);
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// The world matrix that puts the card at `c` with its +z along `normal` (unit) and its +y as near `up` as it goes.
+inline math::mat4 card_world(vec3 c, vec3 normal, vec3 up = {0, 1, 0}) {
+    const vec3 z = math::normalize(normal);
+    vec3 x = math::cross(up, z);
+    x = math::length_sq(x) > 1e-6f ? math::normalize(x) : vec3{1, 0, 0};
+    const vec3 y = math::cross(z, x);
+    math::mat4 m = math::mat4::identity();
+    const vec3 cols[4] = {x, y, z, c};
+    for (u32 k = 0; k < 4; ++k) {
+        m.c[k][0] = cols[k].x;
+        m.c[k][1] = cols[k].y;
+        m.c[k][2] = cols[k].z;
+    }
+    return m;
+}
+
+// A double-sided material of colour `col` with the quantized translucency and wrap (set_material_translucency).
+inline MaterialOverride thin_material(vec3 col, f32 translucency, f32 wrap, f32 metallic = 0.0f, f32 roughness = 0.9f,
+                                      u32 flags = asset::MaterialFlags::DoubleSided) {
+    MaterialOverride m;
+    m.params.base_color[0] = col.x;
+    m.params.base_color[1] = col.y;
+    m.params.base_color[2] = col.z;
+    m.params.base_color[3] = 1.0f;
+    m.params.metallic = metallic;
+    m.params.roughness = roughness;
+    m.params.flags = flags;
+    asset::set_material_translucency(m.params, translucency, wrap);
+    return m;
+}
+
+// ---- M-LENSRAIN 42c: rain on the camera lens ------------------------------------------------------------------------
+
+// The lens rain the cases draw: wet (amount 0.8), the default density and size, a strong mirror (refraction 2: every
+// point inside a drop reads the source across the drop's centre), no glass blur and no trails (so a changed pixel lies
+// inside a drop disc), drops that do not fall (fall_speed 0: still drops, placed independently of the time).
+inline LensRain lens_rain_setting() {
+    LensRain r;
+    r.enabled = true;
+    r.amount = 0.8f;
+    r.refraction = 2.0f;
+    r.blur = 0.0f;
+    r.trail = 0.0f;
+    r.fall_speed = 0.0f;
+    r.seed = 5;
+    return r;
+}
+
+// `rain` (null: the default, disabled) at scene time `time`, bloom and FXAA off (each would carry a changed pixel to
+// its neighbours, and the cases count changed pixels).
+inline void lens_rain_scene(Scene3D& s, const LensRain* rain, f32 time = 0.0f) {
+    s.set_time(time, 1.0f / 60.0f);
+    PostFx post = s.post();
+    post.bloom = false;
+    post.fxaa = false;
+    post.rain = rain ? *rain : LensRain{};
+    s.set_post(post);
+}
+
+// The split sky: the camera 50 m up looking level (the ground slab and the box are far below the view), the sun off,
+// a blue sky above the horizon (v = 0.5) and a red "ground" below it, no IBL: a frame of two colours, so a drop that
+// shows the far side of the horizon is found by its colour alone.
+inline void lens_rain_split_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 50.0f, 0.0f};
+    f.pitch_deg = 0.0f;
+}
+
+inline void lens_rain_split_sky(Scene3D& s) {
+    no_sun(s);
+    Sky sky;
+    sky.zenith = sky.horizon = {0.05f, 0.1f, 0.6f};
+    sky.ground = {0.6f, 0.08f, 0.05f};
+    sky.ibl = false;
+    s.set_sky(sky);
+}
+
+// The gradient sky: the same raised camera looking 20 degrees up (the horizon near the bottom row), the sun off, a sky
+// running from a warm horizon to a deep blue zenith: every row differs from the next, so a drop's mirrored lookup
+// changes nearly every pixel it covers (on a uniform ground only its rim would).
+inline void lens_rain_gradient_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 50.0f, 0.0f};
+    f.pitch_deg = -20.0f;
+}
+
+inline void lens_rain_gradient_sky(Scene3D& s) {
+    no_sun(s);
+    Sky sky;
+    sky.zenith = {0.02f, 0.05f, 0.5f};
+    sky.horizon = {0.9f, 0.6f, 0.3f};
+    sky.ground = {0.1f, 0.4f, 0.1f};
+    sky.ibl = false;
+    s.set_sky(sky);
+}
+
+// ---- M-HEATHAZE 43c: heat haze ---------------------------------------------------------------------------------------
+
+// Mesh `key`: a checker wall of 0.4 m tiles (30 x 15, light and dark), 12 m wide and 6 m tall, standing on the ground
+// 3 m behind the origin and facing the camera (+z): sharp edges everywhere, so a displacement of a pixel shows.
+inline void upload_haze_wall(Fixture3D& f, u32 key) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    constexpr u32 kCols = 30, kRows = 15;
+    constexpr f32 kTile = 0.4f;
+    for (u32 y = 0; y < kRows; ++y)
+        for (u32 x = 0; x < kCols; ++x) {
+            mesh_fixture::Box t;
+            t.center = {(f32(x) + 0.5f) * kTile - 0.5f * kTile * f32(kCols), (f32(y) + 0.5f) * kTile, -3.0f};
+            t.half = {0.5f * kTile, 0.5f * kTile, 0.05f};
+            const f32 c = (x + y) % 2 == 0 ? 0.85f : 0.06f;
+            t.color[0] = t.color[1] = c;
+            t.color[2] = c * 0.9f;
+            b.add_box(t);
+        }
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// Mesh `key`: a thin green pole (0.2 m square, 3 m tall, in 0.1 m bands of two greens, so a displacement inside it would
+// show) standing on the origin; placed in front of the haze it is the occluder the depth mask must keep sharp.
+inline void upload_haze_pole(Fixture3D& f, u32 key) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    for (u32 i = 0; i < 30; ++i) {
+        mesh_fixture::Box band;
+        band.center = {0.0f, 0.05f + 0.1f * f32(i), 0.0f};
+        band.half = {0.1f, 0.05f, 0.1f};
+        band.color[0] = 0.04f;
+        band.color[1] = i % 2 == 0 ? 0.85f : 0.4f;
+        band.color[2] = 0.04f;
+        b.add_box(band);
+    }
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// The level camera the cases use: 7 m in front of (0, 1.5, 0), looking at the wall through the haze sphere.
+inline void haze_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 1.5f, 0.0f};
+    f.pitch_deg = 0.0f;
+}
+
+// One haze sphere at `center` (radius 1.5 m) with a strong displacement (strength 1.5) so the 160 x 120 frame moves by
+// whole pixels; the default rise, scale and softness.
+inline HeatHaze haze_setting(vec3 center = {0.0f, 1.5f, 0.0f}, f32 radius = 1.5f, f32 strength = 1.5f) {
+    HeatHaze h;
+    h.count = 1;
+    h.volumes[0].center = center;
+    h.volumes[0].radius = radius;
+    h.volumes[0].strength = strength;
+    return h;
+}
+
+// `haze` (null: none) at scene time `time` over the wall (mesh `wall`), with the pole (mesh `pole`, ~0u: none) at
+// `pole_at`; bloom and FXAA off (each would carry a changed pixel to its neighbours, and the cases count changed
+// pixels).
+inline void heat_haze_scene(Scene3D& s, const HeatHaze* haze, f32 time, u32 wall, u32 pole = ~0u,
+                            vec3 pole_at = {0.3f, 0.0f, 2.5f}) {
+    s.set_time(time, 1.0f / 60.0f);
+    PostFx post = s.post();
+    post.bloom = false;
+    post.fxaa = false;
+    post.haze = haze ? *haze : HeatHaze{};
+    s.set_post(post);
+    MeshInstance w;
+    w.mesh = wall;
+    s.add(w);
+    if (pole != ~0u) {
+        MeshInstance m;
+        m.mesh = pole;
+        m.world = math::translation(pole_at);
+        s.add(m);
+    }
+}
+
+// ---- M-UNDERWATER 44c: the camera under water -------------------------------------------------------------------------
+
+// The underwater scene: a calm sea at level kUnderwaterLevel (amplitude and foam 0, so the water itself never records the
+// prepass) over the fixture's box and ground, and three equal grey pillars (mesh `key`, 0.6 m square and 2.4 m tall,
+// standing on y = 0) at 3, 8 and 20 m in front of the camera at (0, 1.2, 7) (kUnderwaterPillars: each pillar's front-face
+// centre at the camera's height; to the sides of the box, so none hides another): the red-first fade with distance.
+inline constexpr f32 kUnderwaterLevel = 3.2f;
+inline constexpr vec3 kUnderwaterPillars[3] = {{-1.2f, 1.2f, 4.3f}, {1.6f, 1.2f, -0.7f}, {-3.2f, 1.2f, -12.7f}};
+
+inline void upload_underwater_pillars(Fixture3D& f, u32 key) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    for (const vec3& p : kUnderwaterPillars) {
+        mesh_fixture::Box box;
+        box.center = {p.x, 1.2f, p.z - 0.3f};
+        box.half = {0.3f, 1.2f, 0.3f};
+        box.color[0] = box.color[1] = box.color[2] = 0.75f;
+        b.add_box(box);
+    }
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// Places the orbit camera at `pos` looking `pitch_deg` down (negative: up), yaw 0 (toward -z).
+inline void underwater_place_camera(Fixture3D& f, vec3 pos, f32 pitch_deg) {
+    const f32 p = math::radians(pitch_deg);
+    f.pitch_deg = pitch_deg;
+    f.look_at = {pos.x, pos.y - 7.0f * std::sin(p), pos.z - 7.0f * std::cos(p)};
+}
+
+inline WaterSurface underwater_water(f32 level = kUnderwaterLevel) {
+    WaterSurface w;
+    w.enabled = true;
+    w.level_y = level;
+    w.amplitude = 0.0f;
+    w.foam_amount = 0.0f;
+    w.time = 12.5f;
+    return w;
+}
+
+// The water `w` (null: none) with the look `uw` at scene time `time`, the pillars (mesh `pillars`, ~0u: none); bloom and
+// FXAA off unless `post_default` (each carries a changed pixel to its neighbours, and the cases compare pixels).
+inline void underwater_scene(Scene3D& s, const WaterSurface* w, const Underwater& uw, f32 time, u32 pillars,
+                             bool post_default = false) {
+    s.set_time(time, 1.0f / 60.0f);
+    PostFx post = s.post();
+    if (!post_default) {
+        post.bloom = false;
+        post.fxaa = false;
+    }
+    post.underwater = uw;
+    s.set_post(post);
+    if (w) s.set_water(*w);
+    if (pillars != ~0u) {
+        MeshInstance m;
+        m.mesh = pillars;
+        s.add(m);
+    }
+}
+
+// ---- M-SUNSHAFTS 45c: sun light shafts ----------------------------------------------------------------------------------
+
+// The shafts camera: the cloud sky's (raised, looking 15 degrees up, two thirds sky), the sun placed where the view ray
+// through the frame's uv (kShaftsSunU, kShaftsSunV) points (lens_flare_toward; v = 0 is the bottom row): about 17 degrees
+// above the horizon, a low sun (the elevation fade is 1), just right of the middle (asymmetric on purpose, a flipped u in
+// the pass would put the rays on the other side). The disk's angular radius is the default Sky's (acos 0.9994, about 2
+// degrees: 5 pixels of the 120-pixel frame).
+inline constexpr f32 kShaftsSunU = 0.55f, kShaftsSunV = 0.55f;
+
+inline void sun_shafts_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 3.0f, 0.0f};
+    f.pitch_deg = -15.0f;
+}
+
+inline SunShafts sun_shafts_setting() {
+    SunShafts sh;
+    sh.enabled = true;
+    return sh;
+}
+
+// The sun toward `toward_sun` (shadows off: the column would cast one onto the ground and the cases compare pixels),
+// `shafts` (null: the default, disabled); bloom and FXAA off unless `post_default` (each carries a changed pixel to its
+// neighbours, and the cases compare pixels).
+inline void sun_shafts_scene(Scene3D& s, vec3 toward_sun, const SunShafts* shafts, bool post_default = false) {
+    DirectionalLight sun;
+    sun.direction = -toward_sun;
+    sun.shadows = false;
+    s.set_light(sun);
+    PostFx post = s.post();
+    if (!post_default) {
+        post.bloom = false;
+        post.fxaa = false;
+    }
+    post.shafts = shafts ? *shafts : SunShafts{};
+    s.set_post(post);
+}
+
+// A tall column (the fixture's box, mesh 1, scaled to `width` m square and 12 m tall, standing from 3 m under the ground)
+// `distance` m out along the sun's ray, upright, turned to face the camera across the ray. `shift` moves it sideways in
+// widths: -0.5 puts its right edge through the ray, so it covers the left half of the sun's disk.
+inline void sun_shafts_column(Scene3D& s, vec3 toward_sun, f32 shift = -0.5f, f32 distance = 6.0f, f32 width = 0.3f) {
+    const vec3 back = math::normalize(vec3{-toward_sun.x, 0.0f, -toward_sun.z});  // horizontal, back toward the camera
+    const vec3 x = math::normalize(math::cross(vec3{0.0f, 1.0f, 0.0f}, back));  // the camera's right across the ray
+    const vec3 p = s.view().position + toward_sun * distance;
+    const vec3 t = vec3{p.x, -3.0f, p.z} + x * (shift * width);
+    MeshInstance box;
+    box.mesh = 1;
+    const vec3 cols[4] = {x * width, vec3{0.0f, 12.0f, 0.0f}, back * width, t};
+    for (u32 c = 0; c < 4; ++c) {
+        box.world.c[c][0] = cols[c].x;
+        box.world.c[c][1] = cols[c].y;
+        box.world.c[c][2] = cols[c].z;
+    }
+    s.add(box);
+}
+
+// ---- M-CLOUDSHADOW 51c: cloud shadows on the ground --------------------------------------------------------------------
+
+// The cloud shadow camera: raised 80 m (the orbit target; the camera sits 7 m behind and above it), looking 10 degrees
+// down toward -z over a 6 km ground (cloud_shadow_scene), so the frame is ground from the bottom to about 5 degrees under
+// the horizon (the far plane, 1000 m, clips the ground there) and sky above it: about a third of the rows. The fixture's
+// own box and 12 m ground sit under the camera, out of the frame.
+inline void cloud_shadow_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 80.0f, 0.0f};
+    f.pitch_deg = 10.0f;
+    f.far_z = 1000.0f;  // the orbit camera's own far plane is 20 times its 7 m distance
+}
+
+// The direction toward the sun (unnormalized): about 50 degrees up, ahead and to the right of the camera, out of the frame.
+inline constexpr vec3 kCloudShadowToward{0.35f, 0.8f, -0.45f};
+
+// A small, low cloud layer so a frame shows many patches: 60 m cells 150 m above the camera, wind +x at speed 1 (10 m/s).
+inline Clouds cloud_shadow_clouds(f32 coverage) {
+    Clouds c;
+    c.coverage = coverage;
+    c.scale_m = 60.0f;
+    c.height_m = 150.0f;
+    c.speed = 1.0f;
+    c.wind_dir = {1.0f, 0.0f};
+    return c;
+}
+
+inline CloudShadow cloud_shadow_setting() {
+    CloudShadow cs;
+    cs.enabled = true;
+    cs.strength = 0.8f;
+    return cs;
+}
+
+// The sun toward `toward_sun` (shadows off: the cases compare pixels), `clouds` at scene time `time`, `shadow` (null: the
+// default, disabled), exposure 0.6; `ground` adds the 6 km ground (mesh 2 scaled 500 times in x and z, its top at y 0;
+// false: the sky alone, the reference for which pixels are sky); bloom and FXAA off unless `post_default`.
+inline void cloud_shadow_scene(Scene3D& s, const Clouds& clouds, const CloudShadow* shadow, f32 time,
+                               vec3 toward_sun = kCloudShadowToward, bool ground = true, bool post_default = false) {
+    DirectionalLight sun;
+    sun.direction = -toward_sun;
+    sun.shadows = false;
+    s.set_light(sun);
+    s.set_exposure(0.6f);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_clouds(clouds);
+    PostFx post = s.post();
+    if (!post_default) {
+        post.bloom = false;
+        post.fxaa = false;
+    }
+    post.cloud_shadow = shadow ? *shadow : CloudShadow{};
+    s.set_post(post);
+    if (ground) {
+        MeshInstance g;
+        g.mesh = 2;
+        g.world = math::mat4::identity();
+        g.world.c[0][0] = 500.0f;
+        g.world.c[2][2] = 500.0f;
+        s.add(g);
+    }
+}
+
+// ---- M-CAUSTICS 52b: caustics under water ------------------------------------------------------------------------------
+
+// A shallow pool: the fixture's 12 m ground (its top at y 0) is the floor, the water kCausticsLevel above it and the
+// fixture's 1 m box standing on the floor crosses the surface (its top 0.4 m above the water). The orbit camera's default
+// pose (7 m out, 35 degrees down) sees the floor through the water from above; the far half of the frame is water with
+// nothing behind it, and the sky.
+inline constexpr f32 kCausticsLevel = 0.6f;
+// The direction toward the sun (unnormalized): high (about 64 degrees up), behind the camera and to the right, so neither
+// the disk nor the water's glint is in the frame.
+inline constexpr vec3 kCausticsToward{0.3f, 0.9f, 0.3f};
+
+// Gentle waves at a fixed water time (the floor's look does not move between the frames a case compares) and no foam: the
+// waves turn on the M-WATER2 refraction, through which the water shows the floor seen from above (`amplitude` 0: calm,
+// foamless water is an opaque tint from above, and the pass then records nothing there).
+inline WaterSurface caustics_water(f32 level = kCausticsLevel, f32 amplitude = 0.06f) {
+    WaterSurface w;
+    w.enabled = true;
+    w.level_y = level;
+    w.amplitude = amplitude;
+    w.wavelength = 6.0f;
+    w.foam_amount = 0.0f;
+    w.time = 3.0f;
+    return w;
+}
+
+inline Caustics caustics_setting() {
+    Caustics c;
+    c.enabled = true;
+    c.strength = 1.0f;
+    c.scale = 1.5f;  // 1.5 m cells: about eight across the floor
+    return c;
+}
+
+// The sun toward `toward_sun` (shadows off: the box would cast one, and the cases compare pixels), the water `w` (null:
+// none), `caustics` (null: the default, disabled) at scene time `time`, exposure 0.45 (the floor seen through the
+// water stays off the tonemapper's shoulder); bloom and FXAA off unless
+// `post_default` (each carries a changed pixel to its neighbours, and the cases compare pixels).
+inline void caustics_scene(Scene3D& s, const WaterSurface* w, const Caustics* caustics, f32 time,
+                           vec3 toward_sun = kCausticsToward, bool post_default = false) {
+    DirectionalLight sun;
+    sun.direction = -toward_sun;
+    sun.shadows = false;
+    s.set_light(sun);
+    s.set_exposure(0.45f);
+    s.set_time(time, 1.0f / 60.0f);
+    PostFx post = s.post();
+    if (!post_default) {
+        post.bloom = false;
+        post.fxaa = false;
+    }
+    post.caustics = caustics ? *caustics : Caustics{};
+    s.set_post(post);
+    if (w) s.set_water(*w);
+}
+
+// ---- M-CIRRUS 53b: the high cirrus streaks ---------------------------------------------------------------------------
+
+// The cirrus as the kit extract hands it over: `coverage`, the default streaks (density 0.35, 3000 m cells stretched 6:1,
+// speed 2, 9000 m up) combed along a wind toward +x and slightly toward the camera (+z), so they cross the frame of a
+// camera looking toward -z on a diagonal, at scene time `time` (s; the scene's clock drives the drift).
+inline constexpr math::vec2 kCirrusWind{0.8f, 0.6f};
+inline Cirrus cirrus_carrier(f32 coverage = 0.55f) {
+    Cirrus c;
+    c.coverage = coverage;
+    c.wind_dir = kCirrusWind;
+    return c;
+}
+
+// The cirrus day: cloud_sky_scene's camera, sun (33 degrees up on the camera's right front) and gradient sky with the
+// cirrus `cirrus` and the low layer `clouds` (Clouds{}: none) at scene time `time`.
+inline void cirrus_sky_scene(Scene3D& s, const Cirrus& cirrus, const Clouds& clouds = Clouds{}, f32 time = 30.0f) {
+    cloud_sky_scene(s, clouds, time);
+    s.set_cirrus(cirrus);
+}
+
+// The cirrus dusk: the sun 3 degrees under the horizon ahead of the camera and to its right (a DayCycle's light half an
+// hour after its 18:00 key: still warm, dimmer), a dusk gradient (a warm horizon under a deep blue zenith) and ambient,
+// the cirrus `cirrus` and the low layer `clouds` at scene time `time`. At this sun the low layer's light term is nearly
+// gone (smoothstep(-0.1, 0.1, sun.y)) while the cirrus's (smoothstep(-0.16, 0.04, sun.y)) still lights the streaks.
+inline constexpr vec3 kCirrusDuskToward{0.33f, -0.05f, -0.94f};  // toward the sun (normalized by the upload)
+inline void cirrus_dusk_scene(Scene3D& s, const Cirrus& cirrus, const Clouds& clouds = Clouds{}, f32 time = 30.0f) {
+    DirectionalLight sun;
+    sun.direction = -kCirrusDuskToward;
+    sun.color = {1.0f, 0.5f, 0.27f};
+    sun.intensity = 0.85f;
+    sun.ambient_sky = {0.2f, 0.17f, 0.24f};
+    sun.ambient_ground = {0.08f, 0.06f, 0.06f};
+    s.set_light(sun);
+    Sky sky;
+    sky.zenith = {0.05f, 0.07f, 0.17f};
+    sky.horizon = {0.55f, 0.32f, 0.26f};
+    sky.ground = {0.06f, 0.05f, 0.05f};
+    s.set_sky(sky);
+    s.set_exposure(1.0f);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_clouds(clouds);
+    s.set_cirrus(cirrus);
+}
+
+// ---- M-HALO 54b: the ice halo and sun dogs through the cirrus ---------------------------------------------------------
+
+// The halo as the kit extract hands it over: `strength`, the default sun dogs (1), moon ring (0.5) and dispersion (1).
+inline Halo halo_carrier(f32 strength = 1.0f) {
+    Halo h;
+    h.strength = strength;
+    return h;
+}
+
+// A thick cirrus deck for the halo (coverage 0.85, density 0.7: a near-continuous veil the ring shows through).
+inline Cirrus halo_cirrus(f32 coverage = 0.85f) {
+    Cirrus c = cirrus_carrier(coverage);
+    c.density = 0.7f;
+    return c;
+}
+
+// The halo camera: raised 3 m and looking 14 degrees up toward -z (the frame spans about -8 to 36 degrees of elevation
+// and +-29 degrees of azimuth), so a sun low in front of it shows the whole upper half of the 22 degree ring and both
+// dogs.
+inline void halo_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 3.0f, 0.0f};
+    f.pitch_deg = -14.0f;
+}
+
+// The halo day: the default gradient sky and light, the sun `elevation_deg` up straight ahead of the halo camera (toward
+// -z), the cirrus `cirrus`, the halo `halo` and the low layer `clouds`, at scene time `time`.
+inline vec3 halo_sun_toward(f32 elevation_deg) {
+    const f32 e = math::radians(elevation_deg);
+    return vec3{0.0f, std::sin(e), -std::cos(e)};
+}
+inline void halo_sky_scene(Scene3D& s, const Cirrus& cirrus, const Halo& halo, f32 elevation_deg = 12.0f,
+                           const Clouds& clouds = Clouds{}, f32 time = 30.0f) {
+    DirectionalLight sun;
+    sun.direction = -halo_sun_toward(elevation_deg);
+    s.set_light(sun);
+    s.set_exposure(0.6f);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_clouds(clouds);
+    s.set_cirrus(cirrus);
+    s.set_halo(halo);
+}
+
+// The halo night: night_sky_scene's dark sky and dim light from under the horizon behind the camera, a full moon 15
+// degrees up straight ahead of the halo camera (its ring's upper half in the frame), no stars, the cirrus and the halo.
+inline constexpr vec3 kHaloMoonDir{0.0f, 0.25881904f, -0.96592583f};  // toward the moon, 15 degrees up toward -z
+inline NightSky halo_night_carrier(f32 moon_intensity = 6.0f) {
+    NightSky n = night_sky_carrier(0.5f, 0.0f, moon_intensity);
+    n.moon_dir = kHaloMoonDir;
+    return n;
+}
+inline void halo_night_scene(Scene3D& s, const NightSky& night, const Cirrus& cirrus, const Halo& halo) {
+    night_sky_scene(s, night);
+    s.set_time(30.0f, 1.0f / 60.0f);
+    s.set_cirrus(cirrus);
+    s.set_halo(halo);
 }
 
 }  // namespace mce::render_test

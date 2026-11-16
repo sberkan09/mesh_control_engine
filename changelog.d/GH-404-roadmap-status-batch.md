@@ -1,0 +1,1 @@
+- ROADMAP status batch (2026-10-18): M-IMPORTMEDIA, M-FUZZ, M-MOVE3D, M-DAYNIGHT done; M-WORKFLOW and M-SCRIPT3 follow their records; M-SCRIPT4, M-WEATHER and M-DEBUGVIEW in progress.

@@ -423,7 +423,10 @@ void InputSystem::begin_frame(Span<const Event> events) {
 }
 
 void InputSystem::push_event(const Event& e) {
-    if (!is_input_event(e.type) || ((e.flags & platform::EventFlag::ConsumedByEditor) && is_press(e.type))) {
+    // A NaN or infinite coordinate (a bad driver report) would stick in the pad axes and the mouse
+    // delta, and poison every later tick: such an event is dropped.
+    const bool finite = std::isfinite(e.x) && std::isfinite(e.y);
+    if (!finite || !is_input_event(e.type) || ((e.flags & platform::EventFlag::ConsumedByEditor) && is_press(e.type))) {
         ++stats_.events_ignored;
         return;
     }

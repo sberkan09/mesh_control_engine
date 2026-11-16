@@ -2,6 +2,7 @@
 
 #include "kit3d_internal.h"
 #include "mce/containers/hash_map.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
@@ -193,12 +194,31 @@ void kit3d_joint_state(Frame& f) {
     });
 }
 
+// Floating origin: a joint without `connected` holds its far end in world space. Move it, and the settings the
+// joint was built (or refused) with, alike: no rebuild. The Jolt side moved in World3D::shift_origin.
+void joints3d_origin_shift(World& w, const math::vec3& d, void*) {
+    Joints3DState* st = w.try_resource<Joints3DState>();
+    const ecs::ComponentId id = w.find_component(kTypeHash<Joint3D>);
+    if (!st || id == ecs::kInvalidComponent) return;
+    Array<Entity> held;
+    w.query<const Joint3D>().each([&](Entity e, const Joint3D& j) {
+        if (j.connected.is_null()) held.push_back(e);
+    });
+    for (Entity e : held) {
+        Joint3D* j = static_cast<Joint3D*>(w.get_raw_mut(e, id));  // no change stamp: not an edit
+        j->connected_anchor = j->connected_anchor - d;
+        if (Built* b = st->built.find(e)) b->shape.connected_anchor = b->shape.connected_anchor - d;
+        if (Joint3D* f = st->failed.find(e)) f->connected_anchor = f->connected_anchor - d;
+    }
+}
+
 }  // namespace
 
 void install_joints3d(World& world, asset::AssetSystem* assets) {
     install_bodies3d(world, assets);
     if (world.try_resource<Joints3DState>()) return;
     world.set_resource(Joints3DState{});
+    on_origin_shift(world, &joints3d_origin_shift);
     world.register_components<Joint3D>();
     world.register_event<JointBreak3D>(Phase::FixedUpdate_Physics);
     world.set_hooks<Joint3D>(nullptr, &on_joint_removed);

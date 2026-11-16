@@ -1,0 +1,1 @@
+- M-LIGHTNINGBOLT plan (docs only): `docs/milestones/M-LIGHTNINGBOLT.md` gives lightning strikes a deterministic world position near the camera, makes `ThunderDelay` use the real distance and draws a procedural jagged emissive bolt (and an optional point light) for the flash ticks, reusing an existing draw path; steps 11a to 11d.

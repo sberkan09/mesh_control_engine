@@ -263,6 +263,7 @@ u64 hash_config(const ConfigValues& v) {
 void FileConfigFetcher::fetch(ConfigFetchSink& sink) {
     asset::AssetSystem assets;
     const StringView roots[1] = {path_.view()};
+    // A fetched config is data: the default mount options drop any script it carries.
     if (!assets.mount(Span<const StringView>(roots, 1))) {
         MCE_LOG_WARN("remote_config: cannot read {}", path_.view());
         return sink.fetch_failed();

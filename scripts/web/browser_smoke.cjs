@@ -12,6 +12,9 @@
 // --persist also checks saves survive a reload: it writes a probe file under /persistent, asks the
 // page to store it in IndexedDB, reloads, and expects the file back once the app runs again.
 //
+// The canvas screenshot waits for a rendered frame: the 3D samples take about a minute for one under
+// SwiftShader, so it gets 180 s (SMOKE_SHOT_TIMEOUT_MS overrides).
+//
 // Needs Playwright (npm -g) and a Chromium; PLAYWRIGHT_BROWSERS_PATH or /opt/pw-browsers/chromium.
 const http = require('http');
 const fs = require('fs');
@@ -101,7 +104,8 @@ const server = http.createServer((req, res) => {
     // The shipped page's cover (scripts/web/shell.html) would hide the game; the smoke presses nothing.
     await tab.evaluate(() => { const c = document.getElementById('mce-cover'); if (c) c.style.display = 'none'; });
     const canvas = tab.locator('#canvas');
-    const png = await canvas.screenshot({ path: out });
+    const shotTimeout = Number(process.env.SMOKE_SHOT_TIMEOUT_MS || 180000);
+    const png = await canvas.screenshot({ path: out, timeout: shotTimeout });
     // A flat canvas means nothing drew: decode the screenshot (a WebGPU canvas cannot be read back
     // after it is presented), sample a grid and require more than one colour.
     const colours = await tab.evaluate(async (url) => {

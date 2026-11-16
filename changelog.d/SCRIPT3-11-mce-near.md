@@ -1,0 +1,1 @@
+- `mce.near(center, radius, component?, exclude?)`, M-SCRIPT3 step 11: the entities within a radius of a point, nearest first, with no physics world, for pickups, aggro ranges and touch tests.

@@ -1,0 +1,1 @@
+- Physics, M-PHYSDRIVE2D: `LaunchVelocity2D` does not fire again after a save is loaded, and a zero `ConstantForce2D` no longer keeps a sleeping body awake.

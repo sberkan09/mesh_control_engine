@@ -1,0 +1,1 @@
+- A UI document chunk with exactly `kMaxDocumentWidgets` widgets loads and one more is refused as out of bounds, leaving nothing half loaded (`tests/ui/test_ui_screen_link.cpp`).

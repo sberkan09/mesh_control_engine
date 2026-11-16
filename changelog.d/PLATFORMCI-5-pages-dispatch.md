@@ -1,0 +1,1 @@
+- Pages workflow can be started by hand (`workflow_dispatch`) and deploys from master on any non-PR trigger (M-PLATFORM-CI 6d).

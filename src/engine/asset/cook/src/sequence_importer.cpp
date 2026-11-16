@@ -186,13 +186,7 @@ public:
             detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-sequence\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kSequenceFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported sequence version (this cook reads version %u)", kSequenceFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kSequenceFormatVersion, "sequence", file, kStage, diags)) return false;
 
         asset::SequenceHeader header{};
         if (const JsonValue name = doc.get("name"); name.valid()) {

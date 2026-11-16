@@ -1,0 +1,24 @@
+{
+ "format": "mce-material",
+ "version": 1,
+ "guid": "e07d2480-8828-542c-b678-91110afa36ad",
+ "name": "lamp",
+ "base_color": [
+  0.1,
+  0.1,
+  0.12,
+  1
+ ],
+ "metallic": 0.1,
+ "roughness": 0.3,
+ "emissive": [
+  2.2,
+  1.6,
+  0.8
+ ],
+ "alpha_mode": "opaque",
+ "alpha_cutoff": 0.5,
+ "double_sided": false,
+ "unlit": false,
+ "textures": {}
+}

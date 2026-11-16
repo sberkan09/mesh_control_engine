@@ -1,0 +1,1 @@
+- M-WINDDIR milestone record (one scene wind direction for foliage sway and the snow lee side, opt-in), planned in `docs/milestones/M-WINDDIR.md`.

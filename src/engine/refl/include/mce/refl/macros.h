@@ -13,7 +13,7 @@
 // Each field is either a bare member name or `(name, attributes...)`. Attributes:
 //   Range{min, max}   editor drag limits (sets FieldFlags::EditorRange)
 //   Help{"text"}      tooltip / doc string
-//   ReadOnly, Transient, Save, Replicated   FieldFlags bits
+//   ReadOnly, Transient, Save, Replicated, WorldPoint   FieldFlags bits
 //
 // MCE_COMPONENT marks the type as an ECS component (TypeFlags::Component) and enforces the
 // component rule: trivially copyable, standard layout. MCE_REFL_STRUCT reflects a plain value
@@ -50,6 +50,7 @@ inline constexpr Flag ReadOnly{FieldFlags::ReadOnly};
 inline constexpr Flag Transient{FieldFlags::Transient};
 inline constexpr Flag Save{FieldFlags::Save};
 inline constexpr Flag Replicated{FieldFlags::Replicated};
+inline constexpr Flag WorldPoint{FieldFlags::WorldPoint};  // Vec3 fields (or fixed arrays of them); others are ignored
 }  // namespace attr
 
 namespace detail {

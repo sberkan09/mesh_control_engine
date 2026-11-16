@@ -8,6 +8,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/cook/cook.h"
 #include "mce/ecs/hierarchy.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/scene/scene.h"
 #include "mce/scene/streaming.h"
@@ -22,6 +23,7 @@ constexpr const char* kChunkA = "5ce4e000-2222-4000-8000-00000000000a";
 constexpr const char* kChunkB = "5ce4e000-2222-4000-8000-00000000000b";
 constexpr const char* kChunkC = "5ce4e000-2222-4000-8000-00000000000c";
 constexpr const char* kNoChunks = "5ce4e000-2222-4000-8000-000000000002";
+constexpr const char* kOrigin = "5ce4e000-2222-4000-8000-000000000003";
 
 void write_scene(const std::string& root, const char* file, const char* guid, const std::string& entities) {
     write_file(root + "/assets/" + file, std::string("{ \"format\": \"mce-scene\", \"version\": 1, \"guid\": \"") + guid +
@@ -51,6 +53,11 @@ std::string make_streaming_project(const char* name) {
                    { "name": "Moss", "components": { "LocalTransform": { "position": [0, 1, 0] }, "ChildOf": { "parent": "$0" } } })");
     write_scene(root, "chunk_b.mcscene", kChunkB, R"({ "name": "Tree", "components": { "LocalTransform": { "position": [20, 0, 0] } } })");
     write_scene(root, "chunk_c.mcscene", kChunkC, R"({ "name": "Tower", "components": { "LocalTransform": { "position": [40, 0, 0] } } })");
+    // The same world with a floating origin (threshold 16 m, 8 m cells).
+    write_scene(root, "origin.mcscene", kOrigin,
+                std::string(R"({ "name": "Player", "components": { "LocalTransform": {}, "StreamingFocus": {} } },)") +
+                    chunk_entity("ChunkA", 0, kChunkA) + "," + chunk_entity("ChunkB", 20, kChunkB) + "," +
+                    R"({ "name": "Origin", "components": { "FloatingOrigin3D": { "threshold": 16, "snap": 8 } } })");
     write_scene(root, "plain.mcscene", kNoChunks, R"({ "name": "Lonely", "components": { "LocalTransform": {} } })");
     return root;
 }
@@ -320,4 +327,107 @@ TEST_CASE("scene change: scenes that name each other in a loop cook (scene refer
     // A link to a scene that is not there is still an error.
     write_scene(root, "level.mcscene", kLevel, link("ToNowhere", "5ce4e000-3333-4000-8000-0000000000ff"));
     CHECK_FALSE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+}
+
+TEST_CASE("streaming: a floating origin rebases around the focus and chunks land relative to it") {
+    Fixture f("stream_origin", false, kOrigin);
+    REQUIRE(f.base.size() == 4);
+    const Entity A = f.base[1], B = f.base[2];
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    REQUIRE(world_origin(f.world));  // installed with the scene's snap on the first pump
+    CHECK(world_origin(f.world)->serial == 0);  // the focus is at the origin: nothing to do yet
+    CHECK(world_origin(f.world)->snap == 8.0f);
+    CHECK(f.state(A) == scene::ChunkState::Loaded);
+    const Entity rock = f.streaming().entities(A)[0];
+
+    // 15 m out: inside the 16 m threshold, no rebase.
+    f.move_focus(15.0f);
+    scene::pump_streaming(f.world);
+    CHECK(world_origin(f.world)->serial == 0);
+
+    // 17 m: the world moves by round(17 / 8) = 2 cells = 16 m, before the chunks are judged.
+    f.move_focus(17.0f);
+    scene::pump_streaming(f.world);
+    const WorldOrigin* o = world_origin(f.world);
+    REQUIRE(o);
+    CHECK(o->cell[0] == 2);
+    CHECK(o->serial == 1);
+    CHECK(f.world.try_get<LocalTransform>(f.base[0])->position.x == 1.0f);
+    CHECK(f.world.try_get<LocalTransform>(B)->position.x == 4.0f);
+    CHECK(f.state(B) == scene::ChunkState::Loaded);
+    REQUIRE(f.streaming().entities(B).size() == 1);
+    // The tree is authored at x = 20 (absolute); it lands at 20 - 16.
+    CHECK(f.world.try_get<LocalTransform>(f.streaming().entities(B)[0])->position.x == 4.0f);
+    CHECK(to_absolute(f.world, f.world.try_get<LocalTransform>(f.streaming().entities(B)[0])->position).x == 20.0);
+    CHECK_FALSE(f.world.alive(rock));  // A is 12 m behind: unloaded as before
+
+    // Back to A: it reloads in place (rock at absolute 1), and no further rebase happens near the origin.
+    f.move_focus(-15.0f);  // absolute 1
+    scene::pump_streaming(f.world);
+    CHECK(o->serial == 1);
+    CHECK(f.state(A) == scene::ChunkState::Loaded);
+    CHECK(f.world.try_get<LocalTransform>(f.streaming().entities(A)[0])->position.x == -15.0f);
+}
+
+TEST_CASE("streaming: floating origin runs are deterministic") {
+    u64 hashes[2] = {};
+    for (u64& h : hashes) {
+        Fixture f("stream_origin_det", false, kOrigin);
+        scene::pump_streaming(f.world, scene::PumpMode::Settle);
+        for (int i = 0; i < 60; ++i) {
+            f.move_focus(f.world.try_get<LocalTransform>(f.base[0])->position.x + 0.75f);
+            scene::pump_streaming(f.world);
+        }
+        h = f.world.state_hash();
+        CHECK(world_origin(f.world)->serial >= 2);
+    }
+    CHECK(hashes[0] == hashes[1]);
+}
+
+TEST_CASE("streaming: unload_all destroys every streamed entity, pinned chunks included, and a pump brings them back") {
+    Fixture f("stream_unload_all", false);
+    const Entity A = f.base[1], C = f.base[3];
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    REQUIRE(f.state(A) == scene::ChunkState::Loaded);
+    REQUIRE(f.state(C) == scene::ChunkState::Loaded);
+    const Entity rock = f.streaming().entities(A)[0];
+    REQUIRE(f.world.entity_count() == 4 + 2 + 1);
+
+    const u64 unloads = f.streaming().stats().total_unloads;
+    f.streaming().unload_all(f.world);
+    CHECK_FALSE(f.world.alive(rock));
+    CHECK(f.world.entity_count() == 4);  // the focus and the three chunk entities stay
+    CHECK(f.streaming().entities(A).empty());
+    CHECK(f.streaming().entities(C).empty());
+    CHECK(f.streaming().stats().total_unloads == unloads + 2);  // A and the pinned C
+
+    f.streaming().unload_all(f.world);  // nothing left: a no-op
+    CHECK(f.world.entity_count() == 4);
+    CHECK(f.streaming().stats().total_unloads == unloads + 2);
+
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    CHECK(f.state(A) == scene::ChunkState::Loaded);
+    CHECK(f.state(C) == scene::ChunkState::Loaded);
+    CHECK(f.world.entity_count() == 4 + 2 + 1);
+}
+
+TEST_CASE("streaming: update_floating_origin rebases once when asked and is a no-op in a world without an origin") {
+    {
+        Fixture plain("stream_no_origin", false, kNoChunks);
+        CHECK_FALSE(scene::update_floating_origin(plain.world));
+    }
+    Fixture f("stream_update_origin", false, kOrigin);
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    REQUIRE(world_origin(f.world));
+    CHECK_FALSE(scene::update_floating_origin(f.world));  // the focus is at the origin
+    f.move_focus(15.0f);
+    CHECK_FALSE(scene::update_floating_origin(f.world));  // inside the 16 m threshold
+    CHECK(world_origin(f.world)->serial == 0);
+    f.move_focus(17.0f);
+    CHECK(scene::update_floating_origin(f.world));  // round(17 / 8) = 2 cells = 16 m
+    CHECK(world_origin(f.world)->cell[0] == 2);
+    CHECK(world_origin(f.world)->serial == 1);
+    CHECK(f.world.try_get<LocalTransform>(f.base[0])->position.x == 1.0f);
+    CHECK_FALSE(scene::update_floating_origin(f.world));  // already rebased
+    CHECK(world_origin(f.world)->serial == 1);
 }

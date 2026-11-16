@@ -248,3 +248,17 @@ TEST_CASE("gltf lod: bad settings fail the cook; MeshView rejects a LOD range pa
     std::memcpy(blob.data() + at, &l, sizeof l);
     CHECK_FALSE(MeshView::read(Span<const byte>(blob.data(), blob.size())).has_value());
 }
+
+TEST_CASE("gltf lod: lod_levels 3 is the last accepted value, 4 (the first over kMaxMeshLods) and -1 are refused") {
+    CookService svc;
+    const std::string ok = rock_project("lod_limit_3", false, "{ \"lod_levels\": 3 }");
+    const CookReport r3 = svc.cook(ok.c_str(), CookOptions{});
+    INFO(diag_text(r3));
+    CHECK(r3.ok());
+    for (const char* settings : {"{ \"lod_levels\": 4 }", "{ \"lod_levels\": -1 }"}) {
+        const std::string bad = rock_project("lod_limit_bad", false, settings);
+        const CookReport r = svc.cook(bad.c_str(), CookOptions{});
+        CHECK_FALSE(r.ok());
+        CHECK(diag_text(r).find("'lod_levels' must be a whole number 0..3") != std::string::npos);
+    }
+}

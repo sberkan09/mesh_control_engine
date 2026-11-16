@@ -1,0 +1,1 @@
+- The input script parser accepts exactly `kMaxActions` actions on a line and refuses one more; at most `kMaxActions` distinct actions are live on one tick (`tests/input/test_script.cpp`).

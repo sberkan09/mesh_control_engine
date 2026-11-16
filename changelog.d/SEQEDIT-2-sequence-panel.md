@@ -1,0 +1,1 @@
+- Sequence panel, M-SEQEDIT step 2 (closes the milestone): a double click on a `.mcseq` in Assets opens the Sequence panel (step list with add, remove and reorder, per-kind fields, sound and prefab pickers, loop, Save cooks first, Revert).

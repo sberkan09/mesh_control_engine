@@ -291,3 +291,63 @@ TEST_CASE("undo: a scene re-read from disk (an MCP client saved it) is one undoa
     CHECK(text_of(s) == z);
     CHECK_FALSE(s.reload_text("{ not json", "disk", diags));
 }
+
+TEST_CASE("undo fuzz: reparenting, copy/paste and parent deletes undo to byte-identical documents") {
+    for (u32 seed = 1; seed <= 30; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        EditorScene s;
+        for (int i = 0; i < 8; ++i) s.create_entity("N" + std::to_string(i), true);
+        s.clear_undo();
+        const std::string start = text_of(s);
+
+        std::vector<std::string> states{start};
+        for (int i = 0; i < 120; ++i) {
+            const usize before = s.undo_count();
+            s.seal_undo();
+            const EntityId a = random_entity(s, rng);
+            const EntityId b = random_entity(s, rng);
+            switch (rng() % 5) {
+                case 0:
+                    if (a && b && a != b) s.set_parent(a, b);
+                    break;
+                case 1:
+                    if (a) s.set_parent(a, kNoEntity);
+                    break;
+                case 2:
+                    if (a) {
+                        const EntityId ids[] = {a};
+                        cook::String clip;
+                        s.copy_entities(Span<const EntityId>(ids, 1), clip);
+                        cook::DiagList diags;
+                        s.paste_entities(clip.view(), -1, diags);
+                    }
+                    break;
+                case 3:
+                    if (a) s.destroy_entity(a);
+                    break;
+                default:
+                    s.create_entity("M" + std::to_string(rng() % 50), true);
+                    break;
+            }
+            if (s.undo_count() != before)
+                states.push_back(text_of(s));
+            else
+                CHECK(text_of(s) == states.back());
+            REQUIRE(s.verify_world());
+        }
+        const std::string end = text_of(s);
+        usize k = states.size() - 1;
+        while (s.can_undo()) {
+            REQUIRE(s.undo());
+            --k;
+            CHECK(text_of(s) == states[k]);
+        }
+        CHECK(k == 0);
+        CHECK(text_of(s) == start);
+        CHECK(s.verify_world());
+        while (s.can_redo()) REQUIRE(s.redo());
+        CHECK(text_of(s) == end);
+        CHECK(s.verify_world());
+    }
+}

@@ -1,0 +1,1 @@
+- M-AURORA step 16e (docs and close): guide sections 9.19n and 8.3 night-sky aurora text, the `12_weather` sample entry and the milestone record; docs only.

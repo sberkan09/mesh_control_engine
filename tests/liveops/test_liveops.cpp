@@ -270,3 +270,41 @@ TEST_CASE("service: the outbox uploader and the file backend end to end") {
     set_consent(Consent::Unknown);
     analytics::reset();
 }
+
+TEST_CASE("analytics: exactly kMaxParams params are accepted, one more is not") {
+    analytics::reset();
+    set_consent(Consent::Unknown);
+    analytics::Params full;
+    for (u32 i = 0; i < analytics::kMaxParams; ++i) full.add((std::string("p") + std::to_string(i)).c_str(), 1);
+    CHECK_FALSE(full.bad());
+    CHECK(analytics::event("full", full));
+    full.add("one_more", 1);
+    CHECK(full.bad());
+    CHECK_FALSE(analytics::event("over", full));
+    CHECK(analytics::stats().queued == 1);
+    CHECK(analytics::stats().rejected == 1);
+    analytics::reset();
+}
+
+TEST_CASE("crash reports: a report of exactly kMaxReportBytes is sent, one byte more is skipped") {
+    const fs::path dir = fresh_dir("crash_size");
+    write_text(dir / "a-fits.crash", std::string(CrashReports::kMaxReportBytes, 'x'));
+    write_text(dir / "b-over.crash", std::string(CrashReports::kMaxReportBytes + 1, 'x'));
+    write_text(dir / "c-small.crash", "ok");
+
+    set_consent(Consent::Granted);
+    ScriptedUploader up;
+    CrashReports reports;
+    CHECK(reports.scan(StringView(dir.string().c_str())) == 3);
+    reports.set_uploader(&up);
+    for (int i = 0; i < 4; ++i) reports.update();
+
+    CHECK(up.got.find("a-fits.crash=") == 0);
+    CHECK(up.got.find("b-over.crash") == std::string::npos);
+    CHECK(up.got.find("c-small.crash=ok;") != std::string::npos);
+    CHECK(reports.sent() == 2);
+    CHECK(reports.failed() == 1);
+    CHECK(fs::exists(dir / "b-over.crash"));  // kept, not renamed
+    CHECK(fs::exists(dir / "a-fits.crash.sent"));
+    set_consent(Consent::Unknown);
+}

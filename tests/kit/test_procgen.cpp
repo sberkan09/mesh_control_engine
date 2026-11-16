@@ -340,3 +340,25 @@ TEST_CASE("wfc: more than 64 tiles is an error") {
     CHECK(std::string(r.error().stage).find("64") != std::string::npos);
     CHECK_FALSE(WfcRules::from_example(std::span<const u32>(example.data(), 3), 2, 2).has_value());
 }
+
+TEST_CASE("procgen: next_u32 is the high half of next_u64 and below stays in range") {
+    Rng a(1234);
+    Rng b(1234);
+    for (u32 i = 0; i < 64; ++i) CHECK(a.next_u32() == static_cast<u32>(b.next_u64() >> 32));
+    Rng c(99);
+    for (u32 i = 0; i < 256; ++i) CHECK(c.below(7) < 7);
+    CHECK(c.below(0) == 0);
+}
+
+TEST_CASE("wfc: allow_mask lists the dense indices allowed next to a tile, both ways round") {
+    const WfcRules r = shore_rules();
+    for (u32 i = 0; i < r.tile_count(); ++i) {
+        for (u32 d = 0; d < 4; ++d) {
+            const WfcDir dir = static_cast<WfcDir>(d);
+            const u64 mask = r.allow_mask(dir, i);
+            for (u32 j = 0; j < r.tile_count(); ++j)
+                CHECK(((mask >> j) & 1u) == (r.allows(r.id_of(i), dir, r.id_of(j)) ? 1u : 0u));
+            CHECK((mask >> r.tile_count()) == 0);  // no bit beyond the known tiles
+        }
+    }
+}

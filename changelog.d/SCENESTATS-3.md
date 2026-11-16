@@ -1,0 +1,1 @@
+- MCP, M-SCENESTATS step 3: `scene_stats` tool returns what the open scene (or a saved one) holds.

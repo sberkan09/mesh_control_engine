@@ -1,0 +1,1 @@
+- Editor, M-SELALL: Ctrl+A selects every entity of the scene and Ctrl+I the ones that are not selected; both are in Edit > Select.

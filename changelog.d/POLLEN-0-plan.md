@@ -1,0 +1,1 @@
+- M-POLLEN plan (docs only): `docs/milestones/M-POLLEN.md` plans an opt-in `Pollen` kit component that makes pale specks drift on the wind around the camera on spring days (strength from the `Season` spring window, daylight and dry weather), drawn as one camera-following particle emitter with no shader and no state; steps 24a to 24d. Follow-up of M-FIREFLIES and M-LEAFFALL.

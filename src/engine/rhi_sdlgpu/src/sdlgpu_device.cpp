@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 #include "mce/log.h"
 #include "mce/math/math.h"
@@ -28,6 +29,8 @@ SDL_GPUTextureFormat sdl_format(TextureFormat f) {
         case TextureFormat::R11G11B10F: return SDL_GPU_TEXTUREFORMAT_R11G11B10_UFLOAT;
         case TextureFormat::BC1_UNorm: return SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM;
         case TextureFormat::BC3_UNorm: return SDL_GPU_TEXTUREFORMAT_BC3_RGBA_UNORM;
+        case TextureFormat::BC4_UNorm: return SDL_GPU_TEXTUREFORMAT_BC4_R_UNORM;
+        case TextureFormat::BC1_SRGB: return SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM_SRGB;
         case TextureFormat::BC5_UNorm: return SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM;
         case TextureFormat::BC7_UNorm: return SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM;
         case TextureFormat::BC7_SRGB: return SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM_SRGB;
@@ -38,14 +41,6 @@ SDL_GPUTextureFormat sdl_format(TextureFormat f) {
         case TextureFormat::ASTC_4x4_SRGB: return SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM_SRGB;
     }
     return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-}
-
-usize level_bytes(TextureFormat f, u32 w, u32 h) {
-    if (is_compressed_format(f)) {
-        const usize block = f == TextureFormat::BC1_UNorm ? 8 : 16;
-        return usize((w + 3) / 4) * ((h + 3) / 4) * block;
-    }
-    return usize(w) * h * bytes_per_pixel(f);
 }
 
 SDL_GPUSampleCount sample_count(u32 n) {
@@ -202,6 +197,7 @@ ResultV SdlGpuDevice::init() {
     caps_.max_uniform_block_size = 32768;   // SDL_PushGPU*UniformData limit
     caps_.shader_draw_parameters = true;
     caps_.timestamp_queries = false;        // SDL GPU has no timestamp queries (ADR-0038 §7)
+    caps_.fence_timestamps = true;          // fences in their place (sdlgpu_device.h)
     caps_.storage_buffer_alignment = 256;
     // Compute (M-VISUAL 1). SDL GPU reports no limits: these are Vulkan's guaranteed minimums (Metal's
     // are higher). On Apple the compute stage goes through the MSL path like the graphics ones.
@@ -211,6 +207,16 @@ ResultV SdlGpuDevice::init() {
     caps_.max_compute_group_size[2] = 64;
     for (u32& n : caps_.max_compute_group_count) n = 65535;
     caps_.max_storage_image_units = kMaxImageUnits;
+    {
+        const auto sampled = [this](SDL_GPUTextureFormat f) {
+            return SDL_GPUTextureSupportsFormat(device_, f, SDL_GPU_TEXTURETYPE_2D_ARRAY, SDL_GPU_TEXTUREUSAGE_SAMPLER);
+        };
+        caps_.texture_bc = sampled(SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_BC4_R_UNORM) &&
+                           sampled(SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM) &&
+                           sampled(SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM_SRGB) && sampled(SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM_SRGB);
+        caps_.texture_bc_srgb = caps_.texture_bc && sampled(SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM_SRGB);
+        caps_.texture_astc = sampled(SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM_SRGB);
+    }
     MCE_LOG_INFO("rhi.sdlgpu: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
     default_depth_format_ =
@@ -275,6 +281,7 @@ SdlGpuDevice::~SdlGpuDevice() { release_all(); }
 void SdlGpuDevice::release_all() {
     if (!device_) return;
     flush_pending();
+    stop_timing();
     SDL_WaitForGPUIdle(device_);
     for (SlotRings& r : rings_) {
         if (r.fence) SDL_ReleaseGPUFence(device_, r.fence);
@@ -721,6 +728,80 @@ TextureDesc SdlGpuDevice::texture_desc(TextureHandle h) const {
     return d;
 }
 
+// ---- fence timestamps ------------------------------------------------------------------------
+
+// The waiter: one fence at a time, in submit order, so `passed_ns` only grows. It polls the fence for up to
+// kTimingSpinNs before it blocks: a blocking wait wakes tens of microseconds late, and a frame's work that
+// finished within that lateness of the previous fence read as 0 (2D frames on an RTX 4090: p50 0.001 ms against
+// GL's 0.008-0.026). Only measuring runs write fence timestamps, so the spinning core is theirs.
+void SdlGpuDevice::timing_loop() {
+    std::unique_lock<std::mutex> lock(timing_mutex_);
+    for (;;) {
+        timing_cv_.wait(lock, [this] { return timing_stop_ || timing_head_ < timing_waiting_.size(); });
+        if (timing_head_ == timing_waiting_.size()) return;  // stopping, and every fence passed
+        TimedFence t = timing_waiting_[timing_head_];
+        lock.unlock();
+        const u64 spin_until = SDL_GetTicksNS() + kTimingSpinNs;
+        bool passed = SDL_QueryGPUFence(device_, t.fence);
+        while (!passed && SDL_GetTicksNS() < spin_until) {
+            std::this_thread::yield();
+            passed = SDL_QueryGPUFence(device_, t.fence);
+        }
+        if (!passed) SDL_WaitForGPUFences(device_, true, &t.fence, 1);
+        t.passed_ns = SDL_GetTicksNS();
+        lock.lock();
+        timing_passed_.push_back(t);
+        if (++timing_head_ == timing_waiting_.size()) {
+            timing_waiting_.clear();
+            timing_head_ = 0;
+        }
+    }
+}
+
+// The passed fences become timestamps. A timestamp's value is GPU-busy time: a fence's work started when it
+// was submitted or when the previous fence passed, whichever is later, so the CPU recording between splits
+// (an idle GPU) is left out. A frame is published once a later frame's fence passed, or nothing is in flight
+// and a later frame has begun.
+void SdlGpuDevice::collect_timestamps() {
+    Array<TimedFence> passed;
+    {
+        std::lock_guard<std::mutex> lock(timing_mutex_);
+        passed = std::move(timing_passed_);
+    }
+    for (const TimedFence& t : passed) {
+        SDL_ReleaseGPUFence(device_, t.fence);
+        --timing_in_flight_;
+        if (timing_frame_.written == 0 || t.frame != timing_frame_.frame_index) {
+            if (timing_frame_.written) last_timestamps_ = timing_frame_;
+            timing_frame_ = GpuTimestamps{};
+            timing_frame_.frame_index = t.frame;
+            timing_clock_ = t.passed_ns;
+        } else {
+            const u64 start = math::max(t.submitted_ns, timing_last_passed_);
+            timing_clock_ += t.passed_ns > start ? t.passed_ns - start : 0;
+        }
+        timing_last_passed_ = t.passed_ns;
+        for (u32 i = 0; i < kMaxTimestamps; ++i)
+            if ((t.indices >> i) & 1u) timing_frame_.ns[i] = timing_clock_;
+        timing_frame_.written |= t.indices;
+    }
+    if (timing_in_flight_ == 0 && timing_frame_.written && timing_frame_.frame_index < frame_index_) {
+        last_timestamps_ = timing_frame_;
+        timing_frame_ = GpuTimestamps{};
+    }
+}
+
+void SdlGpuDevice::stop_timing() {
+    if (!timing_thread_.joinable()) return;
+    {
+        std::lock_guard<std::mutex> lock(timing_mutex_);
+        timing_stop_ = true;
+    }
+    timing_cv_.notify_one();
+    timing_thread_.join();  // after every submitted fence passed
+    collect_timestamps();
+}
+
 // ---- frames ----------------------------------------------------------------------------------
 
 bool SdlGpuDevice::slot_signaled(u32 slot) {
@@ -749,6 +830,7 @@ void SdlGpuDevice::begin_frame(u64 frame_index) {
     }
     r.geometry_head = r.indirect_head = r.storage_head = 0;
     r.storage_next = 0;
+    if (timing_in_flight_) collect_timestamps();
     ensure_backbuffer();
     stats_ = FrameStats{};
     in_frame_ = true;
@@ -788,8 +870,7 @@ void SdlGpuDevice::submit(const CommandBuffer& cb) {
         return;
     }
     prepare_payloads(cb, gcb);
-    record_passes(cb, gcb);
-    SDL_SubmitGPUCommandBuffer(gcb);
+    if (record_passes(cb, gcb)) SDL_SubmitGPUCommandBuffer(gcb);
 }
 
 void SdlGpuDevice::end_frame() {

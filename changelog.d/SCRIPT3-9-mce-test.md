@@ -1,0 +1,1 @@
+- `mce test <project> [path]`, M-SCRIPT3 step 9: plays a project's `.mctest` scenarios through its MCP server with no agent, prints pass or FAIL with the failed checks and script errors, and exits 1 on a failure or when there are no scenarios.

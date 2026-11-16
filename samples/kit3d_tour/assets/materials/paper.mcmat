@@ -1,0 +1,19 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "b0a30000-0000-4000-8000-000000000045",
+  "name": "paper",
+  "base_color": [
+    0.8,
+    0.76,
+    0.66,
+    1
+  ],
+  "metallic": 0.0,
+  "roughness": 0.9,
+  "double_sided": true,
+  "translucency": 0.6,
+  "textures": {
+    "base_color": "guid:b0a30000-0000-4000-8000-000000000044"
+  }
+}

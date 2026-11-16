@@ -66,7 +66,10 @@ Runtime (`src/engine/asset/include/mce/asset/`)
 
 Cook (`src/engine/asset/cook/include/mce/cook/`)
 - `cook.h`: `CookService::cook(project_root, CookOptions{force, pack, adopt, base_packs})` returning a `CookReport`
-  (per-asset `Cooked`/`UpToDate`/`Failed`/`Blocked`, diagnostics, manifest and pack hashes); `AssetRegistry`
+  (per-asset `Cooked`/`UpToDate`/`Failed`/`Blocked`, diagnostics, manifest and pack hashes, the `sizes` report, and
+  `meshes`: one `MeshSummary` per live mesh asset {triangles, submeshes, materials, joints, clips, lod_levels, warnings}
+  that the cook reads back from the cooked `CHNK_MESH` with `MeshView`, so cached and fresh runs agree; only `warnings`
+  is this run's: `mce_cook` prints it as a `mesh assets/...` line and MCP `cook_run` returns it as `meshes`); `AssetRegistry`
   (scan of `assets/` and `.mceasset` sidecars, `guid_for_path`, GUID-stable `move`); `cook_document` (cooks an
   unsaved native document from memory, used by play-in-editor); `generate_guid`; `kCookToolVersion`.
 - `importer.h`: `IImporter` (`id`, `version`, `schema_hash`, `type`, `native`, `handles_extension`,
@@ -77,9 +80,25 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   `ChunkType::AnimGraph`, `AnimGraphView`; a version 2 graph adds the chunk's extension block, minor 1: 2D blend
   points, layers, mask bones, IK chains and the root motion bone), particles (`.mcpart`), sequence (`.mcseq`), input map (`.mcinput` → `ChunkType::InputMap`, the
   `mce/input/input_map.h` chunk, validated with `decode_input_map` at cook), shader (`.vert/.frag/.comp.glsl`, glslang). The glTF importer
-  also imports skins (`JOINTS_0` / `WEIGHTS_0`, 4 influences, up to 256 joints per skin, inverse bind
-  matrices); the sidecar setting `"skinning": false` imports a skinned mesh as a static one, and `"ragdoll"`
+  also imports skins (`JOINTS_0..7` / `WEIGHTS_0..7`, the 4 largest influences kept, up to 256 joints per skin,
+  inverse bind matrices), sparse accessors, `KHR_mesh_quantization` and `EXT_meshopt_compression` (decoded with
+  meshoptimizer; only version 0 vertex streams, as the extension allows; `KHR_draco_mesh_compression` is refused when required, its fallback read when only used) and
+  bakes the default morph weights into the rest pose (the targets are dropped with a warning); the sidecar setting `"skinning": false` imports a skinned mesh as a static one, and `"ragdoll"`
   writes per-bone ragdoll overrides into the joints (`MeshFlags::Ragdoll`, `MeshRagdoll` flags, chunk minor 3).
+  Also built in: Wavefront OBJ (`.obj` → `ChunkType::Mesh`, `src/obj_importer.cpp`; v, vt, vn, f with n-gon fans and
+  negative indices, o / g nodes, usemtl submeshes; sidecar `"up"` `"y"|"z"`, `"scale"`, `"max_triangles"`, `"lod_levels"`)
+  and its `.mtl` (`mtl` → `ChunkType::Material` of the first material; the `.obj` declares the `.mtl` as a dependency,
+  reads its bytes and cooks every material it names inline, textures resolved to GUIDs; `Ns` maps to perceptual roughness (2 / (Ns + 2))^(1/4), a packed `map_Pr` + `map_Pm` defaults the factors to 1, `map_Ke` without `Ke` defaults emissive to white, `d` beats `Tr`, absolute texture paths fall back to the file name next to the `.mtl`). Both share the glTF importer's
+  back end (`mesh_build.h`); their factories are declared in the cook-private `src/obj_importer.h`, not in `importer.h`.
+  Autodesk FBX (`.fbx` → `ChunkType::Mesh`, `src/fbx_importer.cpp`, factory in the cook-private `src/fbx_importer.h`; host
+  builds only, where `mce_ufbx` exists: `MCE_HAS_FBX`; ADR-0047): ufbx reads the file from memory (format forced to FBX, no
+  external files, no thread pool, 1 GiB temp and result budgets, node depth 4096) into the engine's frame (+Y up, right-handed,
+  metres, so a Z-up centimetre file equals the glTF one); triangulated meshes with normals and UV set 0, inline PBR materials
+  (external textures only: an embedded one is an error), the node tree, skins (4 largest influences, 256 joints, bind poses as
+  inverse binds, skinned geometry in bind space as in glTF) and animation stacks as clips sampled at `sample_rate` (default 30,
+  times `i / rate`, base layer only, no curve fitting); sidecar `"scale"`, `"sample_rate"`, `"max_triangles"`, `"lod_levels"`.
+  Caps (nodes, vertices, triangles, polygon size, clips, keys) are errors that name the cap. FBX bytes are per host: ufbx
+  evaluates Euler angles and slerp with libm.
 - `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and
   `read_base_assets` (GUID to type from the manifests of the game packs a mod builds on). `CookService::cook`
   uses them: references into a base resolve by type without a dependency edge, an override (a base GUID in the
@@ -108,7 +127,8 @@ errors, a module that fails to load among them) or 2 (usage).
 
 - The runtime never parses text. JSON, stb, meshoptimizer and glslang stay in the cook library (FR-AST-010).
   Walls in `scripts/ci/check_walls.py`: the stb and meshopt walls allow those symbols only under
-  `src/engine/asset/cook/`; the shader-cross wall allows glslang only in
+  `src/engine/asset/cook/` (the meshopt wall also allows `tests/asset/test_cook_gltf_ext.cpp`, which encodes its
+  compressed fixtures); the shader-cross wall allows glslang only in
   `src/engine/asset/cook/src/shader_importer.cpp` (and `mce_rhi_metal`); the cook wall allows `#include
   "mce/cook/..."` only in `src/engine/asset/cook/`, `src/editor/` and `tools/cook/`; the cook link wall allows
   `mce_asset_cook` only in CMake files under `src/engine/asset/`, `src/editor/`, `tools/` and `tests/`.
@@ -160,7 +180,12 @@ errors, a module that fails to load among them) or 2 (usage).
   succeeds", "author -> cook -> mount -> load the scene (M2 pipeline)", missing sidecar and `--adopt`,
   duplicate GUIDs. `test_cook_gltf.cpp`: `.gltf`/`.glb` equivalence, `--force` byte identity, triangle budget,
   `MeshView` rejecting corrupt payloads, "skins import joints, inverse binds, 4 unorm8 influences and per-joint
-  bind bounds", "skinning is optional per asset; bad skins fail with the JSON pointer". `test_cook_json_audio.cpp`: JSON positions and nesting limits,
+  bind bounds", "skinning is optional per asset; bad skins fail with the JSON pointer". `test_cook_gltf_ext.cpp`
+  (M-IMPORT3D step 1): sparse, quantized and meshopt-compressed (with filters) cubes equal the dense cook, Draco,
+  8 influences, baked morph weights, dropped-feature warnings, and corrupt-input cases (truncated / flipped
+  streams, bad sparse indices, absurd counts) that must be errors. `test_cook_obj.cpp` (M-IMPORT3D step 2): a quad cube equals
+  the same cube as glTF byte for byte, fans, negative indices, CRLF / LF / CR, MTL materials and textures, warnings, and
+  corrupt-input cases plus a seeded mutation loop. `test_cook_fbx.cpp` (M-IMPORT3D step 3b): ASCII FBX fixtures written in-test; a cube in cm / Z-up, Blender's 0.01 / 100 pair and a left-handed file equal the glTF cube, a 3-bone skin with a clip matches analytic poses, materials, textures, the embedded-texture error, warnings, `lod_levels` / `max_triangles`, twice-cooked identical bytes, and corrupt-input cases (truncations, seeded byte flips, a binary file claiming 2^29 elements, huge counts, deep nesting, non-finite transforms) that must error or succeed. `test_cook_json_audio.cpp`: JSON positions and nesting limits,
   canonical writer, WAV decode and resampling. `test_cook_shader.cpp`: variants, SPIR-V and reflection in
   `CHNK_SHD`, compile errors with source line and variant, binding-bank enforcement. `test_cook_input.cpp`:
   ".mcinput cooks to CHNK_INPUT and loads into the input system", "authoring mistakes are cook errors".

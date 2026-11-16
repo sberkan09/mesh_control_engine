@@ -1,0 +1,1 @@
+- Docs (M-CASH 0): milestone for money in the GTA slice (wallet, cash drops, fines). Record: `docs/milestones/M-CASH.md`.

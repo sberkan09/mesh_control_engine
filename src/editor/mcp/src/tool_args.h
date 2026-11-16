@@ -30,6 +30,7 @@ void read_log(u64 since, Array<log::ConsoleLine>& out);
 void write_log_lines(JsonWriter& w, Span<const log::ConsoleLine> lines, usize max);
 // "script_errors": [{script, error}] of a headless run whose scene scripts failed; nothing when none did.
 void write_script_errors(JsonWriter& w, const HeadlessRun& run);
+void write_script_profile(JsonWriter& w, const HeadlessRun& run);
 void progress(Server& server, cook::JsonValue token, u64 done, u64 total);
 // run_headless's `input` argument (a script string or an array of segments).
 bool arg_input(ToolCall& c, input::InputScript& script);

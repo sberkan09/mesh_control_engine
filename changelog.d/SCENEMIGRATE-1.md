@@ -1,0 +1,1 @@
+- Editor, M-SCENEMIGRATE: a scene can load a component under its old name when a rename row says so; the table is empty until a format bump needs it.

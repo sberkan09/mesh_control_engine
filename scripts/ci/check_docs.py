@@ -10,6 +10,9 @@
   flags     a `-name` after `mce_player` on a line of a document is a console variable (`MCE_CVAR(id, "name"`
             or `ConVar id("name"`) some source declares: the command line sets convars
 
+  luauapi   every member of a `declare <table>: {...}` in the Luau definitions (`mce.*`, `mission.*`, `clock.*`, ...) appears
+            as `<table>.<member>` in the scripting guide or `docs/engine/script.md` (M-SCRIPTDOC)
+
 A miss is an error unless `scripts/ci/docs.allow` lists it as `kind | file | target | reason`. A listed miss
 that no longer happens is an error too, so the list only shrinks. `--list` prints the misses as allow lines.
 """
@@ -116,11 +119,25 @@ def untested():
     return out
 
 
+def luau_api():
+    """Members of the Luau `declare` tables that neither scripting document names."""
+    src = (ROOT / "src/engine/script/compiler/definitions.cpp").read_text()
+    docs = "".join((ROOT / d).read_text(errors="ignore") for d in ("docs/user-guide/27-scripting.md", "docs/engine/script.md"))
+    out = []
+    for m in re.finditer(r"^declare (\w+): \{\n(.*?)^\}", src, re.S | re.M):
+        table = m.group(1)
+        for name in re.findall(r"^    (\w+): ", m.group(2), re.M):
+            if not re.search(rf"\b{table}\.{name}\b", docs):
+                out.append(("luauapi", "docs/user-guide/27-scripting.md", f"{table}.{name}", "declared for scripts, not documented"))
+    return out
+
+
 def misses():
     out = []
     incs = include_roots()
     cvars = convar_names()
     out.extend(untested())
+    out.extend(luau_api())
     for p in md_files():
         rel = p.relative_to(ROOT).as_posix()
         raw = p.read_text(errors="ignore")

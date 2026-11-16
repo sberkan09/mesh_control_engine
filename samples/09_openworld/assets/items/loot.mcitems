@@ -1,0 +1,54 @@
+{
+ "format": "mce-items",
+ "version": 1,
+ "guid": "e97a4643-08b9-544e-903e-5f68ba9c1348",
+ "items": [
+  {
+   "id": "bandage",
+   "name": "Bandage",
+   "stack": 5,
+   "weight": 0.1,
+   "tags": [
+    "consumable",
+    "heal"
+   ],
+   "stats": {
+    "heal": 20
+   }
+  },
+  {
+   "id": "medkit",
+   "name": "Medkit",
+   "stack": 3,
+   "weight": 0.4,
+   "tags": [
+    "consumable",
+    "heal"
+   ],
+   "stats": {
+    "heal": 60
+   }
+  }
+ ],
+ "tables": [
+  {
+   "id": "pedestrian",
+   "rolls": [
+    0,
+    1
+   ],
+   "entries": [
+    {
+     "item": "bandage",
+     "weight": 3,
+     "qty": 1
+    },
+    {
+     "item": "medkit",
+     "weight": 1,
+     "qty": 1
+    }
+   ]
+  }
+ ]
+}

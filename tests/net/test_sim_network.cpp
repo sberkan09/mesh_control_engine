@@ -329,3 +329,54 @@ TEST_CASE("net host: set_conditions holds outgoing messages back and drops unrel
     CHECK(std::chrono::duration_cast<std::chrono::milliseconds>(arrived_at - sent_at).count() >= 30);
     CHECK(client.delayed_count() == 0);
 }
+
+TEST_CASE("sim network: endpoints are counted and indexed, and the clock and in-flight count follow advance") {
+    SimNetwork network;
+    CHECK(network.endpoint_count() == 0);
+    CHECK(network.now_ms() == 0);
+    CHECK(network.in_flight() == 0);
+
+    SimEndpoint& a = network.add_endpoint(2, 3);
+    SimEndpoint& b = network.add_endpoint(1, 1);
+    CHECK(network.endpoint_count() == 2);
+    CHECK(a.index() == 0);
+    CHECK(b.index() == 1);
+    CHECK(&network.endpoint(1) == &b);
+    CHECK(a.channel_count() == 3);
+    CHECK(b.channel_count() == 1);
+
+    LinkConditions c;
+    c.latency_ms = 30;
+    network.set_default_conditions(c);
+    REQUIRE(b.connect(a, 1) != kInvalidPeer);
+    CHECK(network.in_flight() == 1);  // the connect request is on the wire
+    network.advance(10);
+    CHECK(network.now_ms() == 10);
+    CHECK(network.in_flight() == 1);  // not due yet
+    network.advance(20);
+    CHECK(network.now_ms() == 30);
+    CHECK(network.in_flight() == 1);  // delivered; the accept is on its way back
+    network.advance(30);
+    CHECK(network.now_ms() == 60);
+    CHECK(network.in_flight() == 0);
+}
+
+TEST_CASE("sim network: conditions(from, to) reports the default until a link gets its own") {
+    SimNetwork network;
+    SimEndpoint& a = network.add_endpoint();
+    SimEndpoint& b = network.add_endpoint();
+
+    LinkConditions base;
+    base.latency_ms = 25;
+    network.set_default_conditions(base);
+    CHECK(network.conditions(a.index(), b.index()).latency_ms == 25);
+    CHECK(network.conditions(b.index(), a.index()).latency_ms == 25);
+
+    LinkConditions own;
+    own.latency_ms = 90;
+    own.loss = 0.5f;
+    network.set_conditions(a, b, own);
+    CHECK(network.conditions(a.index(), b.index()).latency_ms == 90);
+    CHECK(network.conditions(a.index(), b.index()).loss == 0.5f);
+    CHECK(network.conditions(b.index(), a.index()).latency_ms == 25);  // one direction only
+}

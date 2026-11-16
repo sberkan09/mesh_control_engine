@@ -1,0 +1,1 @@
+- Tests: `FileConfigFetcher` with no readable config and a damaged remote config cache (M-HARDEN3 step 4).

@@ -202,3 +202,39 @@ TEST_CASE("render3d: the shadow fit contains the scene; transform_aabb is exact 
     CHECK(sphere_visible(v, {1, 2, 3}, 0.1f));
     CHECK_FALSE(sphere_visible(v, {1, 2, 20}, 0.1f));
 }
+
+TEST_CASE("render3d: Atmosphere::sky_sun_direction lights the sky in place of the light, which keeps its own tint") {
+    MeshStore store;
+    auto built = [&](const DirectionalLight& light, const Atmosphere& a, vec3& sun, vec3& irr, DirectionalLight& out) {
+        Scene3D scene(store, mem::heap());
+        scene.begin(looking_down_minus_z(), {64, 64});
+        scene.set_light(light);
+        scene.set_atmosphere(a);
+        scene.build();
+        sun = scene.atmosphere_sun();
+        irr = scene.sun_irradiance();
+        out = scene.light();
+    };
+    DirectionalLight moon;  // a moon high in the east holds the light
+    moon.direction = math::normalize(vec3{-0.5f, -0.8f, 0.0f});
+    moon.color = {0.6f, 0.7f, 1.0f};
+    moon.intensity = 0.1f;
+    Atmosphere a;
+    a.enabled = true;
+    vec3 sun_default, irr_default, sun_own, irr_own;
+    DirectionalLight lit_default, lit_own;
+    built(moon, a, sun_default, irr_default, lit_default);  // unset: the light is the sky's sun, as before
+    CHECK(sun_default.y > 0.5f);
+    CHECK(irr_default.z == doctest::Approx(1.0f * 0.1f * 3.14159265f).epsilon(1e-4));
+    a.sky_sun_direction = math::normalize(vec3{0.9f, 0.1f, 0.0f});  // the sun just under the western horizon
+    a.sky_sun_light = {2.0f, 1.0f, 0.5f};
+    built(moon, a, sun_own, irr_own, lit_own);
+    CHECK(sun_own.y < 0.0f);
+    CHECK(sun_own.x < -0.9f);
+    CHECK(irr_own.x == doctest::Approx(2.0f * 3.14159265f).epsilon(1e-4));
+    CHECK(irr_own.z == doctest::Approx(0.5f * 3.14159265f).epsilon(1e-4));
+    // The moonlight is tinted along its own (high) direction either way: the same colour.
+    CHECK(lit_own.color.x == doctest::Approx(lit_default.color.x));
+    CHECK(lit_own.color.z == doctest::Approx(lit_default.color.z));
+    CHECK(lit_own.color.z > 0.5f);
+}

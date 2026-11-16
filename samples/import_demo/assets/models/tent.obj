@@ -1,0 +1,9 @@
+mtllib tent.mtl
+o tent
+v -1 0 -1
+v 1 0 -1
+v 0 1.5 1
+v 0 0 1
+f 1 4 2
+usemtl roof
+f 1 2 3

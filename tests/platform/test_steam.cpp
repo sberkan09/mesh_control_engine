@@ -217,6 +217,20 @@ TEST_CASE("steam: an asynchronous call's result reaches the one waiting for it")
     CHECK_FALSE(steam::await_call(5, 1104, [](void*, Span<const byte>, bool) {}, nullptr));  // Steam is off
 }
 
+TEST_CASE("steam: kMaxCalls calls wait at once, the next one is refused") {
+    StubControls stub;
+    REQUIRE(steam::init(stub_config()) == steam::InitResult::Ok);
+    int answered = 0;
+    auto count = [](void* u, Span<const byte>, bool) { ++*static_cast<int*>(u); };
+    for (u32 i = 0; i < steam::kMaxCalls; ++i) CHECK(steam::await_call(1000 + i, 1104, count, &answered));
+    CHECK_FALSE(steam::await_call(2000, 1104, count, &answered));  // kMaxCalls + 1: refused, never called
+    steam::run_callbacks(nullptr, nullptr);
+    steam::run_callbacks(nullptr, nullptr);
+    // Handles Steam does not know are lost or failed, each at most once.
+    CHECK(answered <= static_cast<int>(steam::kMaxCalls));
+    steam::shutdown();
+}
+
 TEST_CASE("steam: game services on Steam: sign-in, achievements, leaderboards, Steam Cloud, the overlay") {
     StubControls stub;
     CHECK(gs::backend() == gs::Backend::None);  // no Steam yet

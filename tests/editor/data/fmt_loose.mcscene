@@ -1,0 +1,5 @@
+{ "format": "mce-scene", "version": 1, "guid": "5ce2e000-0000-4000-8000-000000000004", "name": "fmt_loose",
+  "entities": [
+    { "name": "Crate", "id": 1, "components": { "LocalTransform": { "position": [1, 0, 0], "scale": [1, 1, 1] } } }
+  ]
+}

@@ -1,0 +1,1 @@
+- Kit (M-OWHORN): `VehicleHorn3D` and `VehicleLights3D` (`mce/kit/vehicle_extras.h`): the seated player honks with Horn and cycles the headlights Auto/On/Off with Lights. Sample: both on the `09_openworld` cars, keys G and L. Record: `docs/milestones/M-OWHORN.md`.

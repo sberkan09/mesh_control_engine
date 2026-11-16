@@ -1,0 +1,1 @@
+- Kit (M-WEAPONSWITCH 3): `AmmoShop3D` restocks the `Loadout3D` weapons in the backpack and a `Confiscate3D` arrest cuts their reserve too. Record: `docs/milestones/M-WEAPONSWITCH.md`.

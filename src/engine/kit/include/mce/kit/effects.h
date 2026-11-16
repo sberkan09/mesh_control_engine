@@ -19,7 +19,8 @@
 // event names the entity (as the sensor or trigger, or the other body; as either contact body), Landed when
 // a Landed3D names it (a CharacterController3D touching down), Skid when a Skid3D names it (a Vehicle3D's
 // wheel starting to skid, vehicles3d.h), Lap when a LapCompleted3D names it (a VehicleDriver3D finishing a
-// lap). `fired` counts the plays.
+// lap), Died when a Died3D names it (a Health3D entity killed by apply_damage, combat3d.h), Fired when a WeaponFired3D names it as the weapon or as its `aim_from` camera
+// (muzzle flash, gun kick). `fired` counts the plays.
 //
 // Systems ("kit_effects" in FixedUpdate_Post, after physics so this tick's events are read;
 // "kit_camera_follow" in FixedUpdate_Post after it; "kit_nav_grid" in FixedUpdate_Pre before
@@ -43,8 +44,8 @@ class AssetSystem;
 
 namespace mce::kit {
 
-enum class FireOn : u8 { Manual, Start, TriggerEnter, ContactBegin, Landed, Skid, Lap };
-MCE_ENUM(FireOn, Manual, Start, TriggerEnter, ContactBegin, Landed, Skid, Lap)
+enum class FireOn : u8 { Manual, Start, TriggerEnter, ContactBegin, Landed, Skid, Lap, Died, Fired };
+MCE_ENUM(FireOn, Manual, Start, TriggerEnter, ContactBegin, Landed, Skid, Lap, Died, Fired)
 
 // A one-shot sound. 2D (centred, `pan`); the mixer has no resampling, so there is no pitch.
 struct SfxTrigger {
@@ -61,20 +62,24 @@ struct SfxTrigger {
 };
 MCE_COMPONENT(SfxTrigger, clip, (gain_db, Range{-60, 12}, Help{"gain in dB"}),
               (gain_jitter_db, Range{0, 24}, Help{"random +/- dB per play"}), (pan, Range{-1, 1}), bus,
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors); Died: the entity was killed; Fired: its weapon (or the weapon it is the aim_from camera of) shot"}),
               (fire, Help{"set to play once (the engine clears it)"}), (fired, ReadOnly, Transient))
 
-// A burst of particles from the ParticleEmitter on the same entity.
+// A burst of particles from the ParticleEmitter (2D) or ParticleEmitter3D on the same entity. With
+// `keep_emitting` the fire also switches that 3D emitter on (a wreck's lasting smoke).
 struct ParticleBurst {
     u32 count = 20;
     FireOn on = FireOn::Manual;
     bool fire = false;
-    u8 pad_[2] = {};
+    u8 keep_emitting = 0;
+    u8 pad_ = 0;
     u32 fired = 0;
 };
 MCE_COMPONENT(ParticleBurst, (count, Range{1, 4096}, Help{"particles per burst"}),
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
-              (fire, Help{"set to burst once (the engine clears it)"}), (fired, ReadOnly, Transient))
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors); Died: the entity was killed; Fired: its weapon (or the weapon it is the aim_from camera of) shot"}),
+              (fire, Help{"set to burst once (the engine clears it)"}),
+              (keep_emitting, Range{0, 1}, Help{"1: the fire also sets the entity's ParticleEmitter3D.emitting to 1"}),
+              (fired, ReadOnly, Transient))
 
 // Adds trauma to every CameraShake2D and CameraShake3D (kit/cinematic.h).
 struct ShakeTrigger {
@@ -85,7 +90,7 @@ struct ShakeTrigger {
     u32 fired = 0;
 };
 MCE_COMPONENT(ShakeTrigger, (trauma, Range{0, 1}, Help{"trauma added (0..1; the shake grows with its square)"}),
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors); Died: the entity was killed; Fired: its weapon (or the weapon it is the aim_from camera of) shot"}),
               (fire, Help{"set to shake once (the engine clears it)"}), (fired, ReadOnly, Transient))
 
 // Trauma screen shake (render::ScreenShake's model) on a Camera2DComponent entity: kit::primary_camera
@@ -133,6 +138,11 @@ MCE_COMPONENT(CameraFollow2D, (target, Help{"the entity to follow"}), offset,
 // pivot by that many seconds of the target's ground velocity; `first_person` puts the camera at the
 // pivot, looking along yaw / pitch; `lock_on` turns the yaw (at `lock_on_rate`) so the camera frames
 // the target in front of that entity.
+// Chase (M-OPENWORLD-POLICE 4, off by default): `chase` 1 eases the yaw behind the target's ground velocity while the target has a
+// Vehicle3D driving forward (2: any target, a reversing car included) faster than `chase_min_speed`, at `chase_rate` per second. It
+// starts at `chase_min_speed` and stops below 70% of it, so speed jitter near the threshold does not flicker it. The Look input holds
+// the yaw where the player put it for `chase_hold` seconds after it was last used. `lock_on` wins over chase. A change of `target`
+// (getting into or out of a car) forgets the old velocity, so the swap itself does not read as a speed.
 struct CameraFollow3D {
     Entity target;
     math::vec3 offset{0.0f, 1.5f, 0.0f};
@@ -147,7 +157,7 @@ struct CameraFollow3D {
     bool primed = false;            // engine-written
     bool collide = false;           // spring arm: keep the camera in front of walls
     bool first_person = false;      // the camera at the pivot instead of behind it
-    u8 pad_ = 0;
+    u8 chase = 0;                   // 1: turn behind a driving Vehicle3D target; 2: behind any moving target
     f32 collision_radius = 0.2f;    // m: the sphere the arm sweeps
     f32 return_speed = 4.0f;        // m/s the arm grows back once a wall clears; 0 = at once
     f32 look_ahead = 0.0f;          // s of the target's ground velocity to lead the pivot by
@@ -155,18 +165,30 @@ struct CameraFollow3D {
     Entity lock_on;                 // frame the target with this entity beyond it; null = free
     f32 arm = 0.0f;                 // engine-written: the boom length this tick
     math::vec3 last_goal;           // engine-written: the unsmoothed pivot last tick (for look_ahead)
+    f32 chase_rate = 2.5f;          // 1/s the yaw eases behind the heading
+    f32 chase_hold = 1.5f;          // s the Look input holds the yaw
+    f32 chase_min_speed = 3.0f;     // m/s the target must move to be chased
+    f32 chase_idle = 0.0f;          // engine-written: s since the Look input was last used
+    Entity chase_target;            // engine-written: the target the velocity memory belongs to
+    u8 chasing = 0;                 // engine-written: 1 while the target is fast enough to chase (with hysteresis)
+    u8 pad2_[3] = {};
 };
 MCE_COMPONENT(CameraFollow3D, (target, Help{"the entity to orbit"}), (offset, Help{"pivot above the target"}),
               (distance, Range{0.1f, 1000}), (yaw, Help{"radians about +Y"}), (pitch, Help{"radians above the horizon"}),
               min_pitch, max_pitch, (smoothing, Range{0, 60}, Help{"1/s; 0 = snap"}),
-              (orbit_speed, Range{0, 20}, Help{"radians/s at full Look input; 0 = fixed"}), (pivot, ReadOnly, Transient),
+              (orbit_speed, Range{0, 20}, Help{"radians/s at full Look input; 0 = fixed"}), (pivot, ReadOnly, Transient, WorldPoint),
               (primed, ReadOnly, Transient), (collide, Help{"spring arm: walls pull the camera in, it eases back out"}),
               (first_person, Help{"the camera at the pivot, looking along yaw and pitch"}),
               (collision_radius, Range{0.01f, 5}), (return_speed, Range{0, 100}, Help{"m/s the arm grows back; 0 = at once"}),
               (look_ahead, Range{0, 2}, Help{"seconds of target ground velocity to lead the pivot by"}),
               (lock_on_rate, Range{0, 50}, Help{"rad/s the yaw turns to the lock-on framing; 0 = at once"}),
               (lock_on, Help{"keep this entity framed beyond the target; empty = free orbit"}), (arm, ReadOnly, Transient),
-              (last_goal, ReadOnly, Transient))
+              (last_goal, ReadOnly, Transient, WorldPoint),
+              (chase, Range{0, 2}, Help{"0 off; 1 turns behind a Vehicle3D target driving forward; 2 behind any moving target"}),
+              (chase_rate, Range{0, 60}, Help{"1/s the yaw eases behind the heading"}),
+              (chase_hold, Range{0, 60}, Help{"s the Look input holds the yaw after its last use"}),
+              (chase_min_speed, Range{0, 100}, Help{"m/s the target must move to start being chased (it stops below 70%)"}), (chase_idle, ReadOnly, Transient),
+              (chase_target, ReadOnly, Transient), (chasing, ReadOnly, Transient))
 
 // Engine-written record of the 2D physics events naming this entity (add the component to
 // see them; readable by data, sequences and run_headless inspect).

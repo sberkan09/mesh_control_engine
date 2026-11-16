@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <string>
 
 #include "input_test_util.h"
 #include "mce/input/binding_names.h"
@@ -168,4 +169,43 @@ TEST_CASE("M-ACCESS: one-hand presets move the keyboard to one side and persist 
     CHECK(binding(in, gp, MCE_SID("Jump"), 0)->code == static_cast<u32>(Key::Space));
     in.apply_hand_preset(Hand::Both);
     CHECK(in.binding_overrides().empty());
+}
+
+TEST_CASE("toggle: clear_toggles turns every toggle action back into a plain hold") {
+    InputSystem in;
+    test::setup_default(in);
+    in.set_toggle(MCE_SID("Jump"), true);
+    in.set_toggle(MCE_SID("Fire"), true);
+    CHECK(in.is_toggle(MCE_SID("Jump")));
+    CHECK(in.is_toggle(MCE_SID("Fire")));
+    in.clear_toggles();
+    CHECK_FALSE(in.is_toggle(MCE_SID("Jump")));
+    CHECK_FALSE(in.is_toggle(MCE_SID("Fire")));
+
+    in.push_event(key_event(Key::Space, true, at_tick(1)));
+    CHECK(in.sample_for_tick(1).jump_held);
+    in.push_event(key_event(Key::Space, false, at_tick(2)));
+    CHECK_FALSE(in.sample_for_tick(2).jump_held);  // let go: no longer held
+}
+
+TEST_CASE("M-HARDEN4: an action label is kept to kMaxActionLabel bytes and round-trips at the limit") {
+    const std::string at_limit(kMaxActionLabel, 'a');
+    const std::string over(kMaxActionLabel + 1, 'b');
+    const std::string far_over(kMaxActionLabel + 40, 'c');
+    InputMapBuilder b;
+    b.map(MCE_SID("Gameplay"));
+    b.action(StringView(at_limit.data(), at_limit.size())).key(Key::A);
+    b.action(StringView(over.data(), over.size())).key(Key::B);
+    b.action(StringView(far_over.data(), far_over.size())).key(Key::C);
+    b.action(StringView("")).key(Key::D);
+    Array<byte> bytes;
+    b.encode(bytes);
+
+    InputMapSet set;
+    REQUIRE(decode_input_map(bytes.span(), set).has_value());
+    REQUIRE(set.labels.size() == 4);
+    CHECK(set.label(0) == StringView(at_limit.data(), kMaxActionLabel));
+    CHECK(set.label(1) == StringView(over.data(), kMaxActionLabel));  // one byte cut
+    CHECK(set.label(2) == StringView(far_over.data(), kMaxActionLabel));
+    CHECK(set.label(3).empty());
 }

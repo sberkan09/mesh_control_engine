@@ -1,0 +1,1 @@
+- Test, M-SAVECOMPAT: save and replay files are pinned by frozen v1 bytes, so a change to the on-disk layout without a format version bump fails a test.

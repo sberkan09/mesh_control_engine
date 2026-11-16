@@ -1,0 +1,1 @@
+- Particle panel, M-ASSETLOOK step 4 (closes the milestone): a double click on a particle preset in Assets opens the Particle panel (live swatch, emission, motion and look fields, texture slot, Save cooks first, Revert); `ParticleForm` keeps members it does not own.

@@ -1,0 +1,1 @@
+- Kit (M-PEDDEAD): a `Pedestrian3D` whose `Health3D` is dead stops (`PedestrianMode::Down`), lies about for 10 s and is replaced in the crowd's count (`CrowdStats::down`). Closes an M-OPENWORLD E1 open item. Docs: `docs/engine/kit.md`.

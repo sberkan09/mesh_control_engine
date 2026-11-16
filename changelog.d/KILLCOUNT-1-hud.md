@@ -1,0 +1,1 @@
+- Kit (M-KILLCOUNT): `Wanted3D.kills` counts the deaths an entity caused. Sample: a KILLS counter on the `09_openworld` HUD. Record: `docs/milestones/M-KILLCOUNT.md`.

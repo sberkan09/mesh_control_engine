@@ -1,0 +1,76 @@
+# Release packages: Ember Step (scripts/ship.py platformer) as a zip per desktop OS on standard hosted runners
+# (free for a public repository). On a `v*` tag the zips are attached to a GitHub release; otherwise they are only
+# uploaded as run artifacts. Also builds on a PR that edits this file, so a change here is exercised before a tag.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
+    paths: [".github/workflows/release.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: package-${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux, os: ubuntu-24.04 }
+          - { name: windows, os: windows-2025 }
+          - { name: macos, os: macos-26 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          scripts/ci/setup_env.sh
+      - name: Install Ninja (macOS)
+        if: matrix.name == 'macos'
+        run: brew install ninja
+      - name: Install Ninja (Windows)
+        if: matrix.name == 'windows'
+        shell: bash
+        run: choco install ninja --no-progress -y
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: matrix.name == 'windows'
+        with:
+          arch: x64
+      - name: Package Ember Step
+        shell: bash
+        run: python3 scripts/ship.py platformer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ember-step-${{ matrix.name }}
+          path: dist/*.zip
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    name: attach to the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          pattern: ember-step-*
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" packages/*.zip --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

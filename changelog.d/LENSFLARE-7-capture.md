@@ -1,0 +1,1 @@
+- M-LENSFLARE follow-up (38g): `samples/11_daynight` gets a second scene, `scenes/sunrise.mcscene`, with a low dawn sun in view half behind a building edge and a `LensFlare3D`, so the sun lens flare is visible in a sample capture (`sample_daynight_sunrise_headless`, GPU `sample_daynight_sunrise_gpu`); the default `daynight` scene and every hash are unchanged.

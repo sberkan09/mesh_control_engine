@@ -125,7 +125,8 @@ struct LayerArray {
     u32 present = 0;  // bit i: layer i's texture is in the array
 };
 // False (and `out.present` 0) when no layer has a usable texture.
-bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArray& out, const char* debug_name = "terrain.layers");
+bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArray& out, const char* debug_name = "terrain.layers",
+                         bool widen_bc4 = false);  // widen_bc4: a BC4 layer beside a BC5 one joins as BC5 (parallax height)
 
 // The weight map of a terrain with splat layers as a 2-layer RGBA8 array upload (pointing into the view).
 TextureUpload splat_upload(const asset::TerrainView& terrain, TextureMipUpload& mip);

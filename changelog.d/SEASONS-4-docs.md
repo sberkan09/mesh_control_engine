@@ -1,0 +1,1 @@
+- M-SEASONS step 19d (docs and close): guide section 9.19q completed and the 08-3d Seasons paragraph, the milestone record and its follow-ups; docs only.

@@ -1,0 +1,1 @@
+- MCP, M-SCENELINT step 3: `scene_lint` returns the mistakes in the open scene or in a saved scene.

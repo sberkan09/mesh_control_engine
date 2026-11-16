@@ -1,0 +1,1 @@
+- Test: editor soak for play-in-editor start and stop, 100 rounds keep the live allocation count flat; no code change.

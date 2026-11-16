@@ -1,0 +1,1 @@
+- M-BUTTERFLY planned: an opt-in kit `Butterfly` component (summer-window, daylight, calm-wind and dry-weather strength) drawn as one camera-following alpha-blended particle emitter, steps 27a to 27d; the milestone record and the ROADMAP row.

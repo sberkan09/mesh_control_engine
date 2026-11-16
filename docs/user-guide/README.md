@@ -41,6 +41,7 @@ code as built and why; this guide links to them where you may want the full deta
 | 26 | [Steam](26-steam.md) | Sign-in, achievements, leaderboards and Steam Cloud, the overlay, rich presence, Steam Input, depots for steamcmd, the demo and a release checklist |
 | 27 | [Scripting in Luau](27-scripting.md) | Luau scripts as cooked assets, ScriptSystem in a scene, the `mce` API, the sandbox and its rules |
 | 28 | [Procedural levels](28-procedural-levels.md) | Seeded level generators (rooms, caves, walk, noise, WFC), `procgen_run`, baking into a tilemap, the `reachable` test check |
+| 29 | [Roads and traffic](29-roads-and-traffic.md) | A city's road network as a `.mcroads` asset: junctions, lanes, turns, right of way and traffic lights |
 
 ## Conventions used in this guide
 

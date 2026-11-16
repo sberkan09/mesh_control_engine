@@ -18,6 +18,47 @@ mce_add_library(mce_gameplay_kit
         src/joints3d.cpp
         src/ragdolls3d.cpp
         src/vehicles3d.cpp
+        src/seats3d.cpp
+        src/combat3d.cpp
+        src/map_markers.cpp
+        src/missions.cpp
+        src/inventory.cpp
+        src/loot.cpp
+        src/craft.cpp
+        src/status.cpp
+        src/world_clock.cpp
+        src/day_cycle.cpp
+        src/timed_light.cpp
+        src/drive_readout.cpp
+        src/face_velocity.cpp
+        src/hit_marker.cpp
+        src/impact_fx.cpp
+        src/fall_death.cpp
+        src/loadout3d.cpp
+        src/melee3d.cpp
+        src/grenade3d.cpp
+        src/ammopickup3d.cpp
+        src/event_sfx3d.cpp
+        src/bullet_hole3d.cpp
+        src/tracer3d.cpp
+        src/progress3d.cpp
+        src/vehicle_extras.cpp
+        src/weather.cpp
+        src/cirrus.cpp
+        src/halo.cpp
+        src/floater.cpp
+        src/water_flow.cpp
+        src/gi_visibility.cpp
+        src/weather_audio.cpp
+        src/world_audio.cpp
+        src/wind_gust.cpp
+        src/lightning_bolt.cpp
+        src/precipitation.cpp
+        src/thunder_delay.cpp
+        src/rain_splash.cpp
+        src/wanted3d.cpp
+        src/vehicle_ram.cpp
+        src/impact_damage.cpp
         src/sensors3d.cpp
         src/particles.cpp
         src/pathfinding.cpp
@@ -28,11 +69,19 @@ mce_add_library(mce_gameplay_kit
         src/skeleton2d_ik.cpp
         src/sprite_anim.cpp
         src/sprite_extract.cpp
+        src/static_merge3d.cpp
+        src/chunk_lod3d.cpp
         src/stock.cpp
         src/timeline.cpp
+        src/ui_flow.cpp
         src/ai.cpp
+        src/roads.cpp
+        src/roadblock.cpp
+        src/traffic.cpp
+        src/crowd.cpp
         src/ai_tasks.cpp
         src/perception.cpp
+        src/debug_lines.cpp
         src/cinematic.cpp
         src/video.cpp
         src/render_textures.cpp

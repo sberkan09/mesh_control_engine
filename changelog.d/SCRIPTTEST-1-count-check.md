@@ -1,0 +1,1 @@
+- `.mctest` and `playtest` get a `{"count": "<Component>", <op>: n}` check: how many live entities (spawned ones included) have the component, M-SCRIPTTEST step 1.

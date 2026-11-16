@@ -1,0 +1,1 @@
+- Docs: M-HARDEN3 milestone record (error paths and encode/decode pairs that no test exercises) and its ROADMAP row.

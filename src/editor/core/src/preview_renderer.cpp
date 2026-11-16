@@ -129,6 +129,7 @@ bool PreviewRenderer::ensure_3d() {
     extract3d_.init(renderer_.meshes(), assets_);
     extract3d_.set_texture_store(&renderer_.textures());
     extract3d_.set_render_textures(&render_textures_);
+    extract3d_.set_static_merge(false);  // selection, gizmos and picking keep per-entity draws (StaticMerge3D, M-VISUAL3 5b)
     three_d_ = true;
     return true;
 }
@@ -264,6 +265,13 @@ Result<void> PreviewRenderer::bake_gi(World& world, GiBake& out) {
         extract3d_.set_bake_mode(true);
         extract3d_.extract(world, scene, 1.0f);
         extract3d_.set_bake_mode(false);
+        // M-GI2 50g: a bake is of the authored box, in its local probe order: a following volume's toroidal slots would
+        // scramble it, so the bake never follows (the Low tier, which loads it, does not follow either).
+        if (scene.gi_volume().follow) {
+            render::GiVolume fixed = scene.gi_volume();
+            fixed.follow = false;
+            scene.set_gi_volume(fixed);
+        }
         scene.build();
         gi = scene.gi_volume();
         if (!gi.enabled) break;

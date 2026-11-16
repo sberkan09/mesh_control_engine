@@ -299,3 +299,25 @@ TEST_CASE("hierarchy: moving 1 of 5,000 entities re-composes exactly that entity
     w.render(0.0f);
     CHECK(w.resource<Count>().n == 1);
 }
+
+TEST_CASE("hierarchy: to_world copies the pose and builds the matching matrix") {
+    LocalTransform l;
+    l.position = {1, 2, 3};
+    l.rotation = rotation_z(0.5f);
+    l.scale = {2, 2, 2};
+
+    const WorldTransform w = ecs::to_world(l);
+    CHECK(w.position.x == 1.0f);
+    CHECK(w.position.y == 2.0f);
+    CHECK(w.position.z == 3.0f);
+    CHECK(w.scale.x == 2.0f);
+    CHECK(math::near(transform_point(w.matrix, {0, 0, 0}), w.position));
+    CHECK(math::near(transform_point(w.matrix, {1, 0, 0}), w.position + rotate(w.rotation, vec3{2, 0, 0})));
+
+    const WorldTransform id = ecs::to_world(LocalTransform{});
+    CHECK(id.position.x == 0.0f);
+    CHECK(id.scale.x == 1.0f);
+    const WorldTransform c = ecs::compose(id, l);
+    CHECK(math::near(c.position, w.position));
+    CHECK(math::near(c.scale, w.scale));
+}

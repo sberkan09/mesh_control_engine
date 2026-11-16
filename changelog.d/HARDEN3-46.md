@@ -1,0 +1,1 @@
+- Tests: `encode_png` / `decode_png` round trip, `image_size`, `decode_png_grey16` and their refusals (M-HARDEN3 step 2).

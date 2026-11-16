@@ -1,0 +1,1 @@
+- M-THUMBS is done: asset thumbnails in the Assets panel grid and the MCP `asset_thumbnail` tool, drawn on the CPU. Follow-ups (Ogg audio, prefab previews, lit material previews) are listed in the milestone record.

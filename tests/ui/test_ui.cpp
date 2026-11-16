@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstring>
 
 #include "mce/convar.h"
 #include "mce/core.h"
@@ -32,6 +33,13 @@ struct UiHealth {
     bool shielded = false;
 };
 MCE_COMPONENT(UiHealth, hp, lives, shielded)
+
+enum class UiPhase : u8 { Idle, Active, Done };
+MCE_ENUM(UiPhase, Idle, Active, Done)
+struct UiMission {
+    UiPhase phase = UiPhase::Idle;
+};
+MCE_COMPONENT(UiMission, phase)
 
 // The built-in font as a headless Font (no renderer; the set id is a CPU-only sprite set).
 struct Fixture {
@@ -646,6 +654,51 @@ TEST_CASE("ui: a health bar bound to UiHealth/hp updates on change and is untouc
     d.update(frame());
 }
 
+TEST_CASE("ui: a panel bound to a field shows while the value is within its range (wanted stars, mission state)") {
+    Fixture f;
+    World world;
+    const Entity player = world.spawn();
+    world.set(player, UiHealth{});
+    Document d;
+    d.set_skin(f.skin);
+    d.set_modal(false);
+    Builder b(d, d.root());
+    const WidgetId low = b.panel("star1").at({0.0f, 0.0f}, {8, 8}).id();
+    const WidgetId high = b.panel("star3").at({0.0f, 0.0f}, {8, 8}).id();
+    d.set_range(low, 1.0f, 5.0f, 1.0f);
+    d.set_range(high, 3.0f, 5.0f, 1.0f);
+    CHECK(d.bind_property(low, world, player, "UiHealth/lives"));
+    CHECK(d.bind_property(high, world, player, "UiHealth/lives"));
+    d.update(frame());  // lives 3: both shown
+    CHECK(d.visible_self(low));
+    CHECK(d.visible_self(high));
+    world.try_get_mut<UiHealth>(player)->lives = 2;
+    d.update(frame());
+    CHECK(d.visible_self(low));
+    CHECK_FALSE(d.visible_self(high));
+    world.try_get_mut<UiHealth>(player)->lives = 0;
+    d.update(frame());
+    CHECK_FALSE(d.visible_self(low));
+
+    // Above `hi` it hides again, and an enum field reads as its number: a banner shown only while the phase is Active (1).
+    world.try_get_mut<UiHealth>(player)->lives = 6;
+    d.update(frame());
+    CHECK_FALSE(d.visible_self(low));
+    const Entity mission = world.spawn();
+    world.set(mission, UiMission{});
+    const WidgetId banner = b.panel("banner").at({0.0f, 0.0f}, {8, 8}).id();
+    d.set_range(banner, 1.0f, 1.0f, 0.0f);
+    CHECK(d.bind_property(banner, world, mission, "UiMission/phase"));
+    d.update(frame());
+    CHECK_FALSE(d.visible_self(banner));
+    world.try_get_mut<UiMission>(mission)->phase = UiPhase::Active;
+    d.update(frame());
+    CHECK(d.visible_self(banner));
+    world.try_get_mut<UiMission>(mission)->phase = UiPhase::Done;
+    d.update(frame());
+    CHECK_FALSE(d.visible_self(banner));
+}
+
 TEST_CASE("ui: the developer console mirrors the log, runs convars and closes on cancel") {
     Fixture f;
     cv_test_ui_volume.reset();
@@ -771,4 +824,312 @@ TEST_CASE("M-ACCESS: the high-contrast theme keeps text at 7:1 or more and leave
     const u32 plain = glyph_quads(false);
     REQUIRE(plain > 0);
     CHECK(glyph_quads(true) == plain * 9);
+}
+
+TEST_CASE("ui: find_child, first_child and next_sibling walk the tree in document order") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    Builder col = b.stack("menu");
+    const WidgetId a = col.button("a", "A").id();
+    const WidgetId bb = col.button("b", "B").id();
+    Builder inner = col.stack("inner");
+    const WidgetId deep = inner.button("deep", "D").id();
+    const WidgetId c = col.button("c", "C").id();
+
+    CHECK(d.first_child(col.id()) == a);
+    CHECK(d.next_sibling(a) == bb);
+    CHECK(d.next_sibling(bb) == inner.id());
+    CHECK(d.next_sibling(inner.id()) == c);
+    CHECK(d.next_sibling(c).is_null());  // the last child has no next
+    CHECK(d.first_child(a).is_null());   // a button has no children
+    CHECK(d.first_child(inner.id()) == deep);
+
+    CHECK(d.find_child(col.id(), "b") == bb);
+    CHECK(d.find_child(col.id(), "inner") == inner.id());
+    CHECK(d.find_child(col.id(), "deep").is_null());  // direct children only; find() takes a path
+    CHECK(d.find(StringView("menu/inner/deep")) == deep);
+    CHECK(d.find_child(col.id(), "missing").is_null());
+    CHECK(d.find_child(WidgetId{}, "a").is_null());  // a null parent finds nothing
+}
+
+TEST_CASE("ui: set_font_role and set_blocks_pointer are read back, and a null widget is ignored") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId t = b.text("t", "hello").id();
+    CHECK(d.font_role(t) == FontRole::Auto);
+    d.set_font_role(t, FontRole::Title);
+    CHECK(d.font_role(t) == FontRole::Title);
+    d.set_font_role(t, FontRole::Auto);
+    CHECK(d.font_role(t) == FontRole::Auto);
+
+    CHECK_FALSE(d.blocks_pointer(t));
+    d.set_blocks_pointer(t, true);
+    CHECK(d.blocks_pointer(t));
+    d.set_blocks_pointer(t, false);
+    CHECK_FALSE(d.blocks_pointer(t));
+
+    d.set_font_role(WidgetId{}, FontRole::Title);  // no crash, no change
+    d.set_blocks_pointer(WidgetId{}, true);
+    CHECK_FALSE(d.blocks_pointer(WidgetId{}));
+    CHECK(d.font_role(WidgetId{}) == FontRole::Auto);
+}
+
+TEST_CASE("ui theme: encode_ui_theme then decode_ui_theme round-trips every field") {
+    ThemeData t = high_contrast_theme();
+    t.fonts[0] = asset::Guid{1, 2};
+    t.fonts[2] = asset::Guid{3, 4};
+    t.sprites = asset::Guid{5, 6};
+    t.white_region = 9;
+    t.palette.accent = {0.1f, 0.2f, 0.3f, 0.4f};
+    t.palette.console_text = {0.9f, 0.8f, 0.7f, 0.6f};
+
+    Array<byte> bytes;
+    encode_ui_theme(t, bytes);
+    ThemeData back;
+    REQUIRE(decode_ui_theme(bytes.span(), back));
+    CHECK(back.fonts[0] == t.fonts[0]);
+    CHECK(back.fonts[1].is_null());
+    CHECK(back.fonts[2] == t.fonts[2]);
+    CHECK(back.sprites == t.sprites);
+    CHECK(back.white_region == 9u);
+    CHECK(back.palette.accent.r == 0.1f);
+    CHECK(back.palette.console_text.a == 0.6f);
+
+    // Every style survives: encoding the decoded theme gives the same bytes.
+    Array<byte> again;
+    encode_ui_theme(back, again);
+    REQUIRE(again.size() == bytes.size());
+    CHECK(std::memcmp(again.data(), bytes.data(), bytes.size()) == 0);
+}
+
+TEST_CASE("ui theme: decode_ui_theme refuses short or damaged payloads and resets the output") {
+    Array<byte> bytes;
+    encode_ui_theme(default_theme(), bytes);
+
+    ThemeData out;
+    out.white_region = 77;
+    CHECK_FALSE(decode_ui_theme(Span<const byte>{}, out));
+    CHECK(out.white_region == 0u);  // out starts from the default theme
+    CHECK_FALSE(decode_ui_theme(bytes.span().subspan(0, 10), out));
+    CHECK_FALSE(decode_ui_theme(bytes.span().subspan(0, bytes.size() - 1), out));
+
+    Array<byte> bad = bytes;
+    bad[76] = byte{1};  // the reserved pad word of the 80-byte header
+    CHECK_FALSE(decode_ui_theme(bad.span(), out));
+}
+
+namespace {
+
+MCE_CVAR(cv_test_ui_name, "test_ui.name", "alpha", "ui test convar", CVarFlags::None);
+MCE_CVAR(cv_test_ui_count, "test_ui.count", 4, "ui test convar", CVarFlags::None);
+
+struct UiWide {
+    bool on = true;
+    i8 a = -5;
+    i16 b = -300;
+    i64 c = -70000;
+    u8 d = 200;
+    u16 e = 60000;
+    u32 f = 4000000;
+    u64 g = 5000000;
+    f64 h = 2.5;
+};
+MCE_COMPONENT(UiWide, on, a, b, c, d, e, f, g, h)
+
+}  // namespace
+
+TEST_CASE("ui: a property binding reads every integer width, bool and f64") {
+    Fixture f;
+    World world;
+    const Entity e = world.spawn();
+    world.set(e, UiWide{});
+    Document d;
+    d.set_skin(f.skin);
+    d.set_modal(false);
+    Builder b(d, d.root());
+    const char* const fields[] = {"on", "a", "b", "c", "d", "e", "f", "g", "h"};
+    const f32 expect[] = {1.0f, -5.0f, -300.0f, -70000.0f, 200.0f, 60000.0f, 4000000.0f, 5000000.0f, 2.5f};
+    WidgetId w[9];
+    for (u32 i = 0; i < 9; ++i) {
+        FixedString<32> path("UiWide/");
+        path.append(fields[i]);
+        w[i] = b.slider(fields[i], -1.0e7f, 1.0e7f, 0.0f).id();
+        CHECK(d.bind_property(w[i], world, e, path.view()));
+    }
+    d.update(frame());
+    for (u32 i = 0; i < 9; ++i) CHECK(d.value(w[i]) == doctest::Approx(expect[i]));
+
+    world.try_get_mut<UiWide>(e)->on = false;
+    d.update(frame());
+    CHECK(d.value(w[0]) == 0.0f);
+}
+
+TEST_CASE("ui: an int convar drives a slider and a string convar drives a text") {
+    Fixture f;
+    cv_test_ui_name.reset();
+    cv_test_ui_count.reset();
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId count = b.slider("count", 0.0f, 10.0f, 1.0f).bind_convar("test_ui.count").id();
+    const WidgetId name = b.text("name", "").bind_convar("test_ui.name").id();
+    d.update(frame());
+    CHECK(d.value(count) == 4.0f);
+    CHECK(d.text(name) == "alpha");
+    CHECK(d.convar(count) == "test_ui.count");
+    CHECK(d.convar(WidgetId{}).empty());
+
+    console::execute("test_ui.name beta");
+    console::execute("test_ui.count 7");
+    d.update(frame());
+    CHECK(d.text(name) == "beta");
+    CHECK(d.value(count) == 7.0f);
+    cv_test_ui_name.reset();
+    cv_test_ui_count.reset();
+}
+
+TEST_CASE("ui: a pointer drag sets a slider by position, and a click flips a toggle") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId s = b.slider("s", 0.0f, 100.0f, 0.0f).at({0.5f, 0.3f}, {200, 20}).id();
+    const WidgetId t = b.toggle("t", "T").at({0.5f, 0.7f}, {0, 0}).id();
+    d.update(frame());
+    const Rect r = d.rect(s);
+    UpdateContext c = frame();
+    c.pointer = vec2(r.min.x + r.size().x * 0.25f, r.center().y);
+    c.pointer_pressed = c.pointer_down = true;
+    d.update(c);
+    CHECK(d.value(s) == doctest::Approx(25.0f).epsilon(0.05));
+    c.pointer_pressed = false;
+    c.pointer = vec2(r.max.x + 500.0f, r.center().y);  // dragged far past the end: clamped
+    d.update(c);
+    CHECK(d.value(s) == 100.0f);
+    c.pointer = vec2(r.min.x - 500.0f, r.center().y);  // and past the start
+    d.update(c);
+    CHECK(d.value(s) == 0.0f);
+    c.pointer_down = false;
+    c.pointer_released = true;
+    d.update(c);
+
+    CHECK(d.value(t) == 0.0f);
+    for (int round = 0; round < 2; ++round) {
+        UpdateContext k = frame();
+        k.pointer = d.rect(t).center();
+        d.update(k);
+        k.pointer_pressed = k.pointer_down = true;
+        d.update(k);
+        k.pointer_pressed = k.pointer_down = false;
+        k.pointer_released = true;
+        d.update(k);
+        CHECK(d.value(t) == (round == 0 ? 1.0f : 0.0f));
+    }
+}
+
+TEST_CASE("ui: builders refuse an invalid parent and a tab outside tabs, and keep going") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder orphan(d, WidgetId{});
+    CHECK(orphan.button("lost", "X").id().is_null());
+    Builder b(d, d.root());
+    Builder stray = b.tab("page", "PAGE");  // b is a root, not a tabs widget
+    CHECK(stray.id().is_null());
+    CHECK(d.find(StringView("lost")).is_null());
+    CHECK(d.find(StringView("page")).is_null());
+    d.update(frame());  // the document still lays out
+}
+
+TEST_CASE("ui: Builder style, text_size and nav reach the widget") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId other = b.button("other", "O").id();
+    Style st = d.style(other, WidgetState::Normal);
+    st.text_size = 31.0f;
+    Builder btn = b.button("btn", "B");
+    btn.style(WidgetState::Hover, st);
+    CHECK(d.style(btn.id(), WidgetState::Hover).text_size == 31.0f);
+    btn.style(st);
+    for (u32 i = 0; i < static_cast<u32>(WidgetState::Count); ++i)
+        CHECK(d.style(btn.id(), static_cast<WidgetState>(i)).text_size == 31.0f);
+    btn.text_size(18.0f);
+    for (u32 i = 0; i < static_cast<u32>(WidgetState::Count); ++i)
+        CHECK(d.style(btn.id(), static_cast<WidgetState>(i)).text_size == 18.0f);
+    NavEdges e;
+    e.up = other;
+    btn.nav(e);
+    CHECK(d.nav(btn.id()).up == other);
+    CHECK(d.nav(WidgetId{}).up.is_null());
+    CHECK(d.preferred_size(btn.id()).x > 0.0f);
+    CHECK(d.preferred_size(WidgetId{}).x == 0.0f);
+}
+
+TEST_CASE("ui: set_scroll before the first layout is kept, and re-opening an open modal changes nothing") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    Builder sv = b.scroll("list").at({0.5f, 0.5f}, {200, 100});
+    for (u32 i = 0; i < 6; ++i) {
+        char name[8] = {'i', static_cast<char>('0' + i), 0};
+        Anchors a;
+        a.offset_max = vec2(0, 50);
+        sv.button(name, name).anchors(a);
+    }
+    d.set_scroll(sv.id(), -30.0f);  // layout still dirty: the offset waits for it, never below 0
+    CHECK(d.scroll(sv.id()) == 0.0f);
+    d.set_scroll(sv.id(), 40.0f);
+    d.update(frame());
+    CHECK(d.scroll(sv.id()) <= d.scroll_max(sv.id()));
+    CHECK(d.scroll(WidgetId{}) == 0.0f);
+    CHECK(d.scroll_max(WidgetId{}) == 0.0f);
+
+    Builder m = b.modal("dlg");
+    d.open_modal(m.id());
+    d.open_modal(m.id());  // already open
+    d.update(frame());
+    CHECK(d.top_modal() == m.id());
+    d.close_modal(m.id());
+    CHECK(d.top_modal().is_null());
+}
+
+TEST_CASE("ui: a widget name keeps 31 bytes; a longer one is cut and found only by the cut name") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    const std::string fits(31, 'n');
+    const std::string longer(40, 'n');
+    const WidgetId a = d.add(d.root(), WidgetKind::Panel, fits);
+    CHECK(d.name(a) == StringView(fits));
+    CHECK(d.find_child(d.root(), fits) == a);
+
+    const WidgetId b = d.add(d.root(), WidgetKind::Panel, longer);
+    CHECK(d.name(b).size() == 31);
+    CHECK(d.name(b) == StringView(fits));
+    // The full name no longer matches anything; the first widget with the cut name wins.
+    CHECK(d.find_child(d.root(), longer).is_null());
+    CHECK(d.find_child(d.root(), fits) == a);
+}
+
+TEST_CASE("ui: an action name of 31 bytes is kept whole, 32 is refused and keeps the old one") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    const WidgetId w = d.add(d.root(), WidgetKind::Button, "go");
+    const std::string s31(31, 'a');
+    const std::string s32(32, 'a');
+    d.set_action(w, s31);
+    CHECK(d.action(w) == StringView(s31));
+    d.set_action(w, s32);
+    CHECK(d.action(w) == StringView(s31));  // not cut to a different action
+    d.set_action(w, "play");
+    d.set_action(w, s32);
+    CHECK(d.action(w) == StringView("play"));
 }

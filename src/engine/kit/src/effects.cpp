@@ -12,6 +12,7 @@
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/components.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/particles.h"
@@ -29,7 +30,7 @@ static_assert(sizeof(ParticleBurst) == 12);
 static_assert(sizeof(ShakeTrigger) == 12);
 static_assert(sizeof(CameraShake2D) == 40);
 static_assert(sizeof(CameraFollow2D) == 60);
-static_assert(sizeof(CameraFollow3D) == 104);
+static_assert(sizeof(CameraFollow3D) == 132);
 static_assert(sizeof(PhysicsEvents) == 56);
 static_assert(sizeof(NavGridSource) == 40);
 
@@ -60,6 +61,8 @@ struct Named {
     Array<Entity> landed;  // characters that touched down (Landed3D)
     Array<Entity> skid;    // vehicles a wheel of which started to skid (Skid3D)
     Array<Entity> lap;     // vehicles whose driver completed a lap (LapCompleted3D)
+    Array<Entity> died;    // entities killed this tick (Died3D)
+    Array<Entity> fired;   // weapons that shot this tick, and the cameras they aim from (WeaponFired3D)
 };
 
 void add_unique(Array<Entity>& list, Entity e) {
@@ -86,6 +89,8 @@ bool should_fire(FireOn on, bool& fire, u32 fired, Entity e, const Named& n) {
     case FireOn::Landed: go = go || named(n.landed, e); break;
     case FireOn::Skid: go = go || named(n.skid, e); break;
     case FireOn::Lap: go = go || named(n.lap, e); break;
+    case FireOn::Died: go = go || named(n.died, e); break;
+    case FireOn::Fired: go = go || named(n.fired, e); break;
     }
     return go;
 }
@@ -144,8 +149,27 @@ void record_physics_events(Frame& f, Named& n) {
         for (const Skid3D& ev : events.read<Skid3D>()) add_unique(n.skid, ev.vehicle);
     if (w.event_queue<LapCompleted3D>())
         for (const LapCompleted3D& ev : events.read<LapCompleted3D>()) add_unique(n.lap, ev.vehicle);
+    if (w.event_queue<Died3D>())
+        for (const Died3D& ev : events.read<Died3D>()) add_unique(n.died, ev.entity);
+    if (w.event_queue<WeaponFired3D>())
+        for (const WeaponFired3D& ev : events.read<WeaponFired3D>()) {
+            add_unique(n.fired, ev.weapon);
+            const Weapon3D* wp = w.alive(ev.weapon) ? w.try_get<Weapon3D>(ev.weapon) : nullptr;
+            if (wp && !wp->aim_from.is_null()) add_unique(n.fired, wp->aim_from);
+        }
     if (w.event_queue<Landed3D>())
         for (const Landed3D& ev : events.read<Landed3D>()) add_unique(n.landed, ev.entity);
+    if (w.event_queue<ContactBegin3D>())
+        for (const ContactBegin3D& ev : events.read<ContactBegin3D>()) {
+            add_unique(n.contact, ev.a);
+            add_unique(n.contact, ev.b);
+            for (const bool is_a : {true, false})
+                if (PhysicsEvents* p = w.try_get_mut<PhysicsEvents>(is_a ? ev.a : ev.b)) {
+                    p->last_contact = is_a ? ev.b : ev.a;
+                    p->contact_speed = ev.approach_speed;
+                    ++p->contact_begins;
+                }
+        }
     if (w.event_queue<TriggerEnter3D>()) {
         for (const TriggerEnter3D& ev : events.read<TriggerEnter3D>()) {
             add_unique(n.trigger, ev.trigger);
@@ -169,8 +193,16 @@ void record_physics_events(Frame& f, Named& n) {
 
 void kit_effects(Frame& f) {
     World& w = f.world();
+    // Registered to run on held ticks for UiFlow::keep_audio: a pause screen that keeps the sound going lets the
+    // Sfx triggers fire (and nothing else); any other pause holds the whole system as before.
+    bool sfx_only = false;
+    if (w.paused()) {
+        const audio::PauseMix* pause = w.try_resource<audio::PauseMix>();
+        if (!pause || !pause->keep) return;
+        sfx_only = true;
+    }
     Named n;
-    record_physics_events(f, n);
+    if (!sfx_only) record_physics_events(f, n);
 
     const bool audio = w.event_queue<audio::PlaySfx>() != nullptr;
     f.query<SfxTrigger>().each([&](Entity e, SfxTrigger& s) {
@@ -181,15 +213,25 @@ void kit_effects(Frame& f) {
             ev.gain_db = s.gain_db + s.gain_jitter_db * jitter(e, s.fired);
             ev.pan = s.pan;
             ev.bus = static_cast<audio::BusId>(s.bus);
+            if (const audio::AudioSpatial* sp = w.try_get<audio::AudioSpatial>(e)) {
+                ev.attenuation_id = sp->attenuation_id;
+                position_of(w, e, ev.position);
+            }
             f.events().push(ev);
         }
         ++s.fired;
     });
+    if (sfx_only) return;
 
     ParticleSystem* particles = w.try_resource<ParticleSystem>();
     f.query<ParticleBurst>().each([&](Entity e, ParticleBurst& b) {
         if (!should_fire(b.on, b.fire, b.fired, e, n)) return;
         if (particles) particles->burst(e, b.count);
+        if (ParticleEmitter3D* em = w.try_get_mut<ParticleEmitter3D>(e)) {
+            em->burst = b.count;
+            ++em->burst_version;
+            if (b.keep_emitting) em->emitting = 1;
+        }
         ++b.fired;
     });
 
@@ -271,6 +313,27 @@ void kit_camera_follow(Frame& f) {
         if (in && c.orbit_speed > 0.0f) {
             if (!locked) c.yaw -= in->look.x * c.orbit_speed * f.dt;
             c.pitch += in->look.y * c.orbit_speed * f.dt;
+        }
+        // A new target (into or out of a car) has no velocity yet: restart the memory so the swap is not read as a speed.
+        if (!(c.chase_target == c.target)) {
+            c.chase_target = c.target;
+            c.last_goal = p + c.offset;
+            c.chasing = 0;
+        }
+        // Chase: ease the yaw behind where the target is going, unless the player has just used the Look input.
+        c.chase_idle = in && c.orbit_speed > 0.0f && std::fabs(in->look.x) > 0.1f ? 0.0f : c.chase_idle + f.dt;
+        if (c.chase && !locked && c.primed && f.dt > 0.0f) {
+            const f32 vx = (p.x + c.offset.x - c.last_goal.x) / f.dt, vz = (p.z + c.offset.z - c.last_goal.z) / f.dt;
+            const Vehicle3D* car = w.try_get<Vehicle3D>(c.target);
+            const bool drives = c.chase == 2 || (car && car->speed > 0.0f);
+            // Starts at chase_min_speed, stops below 70% of it.
+            const f32 limit = c.chase_min_speed * (c.chasing ? 0.7f : 1.0f);
+            c.chasing = drives && vx * vx + vz * vz >= limit * limit ? 1 : 0;
+            if (c.chasing && c.chase_idle >= c.chase_hold) {
+                f32 turn = std::atan2(-vx, -vz) - c.yaw;
+                turn -= math::kTau * std::floor((turn + math::kPi) / math::kTau);  // the short way round
+                c.yaw += turn * follow_blend(c.chase_rate, f.dt);
+            }
         }
         c.pitch = math::clamp(c.pitch, c.min_pitch, math::max(c.min_pitch, c.max_pitch));
         const math::vec3 raw = p + c.offset;
@@ -398,6 +461,7 @@ void install_effects(World& world, asset::AssetSystem* assets) {
     world.add_system(Phase::FixedUpdate_Post, "kit_effects", &kit_effects);
     world.add_system(Phase::FixedUpdate_Post, "kit_camera_follow", &kit_camera_follow);
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_effects");
+    world.run_when_held(Phase::FixedUpdate_Post, "kit_effects");
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_camera_follow");
 }
 

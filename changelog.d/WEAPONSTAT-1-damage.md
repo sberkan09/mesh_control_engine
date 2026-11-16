@@ -1,0 +1,1 @@
+- Kit (M-WEAPONSTAT): worn items' `damage` stats add to a `Weapon3D` on the same entity as a remembered change (`Equipment::damage_applied`), applied once and given back on unequip. Docs: `docs/engine/kit.md`.

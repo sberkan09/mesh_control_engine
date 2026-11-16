@@ -1,0 +1,1 @@
+- Kit (M-PEDFLEE 2): pedestrians within 30 m of a `WeaponFired3D` run from the muzzle for 5 s. Record: `docs/milestones/M-PEDFLEE.md`.

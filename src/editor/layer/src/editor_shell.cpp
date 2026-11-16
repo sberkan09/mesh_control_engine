@@ -8,10 +8,29 @@
 #include "imgui_platform.h"
 #include "imgui_renderer.h"
 #include "mce/convar.h"
+#include "mce/cook/fs.h"
+#include "mce/editor/align_entities.h"
+#include "mce/editor/batch_rename.h"
+#include "mce/editor/camera_bookmarks.h"
+#include "mce/editor/duplicate_offset.h"
+#include "mce/editor/entity_path.h"
+#include "mce/editor/flip_entities.h"
+#include "mce/editor/group_entities.h"
+#include "mce/editor/match_transform.h"
+#include "mce/editor/quick_open.h"
+#include "mce/editor/recent_list.h"
+#include "mce/editor/reset_transform.h"
+#include "mce/editor/select_all.h"
+#include "mce/editor/select_related.h"
+#include "mce/editor/snap_entities.h"
+#include "mce/editor/selection_history.h"
+#include "mce/editor/selection_sets.h"
+#include "mce/editor/unique_names.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/process.h"
+#include "scene_panels.h"
 
 namespace mce::editor {
 
@@ -21,9 +40,123 @@ struct EditorShell::Impl {
     ImGuiRhiRenderer renderer;
     platform::Process player;
     bool layout_checked = false;
+    // Ctrl+P (M-QUICKOPEN): the searchable items, filled when the popup opens, and the query box state.
+    QuickOpen quick;
+    char quick_query[128] = {};
+    i32 quick_sel = 0;
+    // File > Open Recent (M-RECENT): the open project's list, <root>/.mce/recent_scenes.txt.
+    RecentList recent;
+    cook::String recent_root;  // the project `recent` was loaded for
+    cook::String recent_last;  // the scene path last added to it
+    // Camera bookmarks (M-CAMBOOKMARK): the open project's nine slots, <root>/.mce/camera_bookmarks.txt.
+    CameraBookmarks bookmarks;
+    // Alt+Left / Alt+Right (M-SELHISTORY): the entities selected in the open scene.
+    SelectionHistory sel_history;
+    const EditorScene* sel_scene = nullptr;  // the scene `sel_history` and `sel_sets` belong to
+    // Ctrl+Shift+1..9 / Alt+1..9 (M-SELSETS): numbered groups of selected entities.
+    SelectionSets sel_sets;
+    // Edit > Rename Selection (M-BATCHRENAME): the pattern box and the first number.
+    char rename_pattern[64] = {};
+    i32 rename_start = 1;
 };
 
 namespace {
+
+// Edit > Align: lines the selection up on `axis` (`distribute`: spaces it evenly instead).
+void align_selection(EditorScene& scene, AlignAxis axis, AlignMode mode, bool distribute = false) {
+    Array<EntityId> ids;  // a copy: the edits below touch the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    if (distribute)
+        distribute_entities(scene, ids.span(), axis);
+    else
+        align_entities(scene, ids.span(), axis, mode);
+}
+
+// Edit > Make names unique: numbers the duplicates among the selection, or among every entity when nothing is selected.
+void unique_names_in(EditorScene& scene) {
+    Array<EntityId> ids;
+    if (scene.selection().empty())
+        ids = select_all(scene);
+    else
+        for (EntityId id : scene.selection().items()) ids.push_back(id);
+    make_names_unique(scene, ids.span());
+}
+
+// Edit > Flip: mirrors the selection across its middle on `axis`.
+void flip_selection(EditorScene& scene, AlignAxis axis) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    flip_entities(scene, ids.span(), axis);
+}
+
+// Edit > Snap to grid: the selection's world X and Y go to multiples of the snap step.
+void snap_selection(EditorScene& scene, f32 step) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    snap_entities(scene, ids.span(), step);
+}
+
+// Edit > Duplicate right / up: duplicates the selection and steps the copies by `dx`, `dy` (the copies are selected).
+void duplicate_stepped(EditorScene& scene, f32 dx, f32 dy) {
+    Array<EntityId> ids;  // a copy: the edit below changes the selection
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    duplicate_offset(scene, ids.span(), dx, dy);
+}
+
+// Edit > Match to anchor: `part` of the first selected entity goes onto the rest of the selection.
+void match_selection(EditorScene& scene, MatchPart part) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    match_transforms(scene, ids.span(), scene.selection().anchor(), part);
+}
+
+// Edit > Reset transform: the selection's local transforms go back to the identity.
+void reset_selection_transforms(EditorScene& scene) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    reset_transforms(scene, ids.span());
+}
+
+// Edit > Copy path: the hierarchy paths of the selection (Room/Wall/Torch), one per line, on the clipboard.
+void copy_selection_paths(const EditorScene& scene) {
+    const cook::String text = entity_paths(scene, scene.selection().items());
+    if (!text.empty()) ImGui::SetClipboardText(text.c_str());
+}
+
+// Ctrl+G: the selection moves under a new Group, which becomes the selection. Ctrl+Shift+G: the selected parents
+// dissolve and their children are selected.
+void group_selection(EditorScene& scene) {
+    if (scene.selection().empty()) return;
+    Array<EntityId> ids;  // a copy: the edits below change the selection
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    const EntityId g = group_entities(scene, ids.span());
+    if (g != kNoEntity) scene.selection().set(g);
+}
+
+void ungroup_selection(EditorScene& scene) {
+    Array<EntityId> ids;
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    const Array<EntityId> freed = ungroup_entities(scene, ids.span());
+    if (freed.empty()) return;
+    scene.selection().set(freed[0]);
+    for (usize i = 1; i < freed.size(); ++i) scene.selection().toggle(freed[i]);
+}
+
+// Replaces the selection with the entities `relation` names around it; nothing related leaves it alone.
+void select_around(EditorScene& scene, Relation relation) {
+    const Array<EntityId> ids = select_related(scene, scene.selection().items(), relation);
+    if (ids.empty()) return;
+    scene.selection().set(ids[0]);
+    for (usize i = 1; i < ids.size(); ++i) scene.selection().toggle(ids[i]);
+}
+
+// Replaces the selection with `ids` (the first becomes the anchor); an empty list clears it.
+void select_ids(EditorScene& scene, const Array<EntityId>& ids) {
+    scene.selection().clear();
+    if (ids.empty()) return;
+    scene.selection().set(ids[0]);
+    for (usize i = 1; i < ids.size(); ++i) scene.selection().toggle(ids[i]);
+}
 
 MCE_CVAR(cv_autosave_interval, "editor.autosave_interval", 300.0f,
          "Seconds of unsaved changes before the editor autosaves (0 = only on focus loss)", CVarFlags::None);
@@ -156,6 +289,8 @@ void EditorShell::build_ui(f64 frame_dt) {
         perf_pending_.sim_ticks = session_.play().last_advance_ticks();
     }
     handle_shortcuts();
+    track_recent_scenes();
+    track_selection_history();
     draw_menu_bar();
     draw_dockspace();
     viewport_ = ViewportInfo{};  // the viewport panel republishes it when visible
@@ -187,7 +322,7 @@ void EditorShell::build_ui(f64 frame_dt) {
 // ---- file commands ------------------------------------------------------------------------------
 
 void EditorShell::request_quit() {
-    if (scene_mode() && scene().dirty() && !quit_requested_) {
+    if (scene_mode() && (scene().dirty() || tabs_.any_dirty(session_)) && !quit_requested_) {
         popup_ = Popup::ConfirmQuit;
         return;
     }
@@ -206,6 +341,10 @@ bool EditorShell::open_project(StringView root) {
     bt_.close();
     if (skeleton2d_.dirty()) (void)skeleton2d_.save(session_);
     skeleton2d_.close();
+    material_request_ = asset::Guid{};
+    particle_request_ = asset::Guid{};
+    sequence_request_ = asset::Guid{};
+    tabs_.clear();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -258,6 +397,24 @@ void EditorShell::open_bt(asset::Guid guid) {
     focus_panel("Behavior Tree");
 }
 
+void EditorShell::open_material(asset::Guid guid) {
+    material_request_ = guid;
+    if (IEditorPanel* p = find_panel("Material")) p->open = true;
+    focus_panel("Material");
+}
+
+void EditorShell::open_particle(asset::Guid guid) {
+    particle_request_ = guid;
+    if (IEditorPanel* p = find_panel("Particle")) p->open = true;
+    focus_panel("Particle");
+}
+
+void EditorShell::open_sequence(asset::Guid guid) {
+    sequence_request_ = guid;
+    if (IEditorPanel* p = find_panel("Sequence")) p->open = true;
+    focus_panel("Sequence");
+}
+
 void EditorShell::open_skeleton2d(asset::Guid guid) {
     if (skeleton2d_.dirty() && guid != skeleton2d_.guid()) (void)skeleton2d_.save(session_);
     if (!skeleton2d_.open(session_, guid)) {
@@ -269,11 +426,14 @@ void EditorShell::open_skeleton2d(asset::Guid guid) {
 }
 
 bool EditorShell::open_scene(StringView path) {
-    if (!session_.open_scene(path)) {
+    cook::String why;
+    if (!tabs_.open(session_, path, why)) {
+        MCE_LOG_ERROR("editor: cannot open {}: {}", path, why.view());
         focus_panel("Cook");
         return false;
     }
-    if (session_.has_recovery()) popup_ = Popup::Recover;
+    // Parked changes come back dirty on their own; an autosave of an earlier session is still offered.
+    if (!session_.scene().dirty() && session_.has_recovery()) popup_ = Popup::Recover;
     frame_scene();
     return true;
 }
@@ -444,6 +604,7 @@ void EditorShell::update_title() {
 
 void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Q)) request_quit();
+    if (popup_ == Popup::None && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_P)) popup_ = Popup::QuickOpen;
     if (!scene_mode()) return;
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S)) save_scene();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S)) popup_ = Popup::SaveAs;
@@ -471,10 +632,40 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Z)) scene().undo();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Y) || ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z))
         scene().redo();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_LeftArrow)) selection_back();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_RightArrow)) selection_forward();
+    // Ctrl+A selects every entity, Ctrl+I the ones that are not selected now.
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) select_ids(scene(), select_all(scene()));
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_I)) select_ids(scene(), invert_selection(scene()));
+    // Alt+Up selects the parents, Alt+Down the children, Alt+Shift+Down everything below.
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_UpArrow)) select_around(scene(), Relation::Parent);
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_DownArrow)) select_around(scene(), Relation::Children);
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiMod_Shift | ImGuiKey_DownArrow))
+        select_around(scene(), Relation::Descendants);
+    // Selection sets: Ctrl+Shift+number stores the selection, Alt+number selects it again.
+    for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
+        const ImGuiKey key = static_cast<ImGuiKey>(ImGuiKey_1 + static_cast<int>(i));
+        if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | key))
+            save_selection_set(i);
+        else if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | key))
+            recall_selection_set(i);
+    }
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C)) copy_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) duplicate_selection();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_G)) group_selection(scene());
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_G)) ungroup_selection(scene());
+    // Camera bookmarks: Ctrl+1..9 stores the viewport's view, 1..9 flies back to it.
+    if (viewport_.focused) {
+        for (u32 i = 0; i < CameraBookmarks::kSlots; ++i) {
+            const ImGuiKey key = static_cast<ImGuiKey>(ImGuiKey_1 + static_cast<int>(i));
+            if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | key))
+                save_bookmark(i);
+            else if (ImGui::IsKeyChordPressed(key))
+                recall_bookmark(i);
+        }
+    }
     if (ImGui::IsKeyChordPressed(ImGuiKey_W)) view_.gizmo = GizmoMode::Move;
     if (ImGui::IsKeyChordPressed(ImGuiKey_E)) view_.gizmo = GizmoMode::Rotate;
     if (ImGui::IsKeyChordPressed(ImGuiKey_R)) view_.gizmo = GizmoMode::Scale;
@@ -485,8 +676,118 @@ void EditorShell::handle_shortcuts() {
     }
 }
 
+// Keeps the Open Recent list of the open project: loaded when a project opens, the open scene's file moves to the
+// front whenever it changes (opened, saved as), and the list is saved with it.
+void EditorShell::track_recent_scenes() {
+    if (!scene_mode()) {
+        impl_->recent_root = cook::String();
+        return;
+    }
+    cook::String file = session_.project().root();
+    file += "/.mce/recent_scenes.txt";
+    if (impl_->recent_root.view() != session_.project().root()) {
+        impl_->recent_root = session_.project().root();
+        impl_->recent_last = cook::String();
+        impl_->recent.clear();
+        cook::String text;
+        if (cook::fs::read_text(file.view(), text)) impl_->recent.parse(text.view());
+        impl_->bookmarks.clear_all();
+        cook::String marks;
+        marks = session_.project().root();
+        marks += "/.mce/camera_bookmarks.txt";
+        if (cook::fs::read_text(marks.view(), text)) impl_->bookmarks.parse(text.view());
+    }
+    const StringView cur = scene().path();
+    if (cur.empty() || cur == impl_->recent_last.view()) return;
+    impl_->recent_last = cur;
+    impl_->recent.touch(cur);
+    const cook::String text = impl_->recent.serialize();
+    if (Result<void> r = cook::fs::write_file_atomic(
+            file.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.view().size()));
+        !r)
+        MCE_LOG_WARN("editor: cannot save the recent scenes list");
+}
+
+// Feeds the selection's anchor to the history; the history starts over when another scene becomes the open one.
+void EditorShell::track_selection_history() {
+    if (!scene_mode()) {
+        impl_->sel_history.clear();
+        impl_->sel_sets.clear_all();
+        impl_->sel_scene = nullptr;
+        return;
+    }
+    if (impl_->sel_scene != &scene()) {
+        impl_->sel_history.clear();
+        impl_->sel_sets.clear_all();
+        impl_->sel_scene = &scene();
+    }
+    impl_->sel_history.visit(scene().selection().anchor());
+}
+
+void EditorShell::selection_back() {
+    if (!scene_mode()) return;
+    const SceneDocument& doc = scene().doc();
+    const EntityId id = impl_->sel_history.back([&](EntityId e) { return doc.find(e) != nullptr; });
+    if (id != kNoEntity) scene().selection().set(id);
+}
+
+void EditorShell::selection_forward() {
+    if (!scene_mode()) return;
+    const SceneDocument& doc = scene().doc();
+    const EntityId id = impl_->sel_history.forward([&](EntityId e) { return doc.find(e) != nullptr; });
+    if (id != kNoEntity) scene().selection().set(id);
+}
+
+// Gives the selected entities names from `pattern`, numbered from `first` in document order; one undo step.
+void EditorShell::rename_selection(StringView pattern, u32 first) {
+    if (!scene_mode()) return;
+    EditorScene& s = scene();
+    Array<EntityId> ids;
+    for (const DocEntity& e : s.doc().entities())
+        if (s.selection().contains(e.id)) ids.push_back(e.id);
+    if (ids.empty()) return;
+    s.begin_edit("Rename selection");
+    u32 n = 0;
+    for (const EntityId id : ids) {
+        const DocEntity* e = s.doc().find(id);
+        if (!e) continue;
+        const FixedString<64> name = batch_rename_expand(pattern, e->name.view(), n++, first);
+        s.rename_entity(id, name.view());
+    }
+    s.end_edit();
+}
+
+void EditorShell::save_selection_set(u32 slot) {
+    if (scene_mode()) impl_->sel_sets.save(slot, scene().selection().items());
+}
+
+void EditorShell::recall_selection_set(u32 slot) {
+    if (!scene_mode()) return;
+    const SceneDocument& doc = scene().doc();
+    const Array<EntityId> ids = impl_->sel_sets.recall(slot, [&](EntityId e) { return doc.find(e) != nullptr; });
+    if (ids.empty()) return;
+    scene().selection().set(ids[0]);
+    for (usize i = 1; i < ids.size(); ++i) scene().selection().toggle(ids[i]);
+}
+
+void EditorShell::save_bookmark(u32 slot) {
+    if (!scene_mode()) return;
+    impl_->bookmarks.save(slot, camera_, orbit_);
+    cook::String file = session_.project().root();
+    file += "/.mce/camera_bookmarks.txt";
+    const cook::String text = impl_->bookmarks.serialize();
+    if (Result<void> r = cook::fs::write_file_atomic(
+            file.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.view().size()));
+        !r)
+        MCE_LOG_WARN("editor: cannot save the camera bookmarks");
+}
+
+void EditorShell::recall_bookmark(u32 slot) {
+    if (scene_mode()) impl_->bookmarks.recall(slot, camera_, orbit_);
+}
+
 void EditorShell::request_open_scene(StringView path) {
-    if (scene().dirty()) {
+    if (scene().dirty() && scene().path().empty()) {  // a scene with a file parks in its tab; this one has none
         pending_open_.assign(path);
         popup_ = Popup::ConfirmOpen;
         return;
@@ -494,9 +795,118 @@ void EditorShell::request_open_scene(StringView path) {
     open_scene(path);
 }
 
+namespace {
+
+// The Quick Open commands (the ids of QuickOpenKind::Command items), in menu order.
+enum QuickCommand : u64 {
+    kCmdSave,
+    kCmdNew,
+    kCmdCook,
+    kCmdPlay,
+    kCmdStop,
+    kCmdUndo,
+    kCmdRedo,
+    kCmdFrame,
+    kCmdRescan,
+    kCmdLayout
+};
+
+}  // namespace
+
+void EditorShell::fill_quick_open() {
+    QuickOpen& q = impl_->quick;
+    q.clear();
+    const bool proj = scene_mode();
+    const bool edit = proj && !playing();
+    if (edit) {
+        for (usize i = 0; i < session_.project().assets().size(); ++i)
+            q.add(QuickOpenKind::Asset, session_.project().assets()[i].path.view(), i);
+        for (const DocEntity& e : scene().doc().entities()) q.add(QuickOpenKind::Entity, e.name.view(), e.id);
+    }
+    for (usize i = 0; i < panels_.size(); ++i) q.add(QuickOpenKind::Panel, panels_[i]->name(), i);
+    if (edit) {
+        q.add(QuickOpenKind::Command, "Save Scene", kCmdSave);
+        q.add(QuickOpenKind::Command, "New Scene", kCmdNew);
+        q.add(QuickOpenKind::Command, "Cook", kCmdCook);
+        q.add(QuickOpenKind::Command, "Play in editor", kCmdPlay);
+        if (scene().can_undo()) q.add(QuickOpenKind::Command, "Undo", kCmdUndo);
+        if (scene().can_redo()) q.add(QuickOpenKind::Command, "Redo", kCmdRedo);
+        q.add(QuickOpenKind::Command, "Frame scene", kCmdFrame);
+        q.add(QuickOpenKind::Command, "Rescan assets", kCmdRescan);
+    }
+    if (proj && playing()) q.add(QuickOpenKind::Command, "Stop play", kCmdStop);
+    q.add(QuickOpenKind::Command, "Reset layout", kCmdLayout);
+}
+
+void EditorShell::run_quick_open(const QuickOpenItem& item) {
+    switch (item.kind) {
+        case QuickOpenKind::Asset: {
+            const auto assets = session_.project().assets();
+            if (item.id >= assets.size()) return;
+            const ProjectAsset& a = assets[static_cast<usize>(item.id)];
+            asset::Guid open;
+            open_asset_in_editor(*this, a, open);
+            if (!open.is_null()) request_open_scene(a.path.view());
+            break;
+        }
+        case QuickOpenKind::Entity:
+            scene().selection().set(static_cast<EntityId>(item.id));
+            break;
+        case QuickOpenKind::Panel:
+            if (IEditorPanel* p = panel_at(static_cast<usize>(item.id))) {
+                p->open = true;
+                focus_panel(p->name());
+            }
+            break;
+        case QuickOpenKind::Command:
+            switch (item.id) {
+                case kCmdSave:
+                    save_scene();
+                    break;
+                case kCmdNew:
+                    new_scene();
+                    break;
+                case kCmdCook:
+                    cook(false);
+                    break;
+                case kCmdPlay:
+                    play_in_editor();
+                    break;
+                case kCmdStop:
+                    stop_play();
+                    break;
+                case kCmdUndo:
+                    scene().undo();
+                    break;
+                case kCmdRedo:
+                    scene().redo();
+                    break;
+                case kCmdFrame:
+                    frame_scene();
+                    break;
+                case kCmdRescan:
+                    session_.project().rescan();
+                    break;
+                case kCmdLayout:
+                    reset_layout();
+                    break;
+                default:
+                    break;
+            }
+            break;
+    }
+}
+
 void EditorShell::draw_popups() {
-    static constexpr const char* kIds[] = {"", "Open Scene", "Save Scene As", "Unsaved changes##quit",
-                                           "Unsaved changes##new", "Unsaved changes##open", "Recover unsaved changes"};
+    static constexpr const char* kIds[] = {"",
+                                           "Open Scene",
+                                           "Save Scene As",
+                                           "Unsaved changes##quit",
+                                           "Unsaved changes##new",
+                                           "Unsaved changes##open",
+                                           "Recover unsaved changes",
+                                           "Quick Open",
+                                           "Rename Selection"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
         popup_opened_ = true;
@@ -519,7 +929,7 @@ void EditorShell::draw_popups() {
             if (a.type == asset::ChunkType::Prefab) scenes.push_back(&a);
         for (const ProjectAsset* a : scenes) {
             if (ImGui::Selectable(a->path.c_str(), false, ImGuiSelectableFlags_NoAutoClosePopups)) {
-                if (scene().dirty()) {
+                if (scene().dirty() && scene().path().empty()) {
                     pending_open_.assign(a->path.view());
                     close();
                     popup_ = Popup::ConfirmOpen;
@@ -569,7 +979,8 @@ void EditorShell::draw_popups() {
     for (int which = 3; which <= 5; ++which) {
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
         if (!ImGui::BeginPopupModal(kIds[which], nullptr, ImGuiWindowFlags_AlwaysAutoResize)) continue;
-        ImGui::Text("'%s' has unsaved changes.", scene().doc().name().data());
+        if (scene().dirty()) ImGui::Text("'%s' has unsaved changes.", scene().doc().name().data());
+        else ImGui::TextUnformatted("Other open scenes have unsaved changes (kept in their autosave files).");
         const auto proceed = [&] {
             const Popup p = popup_;
             close();
@@ -578,7 +989,10 @@ void EditorShell::draw_popups() {
                 session_.new_scene("untitled");
                 frame_scene();
             }
-            if (p == Popup::ConfirmOpen) open_scene(pending_open_.view());
+            if (p == Popup::ConfirmOpen) {
+                if (scene().path().empty()) session_.new_scene("untitled");  // the untitled draft was saved or discarded
+                open_scene(pending_open_.view());
+            }
         };
         if (ImGui::Button("Save")) {
             if (save_scene()) {
@@ -593,6 +1007,91 @@ void EditorShell::draw_popups() {
             session_.discard_autosave();
             proceed();
         }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
+        ImGui::EndPopup();
+    }
+
+    // Ctrl+P: type to search assets, entities, panels and commands; Up/Down pick, Enter runs, Esc closes.
+    {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(center.x, vp->Pos.y + vp->Size.y * 0.15f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f));
+        if (ImGui::BeginPopup("Quick Open", ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize)) {
+            QuickOpen& q = impl_->quick;
+            if (ImGui::IsWindowAppearing()) {
+                fill_quick_open();
+                impl_->quick_query[0] = '\0';
+                impl_->quick_sel = 0;
+                ImGui::SetKeyboardFocusHere();
+            }
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::InputText("##query", impl_->quick_query, sizeof(impl_->quick_query))) impl_->quick_sel = 0;
+            Array<u32> hits;
+            q.search(StringView(impl_->quick_query), 12, hits);
+            const i32 n = static_cast<i32>(hits.size());
+            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow) && n > 0) impl_->quick_sel = (impl_->quick_sel + 1) % n;
+            if (ImGui::IsKeyPressed(ImGuiKey_UpArrow) && n > 0) impl_->quick_sel = (impl_->quick_sel + n - 1) % n;
+            if (impl_->quick_sel >= n) impl_->quick_sel = n > 0 ? n - 1 : 0;
+            if (n == 0) ImGui::TextDisabled("(no match)");
+            i32 run = -1;
+            for (i32 i = 0; i < n; ++i) {
+                const QuickOpenItem& it = q.items()[hits[static_cast<usize>(i)]];
+                ImGui::PushID(i);
+                if (ImGui::Selectable(it.label.c_str(), i == impl_->quick_sel, ImGuiSelectableFlags_NoAutoClosePopups))
+                    run = i;
+                ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60.0f);
+                ImGui::TextDisabled("%s", quick_open_kind_name(it.kind));
+                ImGui::PopID();
+            }
+            if (n > 0 && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)))
+                run = impl_->quick_sel;
+            if (run >= 0) {
+                const QuickOpenItem item = q.items()[hits[static_cast<usize>(run)]];
+                close();
+                run_quick_open(item);
+            } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                close();
+            }
+            ImGui::EndPopup();
+        } else if (popup_ == Popup::QuickOpen && popup_opened_) {
+            popup_ = Popup::None;  // a click outside closed it
+            popup_opened_ = false;
+        }
+    }
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Rename Selection", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::IsWindowAppearing()) {
+            std::snprintf(impl_->rename_pattern, sizeof impl_->rename_pattern, "%s", "*_##");
+            impl_->rename_start = 1;
+            ImGui::SetKeyboardFocusHere();
+        }
+        ImGui::TextUnformatted("Pattern: ## is the number, * the current name");
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 16.0f);
+        const bool enter = ImGui::InputText("##pattern", impl_->rename_pattern, sizeof impl_->rename_pattern,
+                                            ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::InputInt("First number", &impl_->rename_start);
+        if (impl_->rename_start < 0) impl_->rename_start = 0;
+        const StringView pattern(impl_->rename_pattern);
+        const u32 first = static_cast<u32>(impl_->rename_start);
+        u32 n = 0;
+        for (const DocEntity& e : scene().doc().entities()) {
+            if (!scene().selection().contains(e.id)) continue;
+            if (n < 4)
+                ImGui::TextDisabled("%s -> %s", e.name.c_str(),
+                                    batch_rename_expand(pattern, e.name.view(), n, first).c_str());
+            ++n;
+        }
+        if (n > 4) ImGui::TextDisabled("... and %u more", n - 4);
+        const bool valid = !pattern.empty() && n > 0;
+        ImGui::BeginDisabled(!valid);
+        if (ImGui::Button("Rename") || (enter && valid)) {
+            rename_selection(pattern, first);
+            close();
+        }
+        ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
         ImGui::EndPopup();
@@ -650,6 +1149,23 @@ void EditorShell::draw_menu_bar() {
         const bool proj = scene_mode();
         if (ImGui::MenuItem("New Scene", "Ctrl+N", false, proj)) new_scene();
         if (ImGui::MenuItem("Open Scene...", "Ctrl+O", false, proj)) popup_ = Popup::OpenScene;
+        if (ImGui::BeginMenu("Open Recent", proj && !impl_->recent.items().empty())) {
+            cook::String chosen;
+            for (const cook::String& path : impl_->recent.items()) {
+                cook::String rel;
+                const bool has_rel = session_.project().relative_asset_path(path.view(), rel);
+                if (ImGui::MenuItem(has_rel ? rel.c_str() : path.c_str())) chosen = path;
+            }
+            if (!chosen.empty()) {
+                if (cook::fs::exists(chosen.view())) {
+                    request_open_scene(chosen.view());
+                } else {  // deleted or moved since: forget it
+                    MCE_LOG_WARN("editor: {} no longer exists", chosen.view());
+                    impl_->recent.remove(chosen.view());
+                }
+            }
+            ImGui::EndMenu();
+        }
         if (ImGui::MenuItem("Save Scene", "Ctrl+S", false, proj)) save_scene();
         if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S", false, proj)) popup_ = Popup::SaveAs;
         ImGui::Separator();
@@ -697,10 +1213,72 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem(undo_text.c_str(), "Ctrl+Z", false, scene().can_undo())) scene().undo();
         if (ImGui::MenuItem(redo_text.c_str(), "Ctrl+Y", false, scene().can_redo())) scene().redo();
         ImGui::Separator();
+        if (ImGui::MenuItem("Previous selection", "Alt+Left", false, impl_->sel_history.can_back())) selection_back();
+        if (ImGui::MenuItem("Next selection", "Alt+Right", false, impl_->sel_history.can_forward()))
+            selection_forward();
+        if (ImGui::MenuItem("Rename selection...", nullptr, false, sel)) popup_ = Popup::BatchRename;
+        if (ImGui::MenuItem("Make names unique")) unique_names_in(scene());
+        if (ImGui::BeginMenu("Align", scene().selection().items().size() >= 2)) {
+            if (ImGui::MenuItem("Left")) align_selection(scene(), AlignAxis::X, AlignMode::Min);
+            if (ImGui::MenuItem("Center horizontally")) align_selection(scene(), AlignAxis::X, AlignMode::Center);
+            if (ImGui::MenuItem("Right")) align_selection(scene(), AlignAxis::X, AlignMode::Max);
+            if (ImGui::MenuItem("Bottom")) align_selection(scene(), AlignAxis::Y, AlignMode::Min);
+            if (ImGui::MenuItem("Center vertically")) align_selection(scene(), AlignAxis::Y, AlignMode::Center);
+            if (ImGui::MenuItem("Top")) align_selection(scene(), AlignAxis::Y, AlignMode::Max);
+            ImGui::Separator();
+            const bool three = scene().selection().items().size() >= 3;
+            if (ImGui::MenuItem("Distribute horizontally", nullptr, false, three))
+                align_selection(scene(), AlignAxis::X, AlignMode::Min, true);
+            if (ImGui::MenuItem("Distribute vertically", nullptr, false, three))
+                align_selection(scene(), AlignAxis::Y, AlignMode::Min, true);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Select")) {
+            if (ImGui::MenuItem("All", "Ctrl+A")) select_ids(scene(), select_all(scene()));
+            if (ImGui::MenuItem("Invert", "Ctrl+I")) select_ids(scene(), invert_selection(scene()));
+            ImGui::Separator();
+            ImGui::BeginDisabled(!sel);
+            if (ImGui::MenuItem("Parent", "Alt+Up")) select_around(scene(), Relation::Parent);
+            if (ImGui::MenuItem("Children", "Alt+Down")) select_around(scene(), Relation::Children);
+            if (ImGui::MenuItem("All descendants", "Alt+Shift+Down")) select_around(scene(), Relation::Descendants);
+            if (ImGui::MenuItem("Siblings")) select_around(scene(), Relation::Siblings);
+            if (ImGui::MenuItem("Similar")) select_ids(scene(), select_similar(scene()));
+            ImGui::EndDisabled();
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Selection sets")) {
+            for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
+                FixedString<32> label;
+                char text[32];
+                std::snprintf(text, sizeof text, "Set %u (%zu)", i + 1, impl_->sel_sets.size(i));
+                label.append(text);
+                char keys[24];
+                std::snprintf(keys, sizeof keys, "Alt+%u", i + 1);
+                if (ImGui::MenuItem(label.c_str(), keys, false, impl_->sel_sets.has(i))) recall_selection_set(i);
+            }
+            ImGui::TextDisabled("Ctrl+Shift+1..9 stores the selection");
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
+        if (ImGui::MenuItem("Copy path", nullptr, false, sel)) copy_selection_paths(scene());
+        if (ImGui::MenuItem("Flip horizontally", nullptr, false, sel)) flip_selection(scene(), AlignAxis::X);
+        if (ImGui::MenuItem("Flip vertically", nullptr, false, sel)) flip_selection(scene(), AlignAxis::Y);
+        if (ImGui::BeginMenu("Match to anchor", scene().selection().items().size() >= 2)) {
+            if (ImGui::MenuItem("Position")) match_selection(scene(), MatchPart::Position);
+            if (ImGui::MenuItem("Rotation")) match_selection(scene(), MatchPart::Rotation);
+            if (ImGui::MenuItem("Scale")) match_selection(scene(), MatchPart::Scale);
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Snap to grid", nullptr, false, sel)) snap_selection(scene(), view_.snap_step);
+        if (ImGui::MenuItem("Reset transform", nullptr, false, sel)) reset_selection_transforms(scene());
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
+        if (ImGui::MenuItem("Duplicate right", nullptr, false, sel)) duplicate_stepped(scene(), view_.snap_step, 0.0f);
+        if (ImGui::MenuItem("Duplicate up", nullptr, false, sel)) duplicate_stepped(scene(), 0.0f, view_.snap_step);
+        if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
+        if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G", false, sel)) ungroup_selection(scene());
         ImGui::Separator();
         if (ImGui::MenuItem("Move tool", "W", view_.gizmo == GizmoMode::Move)) view_.gizmo = GizmoMode::Move;
         if (ImGui::MenuItem("Rotate tool", "E", view_.gizmo == GizmoMode::Rotate)) view_.gizmo = GizmoMode::Rotate;
@@ -720,12 +1298,30 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Reset layout")) reset_layout();
         ImGui::MenuItem("Grid", nullptr, &view_.show_grid, scene_mode());
         ImGui::MenuItem("Perception (while playing)", nullptr, &view_.show_perception, scene_mode());
+        ImGui::MenuItem("Roads (while playing)", nullptr, &view_.show_roads, scene_mode());
+        ImGui::MenuItem("Gameplay debug (while playing)", nullptr, &view_.show_gameplay, scene_mode());
         ImGui::MenuItem("Game camera while playing", nullptr, &view_.play_camera, scene_mode());
         if (ImGui::MenuItem("3D orbit view", "O", &view_.orbit_view, scene_mode()) && view_.orbit_view) frame_scene();
         ImGui::MenuItem("Orbit camera collision", nullptr, &view_.orbit_collision, scene_mode() && view_.orbit_view);
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
         ImGui::DragFloat("Collider depth", &view_.orbit_depth, 0.05f, 0.05f, 50.0f, "%.2f m");
         if (ImGui::MenuItem("Frame scene", "F", false, scene_mode())) frame_scene();
+        if (ImGui::BeginMenu("Camera bookmarks", scene_mode())) {
+            for (u32 i = 0; i < CameraBookmarks::kSlots; ++i) {
+                char label[32], key[8];
+                std::snprintf(label, sizeof(label), "Go to %u", i + 1);
+                std::snprintf(key, sizeof(key), "%u", i + 1);
+                if (ImGui::MenuItem(label, key, false, impl_->bookmarks.has(i))) recall_bookmark(i);
+            }
+            ImGui::Separator();
+            for (u32 i = 0; i < CameraBookmarks::kSlots; ++i) {
+                char label[32], key[16];
+                std::snprintf(label, sizeof(label), "Save view as %u", i + 1);
+                std::snprintf(key, sizeof(key), "Ctrl+%u", i + 1);
+                if (ImGui::MenuItem(label, key)) save_bookmark(i);
+            }
+            ImGui::EndMenu();
+        }
         ImGui::MenuItem("ImGui demo", nullptr, &show_demo_);
         ImGui::EndMenu();
     }

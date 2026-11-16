@@ -1,0 +1,1 @@
+- M-WATER2 49a seam: `render::WaterSurface::flow` (current velocity on world xz, m/s, default zero, clamped to -5..5 with NaN to 0 by `apply_quality`) and `Forward3DStats::water_reflect` / `water_refract` (false); data only, nothing reads them yet. The only wide-header edits of the milestone (`scene3d.h` 222 of 1038 TUs, `forward3d.h` 193), shipped alone.

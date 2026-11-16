@@ -265,3 +265,124 @@ TEST_CASE("focus loss lifts every touch") {
     in.sample_for_tick(3);
     CHECK(in.state().touch_count == 0);
 }
+
+TEST_CASE("touch_held and touch_pos follow a finger, and refuse a slot past kMaxTouches") {
+    InputSystem in;
+    setup(in);
+    CHECK_FALSE(in.touch_held(0));
+    in.push_event(test::touch_event(EventType::TouchDown, 1, 0.25f, 0.75f, at(1)));
+    in.sample_for_tick(1);
+    CHECK(in.touch_held(1));
+    CHECK_FALSE(in.touch_held(0));
+    CHECK(in.touch_pos(1).x == doctest::Approx(0.25f));
+    CHECK(in.touch_pos(1).y == doctest::Approx(0.75f));
+    in.push_event(test::touch_event(EventType::TouchMove, 1, 0.5f, 0.5f, at(2)));
+    in.sample_for_tick(2);
+    CHECK(in.touch_pos(1).x == doctest::Approx(0.5f));
+    CHECK(in.touch_pos(1).y == doctest::Approx(0.5f));
+    CHECK_FALSE(in.touch_held(platform::kMaxTouches));
+    CHECK(in.touch_pos(platform::kMaxTouches).x == 0.f);
+    CHECK(in.touch_pos(platform::kMaxTouches).y == 0.f);
+    CHECK(in.touch_pos(0xFFFFFFFFu).x == 0.f);
+}
+
+TEST_CASE("mouse_held follows the button events and ignores an unknown button") {
+    InputSystem in;
+    setup(in);
+    CHECK_FALSE(in.mouse_held(platform::MouseButton::Left));
+    in.push_event(test::simple_event(EventType::MouseButtonDown, at(1), static_cast<u32>(platform::MouseButton::Left)));
+    in.sample_for_tick(1);
+    CHECK(in.mouse_held(platform::MouseButton::Left));
+    CHECK_FALSE(in.mouse_held(platform::MouseButton::Right));
+    in.push_event(test::simple_event(EventType::MouseButtonUp, at(2), static_cast<u32>(platform::MouseButton::Left)));
+    in.sample_for_tick(2);
+    CHECK_FALSE(in.mouse_held(platform::MouseButton::Left));
+    CHECK_FALSE(in.mouse_held(static_cast<platform::MouseButton>(99)));
+}
+
+TEST_CASE("set_tick_origin_us is read back and moves the tick grid") {
+    InputSystem in;
+    setup(in);
+    CHECK(in.tick_origin_us() == 0);
+    in.set_tick_origin_us(1'000'000);
+    CHECK(in.tick_origin_us() == 1'000'000);
+    // Tick 1's window is now [1.000 s, 1.0167 s): a press 8 ms in lands in tick 1.
+    in.push_event(test::key_event(platform::Key::Space, true, 1'008'000));
+    const InputState s = in.sample_for_tick(1);
+    CHECK(s.jump_held);
+}
+
+TEST_CASE("a touch_zone binding is held while a touch that began in the zone is down") {
+    InputMapBuilder b;
+    b.map(MCE_SID("Zone"));
+    b.action(MCE_SID("Fire"), ActionType::Button).touch_zone(TouchZoneRect{0.5f, 0.5f, 1.f, 1.f});
+    Array<byte> chunk;
+    b.encode(chunk);
+    InputSystem in;
+    REQUIRE(in.load_map(chunk.span()).has_value());
+    in.set_tick_origin_us(0);
+    in.set_view_size(1000.f, 500.f);
+
+    in.push_event(test::touch_event(EventType::TouchDown, 0, 0.2f, 0.2f, at(1)));  // outside the zone
+    in.sample_for_tick(1);
+    CHECK_FALSE(in.state().held(MCE_SID("Fire")));
+    in.push_event(test::touch_event(EventType::TouchMove, 0, 0.8f, 0.8f, at(2)));  // dragged in: still not
+    in.sample_for_tick(2);
+    CHECK_FALSE(in.state().held(MCE_SID("Fire")));
+    in.push_event(test::touch_event(EventType::TouchUp, 0, 0.8f, 0.8f, at(3)));
+    in.sample_for_tick(3);
+
+    in.push_event(test::touch_event(EventType::TouchDown, 1, 0.75f, 0.75f, at(5)));  // inside
+    in.sample_for_tick(4);
+    in.sample_for_tick(5);
+    CHECK(in.state().held(MCE_SID("Fire")));
+    in.push_event(test::touch_event(EventType::TouchMove, 1, 0.1f, 0.1f, at(6)));  // dragged out: still held
+    in.sample_for_tick(6);
+    CHECK(in.state().held(MCE_SID("Fire")));
+    in.push_event(test::touch_event(EventType::TouchUp, 1, 0.1f, 0.1f, at(7)));
+    for (u64 t = 7; t <= 9; ++t) in.sample_for_tick(t);
+    CHECK_FALSE(in.state().held(MCE_SID("Fire")));
+}
+
+TEST_CASE("a Resized event changes the view the tap slop is measured in; a zero size is ignored") {
+    InputSystem in;
+    setup(in);  // 1000x500
+    // 0.025 of the width is 0.05 short-side units here: more than a tap may travel.
+    in.push_event(test::touch_event(EventType::TouchDown, 0, 0.70f, 0.6f, at(1, 0.1f)));
+    in.push_event(test::touch_event(EventType::TouchUp, 0, 0.725f, 0.6f, at(1, 0.6f)));
+    in.sample_for_tick(1);
+    CHECK_FALSE(in.state().jump_pressed);
+
+    platform::Event rs;
+    rs.type = EventType::Resized;
+    rs.x = 500.f;  // portrait: the same normalized move is 0.025 units, a tap
+    rs.y = 1000.f;
+    rs.timestamp_us = at(2, 0.1f);
+    in.push_event(rs);
+    in.push_event(test::touch_event(EventType::TouchDown, 0, 0.70f, 0.6f, at(3, 0.1f)));
+    in.push_event(test::touch_event(EventType::TouchUp, 0, 0.725f, 0.6f, at(3, 0.6f)));
+    in.sample_for_tick(2);
+    in.sample_for_tick(3);
+    CHECK(in.state().jump_pressed);
+
+    in.set_view_size(0.f, 0.f);  // refused: the portrait view stays
+    in.push_event(test::touch_event(EventType::TouchDown, 0, 0.70f, 0.6f, at(5, 0.1f)));
+    in.push_event(test::touch_event(EventType::TouchUp, 0, 0.725f, 0.6f, at(5, 0.6f)));
+    in.sample_for_tick(4);
+    in.sample_for_tick(5);
+    CHECK(in.state().jump_pressed);
+}
+
+TEST_CASE("M-HARDEN4: a snapshot carries kMaxTouchPoints touches, the oldest first, and drops the rest") {
+    InputSystem in;
+    setup(in);
+    constexpr u32 kFingers = kMaxTouchPoints + 2;
+    static_assert(kFingers <= platform::kMaxTouches);
+    for (u32 slot = 0; slot < kFingers; ++slot)
+        in.push_event(test::touch_event(EventType::TouchDown, kFingers - 1 - slot, 0.1f * static_cast<f32>(slot), 0.5f,
+                                        at(1, 0.1f + 0.05f * static_cast<f32>(slot))));
+    in.sample_for_tick(1);
+    REQUIRE(in.state().touch_count == kMaxTouchPoints);
+    for (u32 i = 0; i < kMaxTouchPoints; ++i)
+        CHECK(in.state().touches[i].slot == kFingers - 1 - i);  // started first = listed first
+}

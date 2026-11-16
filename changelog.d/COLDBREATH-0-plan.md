@@ -1,0 +1,1 @@
+- M-COLDBREATH plan: an opt-in `ColdBreath` component for winter breath puffs in front of the camera as one render-side emitter (steps 34a to 34d); nothing is built yet.

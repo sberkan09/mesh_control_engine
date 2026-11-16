@@ -1,0 +1,1 @@
+- CI: `.github/workflows/release.yml` packages Ember Step as a zip for Linux, Windows and macOS on hosted runners and, on a `v*` tag, attaches them to a GitHub release. See `docs/milestones/M-PLATFORM-CI.md`.

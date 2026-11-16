@@ -5,6 +5,7 @@
 
 #include "mce/core.h"
 #include "shader_cross.h"
+#include "shaders3d.h"  // render's 3D shaders (M-LENSFLARE 38c case)
 
 using namespace mce;
 using namespace mce::rhi::metal;
@@ -124,4 +125,218 @@ void main() {
     CHECK(contains(msl, "u_in [[texture(19)]]"));
     CHECK(contains(msl, "atomic_fetch_add_explicit"));
     CHECK_FALSE(contains(msl, "mce_flip_y"));
+}
+
+// M-LENSFLARE 38c: the flare's two fragment stages (render's shaders3d.h, the real sources) translate, with FlareU at
+// [[buffer(1)]] and their samplers at the GL binding numbers Forward3D::record_flare binds.
+TEST_CASE("shader_cross: the lens flare's occlusion and composite stages") {
+    FixedString<1024> log;
+    auto occ = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kFlareOccFS, "lens_flare_occ.frag", log);
+    REQUIRE_MESSAGE(occ.has_value(), log.c_str());
+    if (!occ) return;
+    CHECK(contains(occ.value(), "[[buffer(1)]]"));
+    CHECK(contains(occ.value(), "u_depth [[texture(7)]]"));
+    CHECK(contains(occ.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(occ.value(), "mce_flip_y"));
+    auto comp = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kFlareFS, "lens_flare.frag", log);
+    REQUIRE_MESSAGE(comp.has_value(), log.c_str());
+    if (!comp) return;
+    CHECK(contains(comp.value(), "[[buffer(1)]]"));
+    CHECK(contains(comp.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(comp.value(), "u_occ [[texture(8)]]"));
+    CHECK(contains(comp.value(), "[[sampler(8)]]"));
+}
+
+// M-OUTLINE 39c: the edge outline's fragment stage (render's shaders3d.h, the real source) translates, with OutlineU at
+// [[buffer(1)]] and its samplers at the GL binding numbers Forward3D::record_outline binds.
+TEST_CASE("shader_cross: the edge outline stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kOutlineFS, "edge_outline.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}
+
+// M-LIGHTCOOKIE 40c to 40f: the cookie bake stage, the lit mesh stage and the volumetric injection (render's shaders3d.h,
+// the real sources) translate: the bake with CookieBakeU at [[buffer(1)]] and its source at the GL binding 6; the lit stage with the shared
+// bank 2 (u_slot2: decal texture 2 or the cookie atlas) at texture and sampler 2 and the cookie records (storage bank 2)
+// at [[buffer(10)]] (kStorageBufferBase 8 + 2). Not built on Linux (macOS only): recorded in M-LIGHTCOOKIE as unverified
+// until a Mac run.
+TEST_CASE("shader_cross: the light cookie bake stage and the lit stage's cookie bindings") {
+    FixedString<1024> log;
+    auto bake = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCookieBakeFS, "light_cookie_bake.frag", log);
+    REQUIRE_MESSAGE(bake.has_value(), log.c_str());
+    if (!bake) return;
+    CHECK(contains(bake.value(), "[[buffer(1)]]"));
+    CHECK(contains(bake.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(bake.value(), "[[sampler(6)]]"));
+    CHECK_FALSE(contains(bake.value(), "mce_flip_y"));
+    auto lit = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kMeshFS, "pbr.frag", log);
+    REQUIRE_MESSAGE(lit.has_value(), log.c_str());
+    if (!lit) return;
+    CHECK(contains(lit.value(), "u_slot2 [[texture(2)]]"));
+    CHECK(contains(lit.value(), "[[sampler(2)]]"));
+    CHECK(contains(lit.value(), "[[buffer(10)]]"));
+    // M-LIGHTCOOKIE 40f: the volumetric injection binds the atlas and the records where the lit stage does.
+    auto inject = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kVolInjectFS, "vol_inject.frag", log);
+    REQUIRE_MESSAGE(inject.has_value(), log.c_str());
+    if (!inject) return;
+    CHECK(contains(inject.value(), "u_slot2 [[texture(2)]]"));
+    CHECK(contains(inject.value(), "[[sampler(2)]]"));
+    CHECK(contains(inject.value(), "[[buffer(10)]]"));
+}
+
+// M-TRANSLUCENT 41d / 41e: the lit mesh and terrain stages with the thin-surface terms (the o_skin.w decode, PassU's
+// p_translucency, the two-sided SH9 and irradiance-volume reads) translate with no new resource: the same SH9 texture at
+// texture 15, the volume at 5, the cookie records at [[buffer(10)]], no extra buffer. Not built on Linux (macOS only):
+// unverified until a Mac run, as the cookie case above.
+TEST_CASE("shader_cross: the lit stages with thin-surface translucency and wrap") {
+    FixedString<1024> log;
+    for (const char* src : {mce::render::shaders3d::kMeshFS, mce::render::shaders3d::kTerrainFS}) {
+        auto lit = translate_glsl(ShaderStage::Fragment, src, "pbr.frag", log);
+        REQUIRE_MESSAGE(lit.has_value(), log.c_str());
+        if (!lit) return;
+        CHECK(contains(lit.value(), "p_translucency"));
+        CHECK(contains(lit.value(), "u_env_sh [[texture(15)]]"));
+        CHECK(contains(lit.value(), "u_gi [[texture(5)]]"));
+        CHECK(contains(lit.value(), "[[buffer(10)]]"));
+    }
+}
+
+// M-LENSRAIN 42c: the lens rain's fragment stage (render's shaders3d.h, the real source) translates, with LensRainU at
+// [[buffer(1)]] and its source at the GL binding 6 Forward3D::record_lens_rain binds. Not built on Linux (macOS only):
+// unverified until a Mac run, like the cookie case above.
+TEST_CASE("shader_cross: the lens rain stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kLensRainFS, "lens_rain.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "[[sampler(6)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}
+
+// M-HEATHAZE 43c: the heat haze's fragment stage (render's shaders3d.h, the real source) translates, with HazeU at
+// [[buffer(1)]], the HDR frame at the GL binding 6 and the opaque prepass at 7, as Forward3D::record_heat_haze binds
+// them. Not built on Linux (macOS only): unverified until a Mac run, like the lens rain case above.
+TEST_CASE("shader_cross: the heat haze stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kHazeFS, "haze.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}
+
+// M-UNDERWATER 44c: the underwater fragment stage (render's shaders3d.h, the real source) translates, with UnderwaterU at
+// [[buffer(1)]], the HDR frame at the GL binding 6 and the opaque prepass at 7, as Forward3D::record_underwater binds
+// them. Not built on Linux (macOS only): unverified until a Mac run, like the heat haze case above.
+TEST_CASE("shader_cross: the underwater stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kUnderwaterFS, "underwater.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}
+
+// M-SUNSHAFTS 45c: the sun shafts' two fragment stages (render's shaders3d.h, the real sources) translate, with ShaftsU at
+// [[buffer(1)]] and their samplers at the GL binding numbers Forward3D::record_sun_shafts binds (the HDR frame at 6, the
+// opaque prepass at 7, the ray buffer at 8). Not built on Linux (macOS only): unverified until a Mac run, like the cases
+// above.
+TEST_CASE("shader_cross: the sun shafts' accumulation and composite stages") {
+    FixedString<1024> log;
+    auto acc = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kShaftsFS, "sun_shafts.frag", log);
+    REQUIRE_MESSAGE(acc.has_value(), log.c_str());
+    if (!acc) return;
+    CHECK(contains(acc.value(), "[[buffer(1)]]"));
+    CHECK(contains(acc.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(acc.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(acc.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(acc.value(), "mce_flip_y"));
+    auto comp = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kShaftsCompFS, "sun_shafts_comp.frag", log);
+    REQUIRE_MESSAGE(comp.has_value(), log.c_str());
+    if (!comp) return;
+    CHECK(contains(comp.value(), "[[buffer(1)]]"));
+    CHECK(contains(comp.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(comp.value(), "u_rays [[texture(8)]]"));
+    CHECK(contains(comp.value(), "[[sampler(8)]]"));
+    CHECK_FALSE(contains(comp.value(), "mce_flip_y"));
+}
+
+// M-CLOUDSHADOW 51c: the cloud shadow fragment stage (render's shaders3d.h, the real source) translates, with CloudShadowU
+// at [[buffer(1)]] and its samplers at the GL binding numbers Forward3D::record_cloud_shadow binds (post_source_ at 6, the
+// opaque prepass at 7). Not built on Linux (macOS only): unverified until a Mac run, like the cases above.
+TEST_CASE("shader_cross: the cloud shadow stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCloudShadowFS, "cloud_shadow.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}
+
+// M-CIRRUS 53b: the sky pass and the water, whose fragment stages carry the cirrus layer (apply_cirrus, p_cirrus /
+// p_cirrus2 in PassU), translate, with PassU at [[buffer(1)]]. Not built on Linux (macOS only): unverified until a Mac
+// run, like the cases above.
+TEST_CASE("shader_cross: the sky and water stages with the cirrus layer") {
+    FixedString<1024> log;
+    auto sky = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kSkyFS, "sky.frag", log);
+    REQUIRE_MESSAGE(sky.has_value(), log.c_str());
+    if (!sky) return;
+    CHECK(contains(sky.value(), "[[buffer(1)]]"));
+    CHECK(contains(sky.value(), "p_cirrus2"));
+    auto water = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kWaterFS, "water.frag", log);
+    REQUIRE_MESSAGE(water.has_value(), log.c_str());
+    if (!water) return;
+    CHECK(contains(water.value(), "[[buffer(1)]]"));
+    CHECK(contains(water.value(), "p_cirrus2"));
+}
+
+// M-HALO 54b: the sky pass and the water, whose cirrus layer carries the ice halo (halo_term, p_halo the last vec4 of
+// PassU), translate, with PassU at [[buffer(1)]]. Not built on Linux (macOS only): unverified until a Mac run, like the
+// cases above.
+TEST_CASE("shader_cross: the sky and water stages with the ice halo") {
+    FixedString<1024> log;
+    auto sky = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kSkyFS, "sky.frag", log);
+    REQUIRE_MESSAGE(sky.has_value(), log.c_str());
+    if (!sky) return;
+    CHECK(contains(sky.value(), "[[buffer(1)]]"));
+    CHECK(contains(sky.value(), "p_halo"));
+    CHECK(contains(sky.value(), "halo_term"));
+    auto water = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kWaterFS, "water.frag", log);
+    REQUIRE_MESSAGE(water.has_value(), log.c_str());
+    if (!water) return;
+    CHECK(contains(water.value(), "[[buffer(1)]]"));
+    CHECK(contains(water.value(), "p_halo"));
+}
+
+// M-CAUSTICS 52b: the caustics fragment stage (render's shaders3d.h, the real source) translates, with CausticsU at
+// [[buffer(1)]] and its samplers at the GL binding numbers Forward3D::record_caustics binds (the volumetric fog at 4,
+// post_source_ at 6, the opaque prepass at 7). Not built on Linux (macOS only): unverified until a Mac run, like the cases above.
+TEST_CASE("shader_cross: the caustics stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCausticsFS, "caustics.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "u_vol [[texture(4)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
 }

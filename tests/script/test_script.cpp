@@ -4,6 +4,7 @@
 
 #include <cstring>
 
+#include "mce/log.h"
 #include "mce/refl/macros.h"
 #include "mce/script/compiler.h"
 
@@ -97,6 +98,95 @@ TEST_CASE("script: a Luau system moves entities through reflected fields") {
     CHECK(host.scripts()[0].last_steps > 0);
 }
 
+TEST_CASE("script: the step profile counts updates, peak and total steps (M-SCRIPTPROF 1)") {
+    World w;
+    w.register_components<Counter>();
+    ScriptHost host;
+    // Work grows with the tick: the loop runs `mce.tick()` times, so the peak is the last update's cost.
+    REQUIRE(script::add_source(host, "grow", "function update() for i = 1, mce.tick() do end end"));
+    host.install(w);
+    CHECK(host.scripts()[0].updates == 0);
+    for (u32 t = 1; t <= 10; ++t) w.tick(1.0 / 60, t);
+    const script::ScriptInfo& info = host.scripts()[0];
+    CHECK(info.updates == 10);
+    CHECK(info.peak_steps == info.last_steps);
+    CHECK(info.peak_steps > 0);
+    CHECK(info.total_steps > info.peak_steps);  // ten updates, the earlier ones cheaper
+    CHECK(host.budget().steps_per_tick == 200000u);
+
+    // A script that runs out of its budget shows the limit it hit, not the counter the error handler reset.
+    script::ScriptBudget small;
+    small.steps_per_tick = 500;
+    ScriptHost tight(small);
+    REQUIRE(script::add_source(tight, "spin", "function update() while true do end end"));
+    tight.install(w);
+    w.tick(1.0 / 60, 1);
+    const script::ScriptInfo& spun = tight.scripts()[0];
+    CHECK(spun.state == script::ScriptState::Failed);
+    CHECK(spun.updates == 1);
+    CHECK(spun.peak_steps == 501u);
+    CHECK(spun.total_steps == 501u);
+    // M-SCRIPTPROF 2: the error names the script line that spent the budget.
+    CHECK(StringView(spun.error.c_str()).starts_with("spin:1: step budget exceeded (500 per tick)"));
+
+    ScriptHost deeper(small);
+    REQUIRE(script::add_source(deeper, "deep", "local function burn()\n    while true do end\nend\nfunction update()\n    burn()\nend"));
+    deeper.install(w);
+    w.tick(1.0 / 60, 2);
+    CHECK(StringView(deeper.scripts()[0].error.c_str()).starts_with("deep:2: step budget exceeded"));
+}
+
+TEST_CASE("script: mce.log lines name the script that wrote them (M-SCRIPTPROF 3)") {
+    World w;
+    ScriptHost host;
+    REQUIRE(script::add_source(host, "first", "function update() if mce.tick() == 1 then mce.log('hello from one') end end"));
+    REQUIRE(script::add_source(host, "second", "mce.log('loading two')\nfunction update() if mce.tick() == 1 then mce.log('hello from two') end end"));
+    host.install(w);
+    log::set_level(log::Level::Info);  // the test runner logs warnings and up
+    const u64 since = log::console_last_seq();
+    w.tick(1.0 / 60, 1);
+    Array<log::ConsoleLine> lines;
+    lines.resize(log::kConsoleRingSize);
+    lines.resize(log::read_console(since, lines.span()));
+    bool one = false, two = false;
+    for (const log::ConsoleLine& l : lines) {
+        one = one || StringView(l.text.c_str()).find("[first] script: hello from one") != StringView::npos;
+        two = two || StringView(l.text.c_str()).find("[second] script: hello from two") != StringView::npos;
+    }
+    log::set_level(log::Level::Warn);
+    CHECK(one);
+    CHECK(two);
+}
+
+TEST_CASE("script: mce.log takes a level; an unknown level is a script error (M-SCRIPTLOG 1)") {
+    World w;
+    ScriptHost host;
+    REQUIRE(script::add_source(host, "loud", "function update() if mce.tick() == 1 then mce.log('careful', 'warn') mce.log('broken', 'error') end end"));
+    host.install(w);
+    const u64 since = log::console_last_seq();
+    w.tick(1.0 / 60, 1);
+    Array<log::ConsoleLine> lines;
+    lines.resize(log::kConsoleRingSize);
+    lines.resize(log::read_console(since, lines.span()));
+    bool warn = false, error = false;
+    for (const log::ConsoleLine& l : lines) {
+        const bool has = StringView(l.text.c_str()).find("[loud] script: careful") != StringView::npos;
+        warn = warn || (has && l.level == log::Level::Warn);
+        const bool has_e = StringView(l.text.c_str()).find("[loud] script: broken") != StringView::npos;
+        error = error || (has_e && l.level == log::Level::Error);
+    }
+    CHECK(warn);
+    CHECK(error);
+
+    World w2;
+    ScriptHost bad;
+    REQUIRE(script::add_source(bad, "bad", "function update() mce.log('x', 'loud') end"));
+    bad.install(w2);
+    w2.tick(1.0 / 60, 1);
+    REQUIRE_FALSE(bad.scripts()[0].error.empty());
+    CHECK(StringView(bad.scripts()[0].error.c_str()).find("level is \"info\", \"warn\" or \"error\"") != StringView::npos);
+}
+
 TEST_CASE("script: the same inputs give the same state hash (FR-RUN-040)") {
     const u64 a = run_movers(600);
     const u64 b = run_movers(600);
@@ -124,6 +214,29 @@ end
     CHECK(w.try_get<Counter>(e)->n == 3);
     CHECK(w.try_get<Counter>(e)->done);
     CHECK(w.is_changed<Counter>(e, before));
+}
+
+TEST_CASE("script: one mce.get / mce.set call spans fields of several components (M-WORKFLOW 7)") {
+    World w;
+    w.register_components<Mover, Counter>();
+    Mover m;
+    m.velocity = vec3{1, 0, 0};
+    const Entity e = w.spawn_with(Counter{}, m);
+    ScriptHost host;
+    REQUIRE(script::add_source(host, "mixed", R"(
+function update()
+    mce.each("Counter", "Mover", function(e)
+        local n, v = mce.get(e, "Counter", "n", "Mover", "velocity")
+        mce.set(e, "Counter", "n", n + 1, "Mover", "velocity", v * 2)
+    end)
+end
+)"));
+    host.install(w);
+    w.tick(1.0 / 60, 1);
+    w.tick(1.0 / 60, 2);
+    CHECK(host.scripts()[0].state == ScriptState::Running);
+    CHECK(w.try_get<Counter>(e)->n == 2);
+    CHECK(w.try_get<Mover>(e)->velocity.x == doctest::Approx(4.0f));
 }
 
 TEST_CASE("script: the sandbox hides the clock, the OS and unseeded randomness") {

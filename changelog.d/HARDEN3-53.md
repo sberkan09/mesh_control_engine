@@ -1,0 +1,1 @@
+- Tests: `to_upper` / `to_lower` for Cyrillic, Greek, Latin Extended-A and malformed UTF-8, and `plural_form` for more languages (M-HARDEN3 step 4).

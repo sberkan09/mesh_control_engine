@@ -159,3 +159,120 @@ TEST_CASE("net host: invalid uses fail cleanly") {
     CHECK_FALSE(a.is_open());
     CHECK(a.open_client());
 }
+
+TEST_CASE("net host: a name that does not resolve and a full client are refused") {
+    Host h;
+    HostDesc d = loopback_server();
+    d.bind_address = "no such host";
+    CHECK_FALSE(h.listen(d));
+    CHECK_FALSE(h.is_open());
+
+    Host server;
+    REQUIRE(server.listen(loopback_server()));
+    Host client;
+    REQUIRE(client.open_client());  // one peer slot
+    CHECK(client.connect("no such host", server.bound_port()) == kInvalidPeer);
+    REQUIRE(client.connect("127.0.0.1", server.bound_port()) != kInvalidPeer);
+    CHECK(client.connect("127.0.0.1", server.bound_port()) == kInvalidPeer);  // the slot is taken
+}
+
+TEST_CASE("net host: sequenced and unreliable messages, an unreliable broadcast, flush and disconnect_now") {
+    Host server;
+    REQUIRE(server.listen(loopback_server()));
+    Host client;
+    REQUIRE(client.open_client());
+    const PeerId to_server = client.connect("127.0.0.1", server.bound_port());
+    PeerId on_server = kInvalidPeer;
+    bool client_up = false;
+    REQUIRE(pump(
+        server, client,
+        [&](int side, const Event& ev) {
+            if (ev.kind != EventKind::Connected) return;
+            if (side == 0)
+                on_server = ev.peer;
+            else
+                client_up = true;
+        },
+        [&] { return on_server != kInvalidPeer && client_up; }));
+
+    // On a quiet loopback link none of these is lost or reordered.
+    const u8 a[1] = {'s'}, b[1] = {'u'}, c[1] = {'b'};
+    CHECK(client.send(to_server, 0, Span<const u8>(a, 1), Delivery::Sequenced));
+    CHECK(client.send(to_server, 1, Span<const u8>(b, 1), Delivery::Unreliable));
+    client.flush();
+    u32 sequenced = 0, unreliable = 0;
+    REQUIRE(pump(
+        server, client,
+        [&](int side, const Event& ev) {
+            if (side != 0 || ev.kind != EventKind::Received || ev.data.size() != 1) return;
+            if (ev.data[0] == 's') ++sequenced;
+            if (ev.data[0] == 'u') ++unreliable;
+        },
+        [&] { return sequenced == 1 && unreliable == 1; }));
+
+    server.broadcast(1, Span<const u8>(c, 1), Delivery::Unreliable);
+    u32 broadcast_seen = 0;
+    REQUIRE(pump(
+        server, client,
+        [&](int side, const Event& ev) {
+            if (side == 1 && ev.kind == EventKind::Received && ev.data.size() == 1 && ev.data[0] == 'b')
+                ++broadcast_seen;
+        },
+        [&] { return broadcast_seen == 1; }));
+
+    // disconnect_now forgets the peer at once, with no Disconnected event for the caller; the other
+    // side still learns of it.
+    server.disconnect_now(on_server, 5);
+    CHECK_FALSE(server.is_connected(on_server));
+    bool server_event = false, client_saw = false;
+    u32 bye = 0;
+    pump(
+        server, client,
+        [&](int side, const Event& ev) {
+            if (ev.kind != EventKind::Disconnected) return;
+            if (side == 0)
+                server_event = true;
+            else {
+                client_saw = true;
+                bye = ev.user_data;
+            }
+        },
+        [&] { return client_saw; });
+    CHECK(client_saw);
+    CHECK(bye == 5);
+    CHECK_FALSE(server_event);
+}
+
+TEST_CASE("net host: simulated latency holds a message back until it is due, then flush hands it to ENet") {
+    Host server;
+    REQUIRE(server.listen(loopback_server()));
+    Host client;
+    REQUIRE(client.open_client());
+    const PeerId to_server = client.connect("127.0.0.1", server.bound_port());
+    bool up = false;
+    REQUIRE(pump(
+        server, client,
+        [&](int side, const Event& ev) {
+            if (side == 1 && ev.kind == EventKind::Connected) up = true;
+        },
+        [&] { return up; }));
+
+    LinkConditions slow;
+    slow.latency_ms = 40;
+    client.set_conditions(slow);
+    CHECK(client.conditions().latency_ms == 40);
+    const u8 m[1] = {'x'};
+    CHECK(client.send(to_server, 0, Span<const u8>(m, 1), Delivery::Reliable));
+    CHECK(client.delayed_count() == 1);  // held, not sent
+    client.flush();
+    CHECK(client.delayed_count() == 1);  // not due yet
+
+    u32 got = 0;
+    REQUIRE(pump(
+        server, client,
+        [&](int side, const Event& ev) {
+            if (side == 0 && ev.kind == EventKind::Received) ++got;
+        },
+        [&] { return got == 1; }));
+    CHECK(client.delayed_count() == 0);
+}

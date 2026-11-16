@@ -1,0 +1,1 @@
+- Kit (M-PAYSPRAY 1): `PaySpray3D`, a garage that clears the wanted level of an offender who can pay, event `Sprayed3D`. Record: `docs/milestones/M-PAYSPRAY.md`.

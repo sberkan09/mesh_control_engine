@@ -1,0 +1,1 @@
+- Core, M-BENCH: `Array::resize` and `resize_uninitialized` now grow in 1.5x steps like `emplace_back` (exact from empty), so growing a buffer one chunk at a time is linear instead of quadratic.

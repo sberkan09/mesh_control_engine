@@ -1,0 +1,1 @@
+- Docs, M-JOINT2D: new milestone record and ROADMAP row for 2D joints as components (assessments gap: motor-erisim-bosluklari section 5).

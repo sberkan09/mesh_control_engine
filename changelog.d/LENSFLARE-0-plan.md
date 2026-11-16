@@ -1,0 +1,1 @@
+- M-LENSFLARE plan: an opt-in sun lens flare (glare halo, ghosts along the sun-to-centre axis, optional starburst), occluded by scene depth and added before bloom, render-side only (steps 38a to 38f); nothing is built yet.

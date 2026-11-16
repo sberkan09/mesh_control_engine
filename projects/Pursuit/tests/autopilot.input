@@ -1,0 +1,3 @@
+# Dungeon: hands the walk to the autopilot on tick 2 (Jump toggles it), so the run clears levels on its own.
+# The determinism stage plays it (Debug = Release hash).
+2 Jump

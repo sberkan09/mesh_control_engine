@@ -65,7 +65,10 @@ std::string make_pack(const std::string& path, std::vector<PackAsset> assets, co
     std::vector<ManifestItem> items;
     for (usize i = 0; i < assets.size(); ++i) {
         if (assets[i].type == ChunkType::Texture) texture_payload(assets[i].shade, payloads[i]);
-        else sfx_payload(payloads[i]);
+        else if (assets[i].type == ChunkType::Script) {
+            const byte code[4] = {byte(1), byte(2), byte(3), byte(4)};  // not valid Luau: the mount must never look
+            write_script("evil", Span<const byte>(code, 4), payloads[i]);
+        } else sfx_payload(payloads[i]);
         items.push_back({assets[i].guid, xxh64(payloads[i].data(), payloads[i].size()), assets[i].type, "x"});
     }
     Array<byte> mp;
@@ -86,7 +89,10 @@ std::string make_pack(const std::string& path, std::vector<PackAsset> assets, co
     for (usize i = 0; i < assets.size(); ++i) {
         ContainerWriter::ChunkDesc d;
         d.type = assets[i].type;
-        d.version = chunk_version(assets[i].type == ChunkType::Texture ? TEXTURE_VERSION : SFX_VERSION, 0);
+        d.version = chunk_version(assets[i].type == ChunkType::Texture  ? TEXTURE_VERSION
+                                  : assets[i].type == ChunkType::Script ? SCRIPT_VERSION
+                                                                        : SFX_VERSION,
+                                  0);
         d.guid = assets[i].guid;
         w.add(d, payloads[i].span());
     }
@@ -240,4 +246,77 @@ TEST_CASE("mods: a mod mounted before the game overrides same-type assets and ad
     REQUIRE(plain.mount(Span<const StringView>(game_only, 1)));
     CHECK(texture_shade(plain, kTex) == 0x22);
     CHECK(plain.find(kAdded) == kInvalidAssetKey);
+}
+
+TEST_CASE("mods: a mod pack cannot carry script bytecode, new or overriding (M-SCRIPT2 0)") {
+    const std::string dir = tmp_dir("mods_no_code");
+    const Guid kScript{0x5102030405060708ull, 5};
+    const Guid kAddedScript{0x6102030405060708ull, 6};
+    const std::string game = make_pack(dir + "/game.mce", {{kScript, ChunkType::Script, 0}}, nullptr);
+    const std::string mod = make_mod(dir, "mod.mce", "evil", "",
+                                     {{kScript, ChunkType::Script, 0}, {kAddedScript, ChunkType::Script, 0}, {kTex, ChunkType::Texture, 0x99}});
+
+    CHECK_FALSE(MountOptions{}.allow_code);  // the default is data-only: code is something a mount asks for
+    MountOptions own;
+    own.allow_code = true;
+
+    AssetSystem as;
+    const StringView mod_root[] = {mod};
+    REQUIRE(as.mount(Span<const StringView>(mod_root, 1)));  // default options
+    const StringView game_root[] = {game};
+    REQUIRE(as.mount(Span<const StringView>(game_root, 1), own));
+    CHECK(as.find(kAddedScript) == kInvalidAssetKey);  // the mod's new script never entered the table
+    REQUIRE(as.find(kScript) != kInvalidAssetKey);
+    CHECK(as.info(as.find(kScript)).path == "x");
+    CHECK(as.info(as.find(kScript)).type == ChunkType::Script);
+    CHECK(texture_shade(as, kTex) == 0x99);  // its data still loads
+
+    // The same pack mounted without asking for code has no scripts either.
+    AssetSystem plain;
+    REQUIRE(plain.mount(Span<const StringView>(game_root, 1)));
+    CHECK(plain.find(kScript) == kInvalidAssetKey);
+    AssetSystem trusted;
+    REQUIRE(trusted.mount(Span<const StringView>(game_root, 1), own));
+    CHECK(trusted.find(kScript) != kInvalidAssetKey);
+}
+
+TEST_CASE("mods: kMaxMods packs load, the next one is skipped as too many") {
+    const std::string dir = tmp_dir("mods_limit");
+    std::vector<std::string> paths;
+    std::vector<std::string> mod_ids;
+    paths.reserve(kMaxMods + 1);
+    mod_ids.reserve(kMaxMods + 1);
+    for (u32 i = 0; i <= kMaxMods; ++i) {  // kMaxMods + 1 packs
+        char file[32];
+        char id[32];
+        std::snprintf(file, sizeof(file), "p%03u.mce", i);
+        std::snprintf(id, sizeof(id), "m%03u", i);
+        paths.push_back(make_mod(dir, file, id));
+        mod_ids.emplace_back(id);
+    }
+    std::vector<StringView> packs;
+    packs.reserve(paths.size());
+    for (const std::string& p : paths) packs.push_back(p);
+
+    // At the limit: nothing is skipped.
+    const ModList at = resolve_mods(Span<const StringView>(packs.data(), kMaxMods), nullptr, {});
+    CHECK(at.mods.size() == kMaxMods);
+    CHECK(at.skipped.empty());
+
+    // One more: the last by file name is skipped with a reason.
+    const ModList over = resolve_mods(Span<const StringView>(packs.data(), packs.size()), nullptr, {});
+    CHECK(over.mods.size() == kMaxMods);
+    REQUIRE(over.skipped.size() == 1);
+    CHECK(over.skipped[0].what.view() == paths.back());
+    CHECK(over.skipped[0].reason.view() == "too many mods");
+
+    // With a load_order.txt the cut is the same: the id listed last is the one left out.
+    std::string text;
+    for (const std::string& id : mod_ids) text += id + "\n";
+    const StringView order = text;
+    const ModList listed = resolve_mods(Span<const StringView>(packs.data(), packs.size()), &order, {});
+    CHECK(listed.mods.size() == kMaxMods);
+    REQUIRE(listed.skipped.size() == 2);  // cut as "too many mods", then reported as not listed
+    CHECK(listed.skipped[0].reason.view() == "too many mods");
+    CHECK(listed.skipped[1].what.view() == paths.back());
 }

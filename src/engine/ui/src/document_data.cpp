@@ -1,6 +1,7 @@
 // The CHNK_UIDOC codec (M-UI-DATA step 1; mce/ui/document_data.h). Needs nothing but the header,
 // so the cook links it without the renderer.
 
+#include <cmath>
 #include <cstring>
 
 #include "mce/ui/document_data.h"
@@ -70,6 +71,19 @@ struct UiWidgetRecord {
     u32 nav[NavEdgeCount];
 };
 static_assert(sizeof(UiWidgetRecord) == 48 + 4 + 8 + 40 + 124 * 5 + 16 + 8 + 4 + 16 + 16);
+
+// A Minimap widget's values, one record per Minimap widget after the string blob, in widget order (the track
+// name is in the blob). Documents without a Minimap are byte for byte what they were.
+struct UiMinimapRecord {
+    StrRef track;
+    f32 radius, zoom;
+    f32 background[4];
+    f32 world_min[2], world_max[2];
+    f32 marker_px;
+    u32 layer_mask;
+    u8 rotate_with_heading, clamp_to_rim, full_map, pad;
+};
+static_assert(sizeof(UiMinimapRecord) == 8 + 8 + 16 + 16 + 4 + 4 + 4);
 
 void put_color(f32 (&o)[4], const Color& c) {
     o[0] = c.r;
@@ -194,6 +208,7 @@ void theme_from_palette(const Palette& p, ThemeData& out) {
             case WidgetKind::Stack:
             case WidgetKind::Grid:
             case WidgetKind::Scroll:
+            case WidgetKind::Minimap:
             case WidgetKind::Tabs: all.draw_quad = false; break;
             case WidgetKind::Image: break;
         }
@@ -360,6 +375,7 @@ void DocumentData::clear() {
 void encode_ui_document(const DocumentData& d, Array<byte>& out) {
     Array<byte> blob;
     Array<UiWidgetRecord> records;
+    Array<UiMinimapRecord> minimaps;
     for (const WidgetData& w : d.widgets) {
         UiWidgetRecord r{};
         r.name = add_string(blob, w.name.view());
@@ -396,6 +412,21 @@ void encode_ui_document(const DocumentData& d, Array<byte>& out) {
         put_vec(r.grid_spacing, w.grid.spacing);
         for (u32 e = 0; e < NavEdgeCount; ++e) r.nav[e] = w.nav[e];
         records.push_back(r);
+        if (w.kind == WidgetKind::Minimap) {
+            UiMinimapRecord m{};
+            m.track = add_string(blob, w.minimap.track.view());
+            m.radius = w.minimap.radius;
+            m.zoom = w.minimap.zoom;
+            put_color(m.background, w.minimap.background);
+            put_vec(m.world_min, w.minimap.world_min);
+            put_vec(m.world_max, w.minimap.world_max);
+            m.marker_px = w.minimap.marker_px;
+            m.layer_mask = w.minimap.layer_mask;
+            m.rotate_with_heading = w.minimap.rotate_with_heading ? 1 : 0;
+            m.clamp_to_rim = w.minimap.clamp_to_rim ? 1 : 0;
+            m.full_map = w.minimap.full_map ? 1 : 0;
+            minimaps.push_back(m);
+        }
     }
     UiDocHeader h{};
     h.font_hi = d.font.hi;
@@ -413,6 +444,7 @@ void encode_ui_document(const DocumentData& d, Array<byte>& out) {
     append(out, &h, sizeof(h));
     if (!records.empty()) append(out, records.data(), records.size() * sizeof(UiWidgetRecord));
     if (!blob.empty()) append(out, blob.data(), blob.size());
+    if (!minimaps.empty()) append(out, minimaps.data(), minimaps.size() * sizeof(UiMinimapRecord));
 }
 
 Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
@@ -435,6 +467,8 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
     out.modal = h.modal == 1;
     out.default_focus = h.default_focus;
     out.widgets.reserve(h.widget_count);
+    const byte* minimap_at = reinterpret_cast<const byte*>(blob) + h.strings_size;
+    const byte* const payload_end = payload.data() + payload.size();
     for (u32 i = 0; i < h.widget_count; ++i) {
         UiWidgetRecord r;
         std::memcpy(&r, records + u64(i) * sizeof(UiWidgetRecord), sizeof(r));
@@ -454,7 +488,7 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
             return fail(Errc::OutOfBounds);
         if (!valid_name(w.name.view()) || !valid_number_format(w.format.view())) return fail(Errc::InvalidArgument);
         if (r.parent != kNoWidgetIndex && r.parent >= i) return fail(Errc::OutOfBounds);  // parents come first
-        if (r.kind > static_cast<u8>(WidgetKind::Tabs) || r.anchor_to > static_cast<u8>(AnchorTo::Screen) ||
+        if (r.kind > static_cast<u8>(WidgetKind::Minimap) || r.anchor_to > static_cast<u8>(AnchorTo::Screen) ||
             r.stack_axis > static_cast<u8>(Axis::Horizontal) || r.stack_align > static_cast<u8>(Align::Stretch) ||
             r.font_role > static_cast<u8>(FontRole::Button) || r.text_align > static_cast<u8>(TextAlign::Right))
             return fail(Errc::InvalidArgument);
@@ -500,6 +534,29 @@ Result<void> decode_ui_document(Span<const byte> payload, DocumentData& out) {
         w.grid.cell = get_vec(r.grid_cell);
         w.grid.spacing = get_vec(r.grid_spacing);
         for (u32 e = 0; e < NavEdgeCount; ++e) w.nav[e] = r.nav[e];
+        if (w.kind == WidgetKind::Minimap) {
+            if (payload_end - minimap_at < static_cast<std::ptrdiff_t>(sizeof(UiMinimapRecord))) return fail(Errc::Truncated);
+            UiMinimapRecord m;
+            std::memcpy(&m, minimap_at, sizeof(m));
+            minimap_at += sizeof(m);
+            const bool finite = std::isfinite(m.radius) && std::isfinite(m.zoom) && std::isfinite(m.marker_px) &&
+                                std::isfinite(m.world_min[0]) && std::isfinite(m.world_min[1]) && std::isfinite(m.world_max[0]) &&
+                                std::isfinite(m.world_max[1]) && std::isfinite(m.background[0]) && std::isfinite(m.background[1]) &&
+                                std::isfinite(m.background[2]) && std::isfinite(m.background[3]);
+            if (m.pad != 0 || m.rotate_with_heading > 1 || m.clamp_to_rim > 1 || m.full_map > 1) return fail(Errc::ReservedNonZero);
+            if (!finite || !(m.radius > 0.0f) || !(m.zoom > 0.0f) || !(m.marker_px > 0.0f)) return fail(Errc::InvalidArgument);
+            if (!read_string(blob, h.strings_size, m.track, w.minimap.track)) return fail(Errc::OutOfBounds);
+            w.minimap.radius = m.radius;
+            w.minimap.zoom = m.zoom;
+            w.minimap.background = get_color(m.background);
+            w.minimap.world_min = get_vec(m.world_min);
+            w.minimap.world_max = get_vec(m.world_max);
+            w.minimap.marker_px = m.marker_px;
+            w.minimap.layer_mask = m.layer_mask;
+            w.minimap.rotate_with_heading = m.rotate_with_heading == 1;
+            w.minimap.clamp_to_rim = m.clamp_to_rim == 1;
+            w.minimap.full_map = m.full_map == 1;
+        }
         out.widgets.push_back(w);
     }
     return ok();

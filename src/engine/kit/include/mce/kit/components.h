@@ -142,14 +142,16 @@ struct UiFlow {
     FixedString<32> load_on;
     FixedString<32> quit_on;
     bool pause = false;
-    u8 pad_[3] = {};
+    bool keep_audio = false;
+    u8 pad_[2] = {};
 };
 MCE_COMPONENT(UiFlow, (scene, Help{"the scene load_on loads (null: none)"}),
               (show_on, Help{"an input action that shows this screen, e.g. Pause"}),
               (hide_on, Help{"an input action that hides it, e.g. Resume"}),
               (load_on, Help{"an input action that loads 'scene', e.g. Restart"}),
               (quit_on, Help{"an input action that ends the game (scene::request_quit), e.g. Quit"}),
-              (pause, Help{"hold the game (systems, physics, audio) while this screen is visible"}))
+              (pause, Help{"hold the game (systems, physics, audio) while this screen is visible"}),
+              (keep_audio, Help{"with 'pause': the sound goes on while held (playing sources, Sfx triggers, music fades); menu clicks and the screen's own SfxTrigger play"}))
 
 // The view a player renders from: the first `primary` camera in ECS order, at its entity's
 // position (rotation about +Z included).
@@ -296,7 +298,7 @@ struct SequencePlayer {
     u32 pad_ = 0;
 };
 MCE_COMPONENT(SequencePlayer, sequence, name, (active, Save), (anchored, Save, ReadOnly), (step, Save, ReadOnly),
-              (elapsed, Save, ReadOnly), (anchor, Save, ReadOnly))
+              (elapsed, Save, ReadOnly), (anchor, Save, ReadOnly, WorldPoint))
 
 enum class PathStatus : u8 { Idle, Moving, Arrived, NoPath };
 MCE_ENUM(PathStatus, Idle, Moving, Arrived, NoPath)
@@ -356,11 +358,14 @@ struct ScriptSystem {
     i32 order = 0;
     ScriptPhase phase = ScriptPhase::Pre;
     bool enabled = true;
-    u8 pad_[2]{};
+    bool during_cutscenes = false;
+    u8 pad_[1]{};
 };
 MCE_COMPONENT(ScriptSystem, (script, Help{"the .luau script; its update() runs every fixed tick"}),
               (order, Help{"scripts of a phase run lowest first; ties in ECS order"}),
-              (phase, Help{"Pre: before physics; Post: after physics"}), (enabled, Help{"off: the script is not loaded"}))
+              (phase, Help{"Pre: before physics; Post: after physics"}), (enabled, Help{"off: the script is not loaded"}),
+              (during_cutscenes, Help{"on: the script keeps running while a cutscene holds the game (never under a pause hold); "
+                                      "scripts with this on run after the others of their phase"}))
 
 // Per-entity numbers for scripts (M-SCRIPT 6). A script keeps nothing between ticks, and a game
 // with no C++ cannot define its own components, so this is where it writes what it must remember:
@@ -371,5 +376,16 @@ struct ScriptVars {
     f32 v[16] = {};
 };
 MCE_COMPONENT(ScriptVars, (v, Save, Help{"16 numbers a script uses as its per-entity memory"}))
+
+// Named constants a scene sets per entity for its scripts (M-SCRIPT4 3): `names` lists the name of v[0],
+// v[1], ... separated by spaces or commas ("speed jump_height gravity"), and mce.param(e, "speed")
+// reads the matching number. Authored in the scene (the editor, MCP or the scene file), never written
+// by a script, so one script serves many entities with different tuning.
+struct ScriptParams {
+    FixedString<96> names{};
+    f32 v[8] = {};
+};
+MCE_COMPONENT(ScriptParams, (names, Help{"parameter names, space or comma separated: the name of v[0], v[1], ..."}),
+              (v, Help{"the values of the named parameters (at most 8)"}))
 
 }  // namespace mce::kit

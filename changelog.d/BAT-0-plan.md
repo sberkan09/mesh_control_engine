@@ -1,0 +1,1 @@
+- M-BAT planned: dusk bats as an opt-in `Bat` component and one render-side emitter (id 0xFFFF0007), steps 30a to 30d; the milestone record and the ROADMAP row.

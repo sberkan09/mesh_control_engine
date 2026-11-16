@@ -1,0 +1,1 @@
+- Tests: `bt_key_position` has a test of its own (a vec3 key, an entity key with its entity, and the refusals: unset, number key, bad index, no transform).

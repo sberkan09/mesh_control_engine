@@ -96,3 +96,20 @@ TEST_CASE("aabb") {
     CHECK(m.min == vec2{0, 0});
     CHECK(m.max == vec2{3, 3});
 }
+
+TEST_CASE("math: mat4_identity leaves points alone and is the identity of mul") {
+    const mat4 id = mat4_identity();
+    for (usize c = 0; c < 4; ++c)
+        for (usize r = 0; r < 4; ++r) CHECK(id.c[c][r] == (c == r ? 1.0f : 0.0f));
+    const mat4 t = translation(vec3{1, 2, 3});
+    CHECK(near(transform_point(mul(id, t), {0, 0, 0}), vec3{1, 2, 3}));
+    CHECK(near(transform_point(mul(t, id), {0, 0, 0}), vec3{1, 2, 3}));
+}
+
+TEST_CASE("math: Color::to_vec4 keeps the channel order r g b a") {
+    const vec4 v = Color{0.1f, 0.2f, 0.3f, 0.4f}.to_vec4();
+    CHECK(v.x == 0.1f);
+    CHECK(v.y == 0.2f);
+    CHECK(v.z == 0.3f);
+    CHECK(v.w == 0.4f);
+}

@@ -232,6 +232,36 @@ TEST_CASE("failing on_init returns a nonzero exit code") {
     mem::set_frame_arena(nullptr);
 }
 
+namespace {
+class QuittingApp final : public Application {
+public:
+    int shutdowns = 0;
+    u64 ticks = 0;
+    ResultV on_init(Context&) override { return ok(); }
+    void on_tick(const TickContext&) override {
+        if (++ticks == 3) quit(5);
+    }
+    void on_shutdown() override { ++shutdowns; }
+};
+}  // namespace
+
+TEST_CASE("Application quit: want_quit and exit_code reflect the request, and run returns the code after on_shutdown") {
+    QuittingApp app;
+    CHECK_FALSE(app.want_quit());
+    CHECK(app.exit_code() == 0);
+
+    AppDesc desc;
+    desc.headless = true;
+    desc.max_ticks = 100;
+    desc.frame_arena_size = 64 * 1024;
+    CHECK(run(app, desc) == 5);
+    CHECK(app.want_quit());
+    CHECK(app.exit_code() == 5);
+    CHECK(app.ticks == 3);      // the loop stopped on the request
+    CHECK(app.shutdowns == 1);  // and shut down exactly once
+    mem::set_frame_arena(nullptr);
+}
+
 // MCE_LOG_* refuses a printf format at compile time (its % codes would be logged as they are).
 static_assert(mce::log::detail::printf_conversion("gem %u of %u") == 4);
 static_assert(mce::log::detail::printf_conversion("%-8.3lf") == 0);

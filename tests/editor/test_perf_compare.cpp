@@ -5,6 +5,10 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
 
 #include "mce/editor/perf_compare.h"
 #include "mce/editor/perf_file.h"
@@ -130,6 +134,14 @@ TEST_CASE("perf compare: a frame's parts, sim then render then GPU, slowest firs
 TEST_CASE("perf compare: a capture written and read back compares equal to itself") {
     perf::Capture a = capture(12.0f, 7);
     a.frames[5].phase_ms[0] = 0.25f;
+    a.frames[5].counters.runs_instanced = 3;  // M-VISUAL3 5a
+    a.frames[5].counters.draws_instanced = 40;
+    a.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Material)] = 7;  // M-CONTENT 2
+    a.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Budget)] = 2;
+    a.frames[6].counters.draw_causes[static_cast<u32>(DrawCause::Material)] = 3;
+    a.frames[5].counters.merged_groups = 2;  // M-VISUAL3 5b
+    a.frames[5].counters.merged_children = 31;
+    a.frames[5].counters.decals_dropped = 4;  // M-VISUAL3 6
     Array<char> text;
     perf::write_mcperf(a, perf::summarize(a), text);
     perf::Capture b;
@@ -137,6 +149,41 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
     REQUIRE_MESSAGE(read_mcperf(StringView(text.data(), text.size()), b, err), err.c_str());
     CHECK(b.frames.size() == a.frames.size());
     CHECK(b.frames[5].index == 35);
+    CHECK(b.frames[5].counters.runs_instanced == 3);
+    CHECK(b.frames[5].counters.draws_instanced == 40);
+    CHECK(b.frames[5].counters.merged_groups == 2);
+    CHECK(b.frames[5].counters.merged_children == 31);
+    CHECK(b.frames[5].counters.decals_dropped == 4);
+    CHECK(perf::summarize(b).counters_max.decals_dropped == 4);
+    CHECK(perf::summarize(b).counters_max.draws_instanced == 40);
+    CHECK(b.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Material)] == 7);
+    CHECK(b.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Budget)] == 2);
+    CHECK(b.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Skinned)] == 0);
+    CHECK(perf::summarize(b).counters_max.draw_causes[static_cast<u32>(DrawCause::Material)] == 7);
+    CHECK(perf::summarize(b).counters_avg.draw_causes[static_cast<u32>(DrawCause::Material)] == static_cast<u32>(10 / a.frames.size()));  // the mean, rounded down
+    CHECK(StringView(text.data(), text.size()).find("\"draw_causes\": [\"material\", \"unique_mesh\"") != StringView::npos);
+    CHECK(StringView(text.data(), text.size()).find("\"draw_cause_hints\"") != StringView::npos);
+    // A file from before the report has no names and no counts: they read as zero.
+    {
+        perf::Capture old;
+        cook::String err2;
+        const char* doc = "{\"format\": \"mce-perf\", \"version\": 1, \"frames\": [{\"index\": 0, \"counters\": {\"draws\": 5}}]}";
+        REQUIRE_MESSAGE(read_mcperf(doc, old, err2), err2.c_str());
+        CHECK(old.frames[0].counters.draws == 5);
+        CHECK(old.frames[0].counters.draw_causes[0] == 0);
+    }
+    // An old capture against a new one: the causes and instanced counts are not compared (no counter row, no verdict).
+    {
+        perf::Capture old = capture(12.0f, 7);
+        Comparison oc;
+        compare_captures(old, a, oc);
+        for (const auto& k : oc.counters) {
+            CHECK(StringView(k.metric) != StringView("draw_causes"));
+            CHECK(StringView(k.metric) != StringView("draws_instanced"));
+        }
+        CHECK(oc.better.empty());
+        CHECK(oc.worse.empty());
+    }
     Comparison c;
     compare_captures(a, b, c);
     CHECK(c.better.empty());
@@ -145,4 +192,46 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
     frame_parts(b, b.frames[5], parts);
     REQUIRE(parts.size() == 1);
     CHECK(parts[0].ms == doctest::Approx(0.25f));
+}
+
+TEST_CASE("perf compare: save_mcperf then load_mcperf round-trips through a file, and a bad path is refused") {
+    perf::Capture a = capture(9.0f, 5);
+    a.frames[2].counters.draws_instanced = 12;
+
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "mce_perf_file_roundtrip";
+    std::filesystem::create_directories(dir);
+    const std::string file = (dir / "run.mcperf").string();
+
+    REQUIRE(perf::save_mcperf(a, file.c_str()));
+    perf::Capture b;
+    cook::String err;
+    REQUIRE_MESSAGE(load_mcperf(StringView(file.data(), file.size()), b, err), err.c_str());
+    CHECK(b.frames.size() == a.frames.size());
+    CHECK(b.frames[2].counters.draws_instanced == 12);
+    CHECK(b.frames[0].counters.draws == 5);
+    CHECK(b.systems.size() == 1);
+    CHECK(b.systems[0].name.view() == StringView("movement"));
+    CHECK(b.scene.view() == StringView("main"));
+    CHECK(b.phases.size() == a.phases.size());
+
+    // A directory that does not exist cannot be written, and the failure is an error value.
+    const std::string nowhere = (dir / "no_such_dir" / "x.mcperf").string();
+    CHECK_FALSE(perf::save_mcperf(a, nowhere.c_str()));
+
+    // A file cut in half is not a capture: load_mcperf refuses it and names the path.
+    std::string text;
+    {
+        std::ifstream in(file, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    const std::string cut = (dir / "cut.mcperf").string();
+    {
+        std::ofstream out(cut, std::ios::binary);
+        out.write(text.data(), static_cast<std::streamsize>(text.size() / 2));
+    }
+    perf::Capture c;
+    err.clear();
+    CHECK_FALSE(load_mcperf(StringView(cut.data(), cut.size()), c, err));
+    CHECK(err.view().find(StringView(cut.data(), cut.size())) != StringView::npos);
+    std::filesystem::remove_all(dir);
 }

@@ -1,0 +1,1 @@
+- Tests: `SubtitleView` caps `max_lines` at `kMaxSubtitleLines`, shows nothing for 0, and cuts a 400-byte line at its display buffer; new milestone M-HARDEN4 (capacity limits at N-1, N, N+1).

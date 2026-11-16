@@ -1,0 +1,1 @@
+- Tests: a relay client that is sent forged or damaged messages (bad member numbers, wrong sizes, unknown channels, torn room lists) keeps its state and its room; no code change.

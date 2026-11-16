@@ -1,0 +1,1 @@
+- Editor, M-LINTFIX: `fix_scene_lint` repairs every scene lint finding in a loaded document (empty and duplicate names, a missing parent or reference, a transform that is not a number, a zero scale); the CLI and MCP front ends follow.

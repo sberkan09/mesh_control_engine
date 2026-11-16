@@ -1,0 +1,267 @@
+{
+ "format": "mce-ui",
+ "version": 1,
+ "guid": "4d4bad1b-e274-5202-9cd8-a808bd560817",
+ "modal": false,
+ "widgets": [
+  {
+   "name": "active",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    1,
+    1,
+    0
+   ],
+   "value": 1,
+   "bind": "Mission/state",
+   "anchors": {
+    "min": [
+     0,
+     0
+    ],
+    "max": [
+     0,
+     0
+    ],
+    "offset_min": [
+     24,
+     60
+    ],
+    "offset_max": [
+     500,
+     170
+    ]
+   },
+   "children": [
+    {
+     "name": "rows",
+     "kind": "Stack",
+     "fill": true,
+     "stack": {
+      "axis": "Vertical",
+      "spacing": 4
+     },
+     "children": [
+      {
+       "name": "title",
+       "kind": "Text",
+       "text": "PICKUP  +$400",
+       "style": {
+        "text_size": 26,
+        "text_outline": 2,
+        "text_outline_color": [
+         0,
+         0,
+         0,
+         1
+        ],
+        "text_color": [
+         1.0,
+         0.85,
+         0.25,
+         1
+        ]
+       },
+       "text_align": "Left"
+      },
+      {
+       "name": "steps",
+       "kind": "Text",
+       "text": "STEPS 0 / 2",
+       "style": {
+        "text_size": 22,
+        "text_outline": 2,
+        "text_outline_color": [
+         0,
+         0,
+         0,
+         1
+        ],
+        "text_color": [
+         1,
+         1,
+         1,
+         1
+        ]
+       },
+       "text_align": "Left",
+       "bind": "Mission/done",
+       "format": "STEPS %.0f / 2"
+      },
+      {
+       "name": "bar",
+       "kind": "Slider",
+       "range": [
+        0,
+        150,
+        0
+       ],
+       "value": 0,
+       "interactable": false,
+       "bind": "Mission/elapsed"
+      },
+      {
+       "name": "clock",
+       "kind": "Text",
+       "text": "TIME 0 / 150 s",
+       "style": {
+        "text_size": 20,
+        "text_outline": 2,
+        "text_outline_color": [
+         0,
+         0,
+         0,
+         1
+        ],
+        "text_color": [
+         0.8,
+         0.8,
+         0.8,
+         1
+        ]
+       },
+       "text_align": "Left",
+       "bind": "Mission/elapsed",
+       "format": "TIME %.0f / 150 s"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "passed",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    2,
+    2,
+    0
+   ],
+   "value": 2,
+   "bind": "Mission/state",
+   "anchors": {
+    "min": [
+     0,
+     0
+    ],
+    "max": [
+     0,
+     0
+    ],
+    "offset_min": [
+     24,
+     60
+    ],
+    "offset_max": [
+     500,
+     170
+    ]
+   },
+   "children": [
+    {
+     "name": "banner",
+     "kind": "Text",
+     "text": "PICKUP PASSED",
+     "style": {
+      "text_size": 30,
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ],
+      "text_color": [
+       0.45,
+       1.0,
+       0.5,
+       1
+      ]
+     },
+     "text_align": "Left",
+     "fill": true
+    }
+   ]
+  },
+  {
+   "name": "failed",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    3,
+    3,
+    0
+   ],
+   "value": 3,
+   "bind": "Mission/state",
+   "anchors": {
+    "min": [
+     0,
+     0
+    ],
+    "max": [
+     0,
+     0
+    ],
+    "offset_min": [
+     24,
+     60
+    ],
+    "offset_max": [
+     500,
+     170
+    ]
+   },
+   "children": [
+    {
+     "name": "banner",
+     "kind": "Text",
+     "text": "PICKUP FAILED, retry at its pad",
+     "style": {
+      "text_size": 24,
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ],
+      "text_color": [
+       1.0,
+       0.35,
+       0.3,
+       1
+      ]
+     },
+     "text_align": "Left",
+     "fill": true
+    }
+   ]
+  }
+ ]
+}

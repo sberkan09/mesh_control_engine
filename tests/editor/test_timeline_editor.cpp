@@ -200,6 +200,47 @@ TEST_CASE("timeline editor: edits, refusals, undo and redo on disk") {
     CHECK(text_of(ed.text()) == original);
 }
 
+TEST_CASE("timeline editor: set_key_at adds or replaces by time, remove_track drops a track, bad indices are refused") {
+    const std::string root = timeline_project("tl_ed_keys_at");
+    EditorSession session;
+    open_stage(session, root);
+    TimelineEditor ed;
+    REQUIRE(ed.open(session, kIntroGuid));
+    const usize tracks = ed.doc().tracks.size();
+
+    REQUIRE(ed.add_track(TimelineDocTrackType::Event));
+    const u32 ev = static_cast<u32>(ed.doc().tracks.size()) - 1;
+    CHECK(ed.selected_track() == ev);
+    const usize keys = ed.doc().tracks[ev].keys.size();
+
+    cook::TimelineDocKey k;
+    k.name = cook::String("first");
+    REQUIRE(ed.set_key_at(ev, 2.0f, k));
+    CHECK(ed.doc().tracks[ev].keys.size() == keys + 1);
+    CHECK(ed.selected_track() == ev);
+
+    // The same time replaces the key instead of adding one; `key.t` is ignored.
+    k.name = cook::String("second");
+    k.t = 99.0f;
+    REQUIRE(ed.set_key_at(ev, 2.0f, k));
+    CHECK(ed.doc().tracks[ev].keys.size() == keys + 1);
+    bool found = false;
+    for (const cook::TimelineDocKey& key : ed.doc().tracks[ev].keys)
+        if (key.t == doctest::Approx(2.0f)) found = key.name.view() == StringView("second");
+    CHECK(found);
+
+    // A track that does not exist is refused and changes nothing.
+    const u64 rev = ed.revision();
+    CHECK_FALSE(ed.set_key_at(static_cast<u32>(ed.doc().tracks.size()), 1.0f, k));
+    CHECK_FALSE(ed.remove_track(static_cast<u32>(ed.doc().tracks.size())));
+    CHECK(ed.revision() == rev);
+
+    REQUIRE(ed.remove_track(ev));
+    CHECK(ed.doc().tracks.size() == tracks);
+    REQUIRE(ed.undo(session));
+    CHECK(ed.doc().tracks.size() == tracks);  // the whole run was one undo step back to the file
+}
+
 TEST_CASE("timeline editor: create makes a cooked timeline with a start event") {
     const std::string root = timeline_project("tl_ed_create");
     EditorSession session;

@@ -1,0 +1,1 @@
+- Kit (M-MISSIONKILL 1): `Objective.team` and `Objective.by_actor` filter a Kill step (one team, the actor's own kills), and a Kill whose target is already dead is done. `09_openworld` gets the jobs Hit, Cop killer and Pickup. Record: `docs/milestones/M-MISSIONKILL.md`.

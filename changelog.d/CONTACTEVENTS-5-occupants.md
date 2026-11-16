@@ -1,0 +1,1 @@
+- Kit (M-CONTACTEVENTS): `ImpactDamage3D::occupant_share` hurts the car's driver by a fraction of a crash. Record: `docs/milestones/M-CONTACTEVENTS.md`.

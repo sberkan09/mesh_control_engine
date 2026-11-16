@@ -65,15 +65,17 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_list` | `type?` | `guid:<uuid>`, path, type |
 | | `asset_set_import_settings` | `path` or `guid`, `settings` | rewrites a sidecar's settings (chapter 5.2 lists each importer's: a texture's `srgb` and `mips`, a video's `audio` and `normalize`, ...) |
 | Assets | `asset_schema` | `type?` | without `type`: the JSON source types below; with one (`ParticlePreset` or `.mcpart`, ...): its fields with type, default and help, and the template `asset_create` starts from |
-| | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcsheet`, `.mcanim`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices`, `.mcui` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
+| | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcsheet`, `.mcanim`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices`, `.mcui`, `.mcconfig` or `.mcdefaults` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
 | | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
 | | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
-| | `asset_import` | `tool` (`aseprite`, `tiled`, `ldtk`), `file` (a path inside the project), `out_dir?` (under `assets/`), `name?`, `level?` (ldtk), `tile_size?`, `werror?` | converts an Aseprite, Tiled or LDtk export into `.mcsheet` / `.mcscene` + `.mctilemap` assets with the `mce import` converters (user guide 7.3), keeps GUIDs on a re-import, registers the result at once. Unsupported features are listed as warnings in `output`; `werror` makes them a failure that writes nothing. Needs Python 3 |
+| | `asset_import` | `tool` (`aseprite`, `tiled`, `ldtk`, `gltf`, `fbx`), `file` (a path inside the project), `out_dir?` (under `assets/`), `name?`, `level?` (ldtk), `tile_size?`, `werror?` | converts an Aseprite, Tiled or LDtk export into `.mcsheet` / `.mcscene` + `.mctilemap` assets with the `mce import` converters (user guide 7.3), keeps GUIDs on a re-import, registers the result at once. Unsupported features are listed as warnings in `output`; `werror` makes them a failure that writes nothing. `gltf` / `fbx` take a model under `assets/` and write a `.mcprefab` beside it: a root `MeshRef` plus a child per light or camera at its world transform (8.4 has the unit formulas; a directional light is a warning naming `Environment3D.sun_direction`); FBX is read through `mce_cook`. Needs Python 3 |
 | | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |
 | Terrain | `terrain_sculpt` | `path` or `guid`, `op`, `points`, `radius?`, `strength?`, `hardness?`, `target?`, `seed?`, `stroke?`, `repeat?` | the Terrain panel's brushes on a `.mcterrain`: `raise`, `lower`, `smooth`, `flatten` (to `target` metres) or `noise`, a dab at each `[x, z]` point (metres from the terrain's centre) or along them with `stroke`. Returns the samples changed, the height range and the height under each point after the change (`strength` 0 only measures) |
 | | `terrain_paint` | `path` or `guid`, `points`, `mode?` (`layer`, `hole`, `fill`), `layer?`, `radius?`, `strength?`, `hardness?`, `stroke?`, `repeat?` | paints a splat layer (its `TerrainFoliage3D` grows there), cuts holes or closes them. Returns each layer's share of the paint in percent and the hole samples |
 | | `terrain_import` | `path` or `guid`, `file`, `range?`, `raw_bits?`, `raw_width?` | a heightmap under `assets/` (`.png`, `.r16`/`.raw`, `.r8`) into the heights, resampled to the resolution (chapter 5.7) |
 | | `terrain_generate` | `path` or `guid`, `seed?`, `feature?`, `octaves?`, `lacunarity?`, `gain?`, `ridged?`, `low?`, `high?`, `island?`, `thermal?`, `talus_deg?`, `droplets?` | fBm hills, an island falloff and erosion-lite into the heights; deterministic in `seed` (chapter 5.7) |
+| Roads | `roads_info` | `path` or `guid` | cooks a `.mcroads` and reports nodes, roads, lanes, connectors, conflicts, signals and lane kilometres, each junction's control and signal cycle, dead ends, and what traffic would trip on: `no_way_on` (one-way lanes that end) and `cut_off` (lanes not connected both ways to the rest); `ok` when both are empty (chapter 29) |
+| | `roads_generate` | `path`, `columns?`, `rows?`, `block?`, `lanes?`, `speed?`, `sidewalk?`, `control?` (`signal`, `stop`, `priority`, `none`), `seconds?`, `drive?`, `name?`, `replace?` | writes a street grid to start a city from: junctions `n<i>_<j>`, roads `x<i>_<j>` and `z<i>_<j>`, signals with the x roads green first (chapter 29) |
 | UI | `ui_list` | `document?` | without `document`: every `.mcui` with its widget count and the input actions it raises; with one (path or `guid:<uuid>`): its widgets as paths (`menu/play`) with kind, text, action, bind, convar |
 | | `ui_create` | `path`, `modal?` (true), `font?`, `widgets?` | a new `.mcui` with a fresh GUID; `widgets` in the `.mcui` widget format (`asset_schema` type `UiDocument`) |
 | | `ui_widget_add` | `document`, `widget`, `parent?` (root), `index?` (last) | adds a `.mcui` widget object (with its children) |
@@ -88,6 +90,10 @@ each result's `content[0].text` is the tool's JSON).
 | | `bt_add_node` | `tree`, `node`, `parent?` (0, the root), `index?` (last) | adds a node (with its children) under a composite, or under a decorator with no child |
 | | `bt_set` | `tree`, `node?` (outline number), `value?`, `fields?` (`null` removes one), `replace?`, `remove?`, `name?`, `blackboard?` (`null` removes a key) | edits the tree; each edit is cooked first, and one that does not cook fails with the cook's message and writes nothing |
 | | `bt_trace` | `entity`, `ticks?` (300), `every?` (30) | plays the saved scene headless and reports the entity's brain: rows of tick, result, runs, running path and blackboard, and the tick each node `started` |
+| | `perception_debug_lines` | `ticks?` (1) | plays the saved scene headless and reports every `Perceiver`: world `eye`, `forward`, `yaw_deg`, range, angle, `sees`, `target`, `last_seen`, and the debug `lines` (cone edges, range arc, a line to the target); the way to see where a guard looks |
+| | `debug_lines` | `ticks?` (1), `categories?`, `limit?` (2000) | plays the saved scene headless and returns the gameplay debugger's world-space lines as data: box colliders, rigid bodies, triggers (green while occupied), joints, character capsules, vehicle wheels (red while skidding), waypoint chains and driver targets, with `counts` per category |
+| | `debug_view` | `view?` (`top`/`front`/`side`), `ticks?`, `categories?`, `width?`, `height?` (512) | the same lines drawn by a CPU rasteriser and returned as a PNG, no GPU needed |
+| | `asset_thumbnail` | `path` or `guid` (one asset) or `folder` (a contact sheet; `""` for all), `type?`, `size?` (16–512; 128 single, 64 sheet), `limit?` (64) | a CPU-drawn picture of the asset as PNG: a texture, a sound's waveform, a mesh (cook first), a material as a lit sphere, a particle preset as its emitter run for 1.5 s, else a plain tile by type; the JSON says per tile whether it is `real` |
 | 2D skeleton | `skel2d_create` | `path`, `name?`, `root?` ("root") | a new `.mcskel2d` with a fresh GUID and one root bone (user guide 7.13). Every `skel2d_*` edit is cooked by the real importer before it is written, so an error names `file:line` and nothing changes |
 | | `skel2d_add_bone` | `skeleton`, `name`, `parent?`, `x?`, `y?`, `rotation?` (degrees), `scale?` (number or `[sx, sy]`), `length?` | adds a bone, last; the parent must already exist |
 | | `skel2d_add_slot` | `skeleton`, `name`, `bone`, `texture?` (`guid:`), `rect?`, `size?`, `pivot?`, `offset?`, `rotation?`, `tint?`, `attachments?`, `attachment?` | adds a slot (a textured quad on a bone, drawn after the earlier slots); `attachments` makes it a list of quads and meshes in the `.mcskel2d` form |
@@ -111,7 +117,8 @@ each result's `content[0].text` is the tool's JSON).
 | | `scene_open` | `path`, `force?` | path under `assets/`; a `.mcprefab` opens the prefab itself (entity 0 is its root) |
 | | `scene_save` | `path?`, `name?`, `force?`, `resolve?` | atomic; a `.mcprefab` path saves a prefab; `name` renames the scene; a file another agent saved meanwhile is merged by entity (conflicts refuse unless `resolve` is `ours` or `theirs`); refuses to overwrite another existing file unless `force` |
 | | `navmesh_bake` | none | bakes the scene's first `NavMeshSurface3D` into `assets/navmesh/<scene>/nav_<id>.mcnav` and points its `baked` at it (save the scene to keep that); returns the asset, its `content_hash` (the same scene bakes byte-identical), tiles, layers, triangles and bytes |
-| Build | `cook_run` | `pack?`, `adopt?`, `paths?`, `skip_errors?` | incremental; `adopt` writes sidecars for new source files (the error for one without says so); `paths` (files or folders under `assets/`) cooks only those and what they depend on, into `cooked/` only, never the pack; `skip_errors` also returns `failed_files`, every file that could not be cooked; the pack is written only by a run with no errors (section 5.4) |
+| | `hlod_bake` | `entity?`, `min_size?`, `impostor?`, `texels_per_metre?` | bakes an HLOD proxy for every `SceneChunk` (or only `entity`): the area scene's visible rigid meshes merged per material into `assets/hlod/<scene>/chunk_<id>.mchlod`, positions relative to the chunk, and points its `ChunkLod3D.proxy` at it (adds the component; save the scene to keep that); meshes under `min_size` metres (default 1) are left out; returns per chunk the asset, its `content_hash` (byte-identical re-bakes), merged/small/skipped counts, submeshes, triangles and LOD levels; a new sidecar asks for two simplified far levels (`lod_levels`); `impostor: true` also bakes the far stand-in (a box per root entity with CPU-rendered albedo pictures on its sides and top, cross cards for trees and poles) into `chunk_<id>_far.png` + `chunk_<id>_far.mchlod`, points `ChunkLod3D.impostor` at it and returns its groups, boxes, cards, quads, untextured count and atlas size; `texels_per_metre` (default 4) sets its sharpness |
+| Build | `cook_run` | `pack?`, `adopt?`, `paths?`, `skip_errors?` | incremental; `adopt` writes sidecars for new source files (the error for one without says so); `paths` (files or folders under `assets/`) cooks only those and what they depend on, into `cooked/` only, never the pack; `skip_errors` also returns `failed_files`, every file that could not be cooked; the pack is written only by a run with no errors (section 5.4); the result also carries `sizes` and `meshes`, one entry per 3D model: `path`, `triangles`, `submeshes`, `materials`, `joints`, `clips`, `lod_levels`, `warnings` (read from the cooked file, so a cached model reports the same numbers; `warnings` counts this run's only; section 8.4) |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `script_check` | `path` or `source`, `definitions?` | the cook's checks on one Luau script (syntax, hidden state, names with "did you mean", types against `mce.d.luau`) without cooking; returns every problem with line and col (user guide 27.5) |
 | | `asset_delete` | `path` | deletes a source file under `assets/`, its `.mceasset` sidecar and its `CREDITS.md` row (a font's license text too, once no row names it; not the open scene) |
@@ -124,7 +131,7 @@ each result's `content[0].text` is the tool's JSON).
 | Players | `player_list` | none | the co-op setup: the `CoopGame` and, per player 1-4, their `PlayerSpawn`s, `PlayerCamera`s and the project's `.mcinput` maps with `"player": n`, plus `problems` (no `CoopGame`, a player without a spawn, camera or input map, a camera whose `split` does not match its player) |
 | | `player_setup` | `players?` (1-4), `prefab?`, `layout?` (`auto`, `columns`, `rows`, `grid`), `mode?` (`2d`, `3d`), `spacing?` | a whole local co-op rig: a `CoopGame`, a `SplitScreen`, and per player a `PlayerSpawn` and a `PlayerCamera` with its split-screen `CameraView`. Add the input maps with `asset_create` (`.mcinput`, `"player"` key), then `player_list` |
 | | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |
-| Measure | `perf_run` | `scene?`, `frames?` (300), `warmup?` (30), `target?` (desktop), `width?`, `height?`, `headless?`, `software?`, `input?`, `convars?`, `save?`, `top?` (8) | runs the real player for N frames at one sim tick per frame, so counters repeat run to run. Returns the verdict against the target's budget, with advice for each limit it is over; frame, sim, render and GPU ms (p50/p95/p99/max); draws, triangles, sprites and other counters; the slowest systems; the GPU stages; and spike frames with their cause. Keeps the `.mcperf` (`cooked/.perf/last.mcperf`, or `save`) |
+| Measure | `perf_run` | `scene?`, `frames?` (300, 1 to 3600; under 30 the report notes noisy percentiles), `warmup?` (30), `target?` (desktop), `width?`, `height?`, `headless?`, `software?`, `input?`, `convars?`, `save?`, `top?` (8) | runs the real player for N frames at one sim tick per frame, so counters repeat run to run. Returns the verdict against the target's budget, with advice for each limit it is over; frame, sim, render and GPU ms (p50/p95/p99/max); draws, triangles, sprites and other counters; the slowest systems; the GPU stages; and spike frames with their cause. Keeps the `.mcperf` (`cooked/.perf/last.mcperf`, or `save`). With a `progressToken` it sends `notifications/progress` (launching, warmup N/M, capturing N/M, reading the capture) |
 | | `perf_compare` | `before?`, `after?` (default: `perf_run`'s last two), `target?`, `top?` | two captures side by side: p50/p95 times, the worst frame's counters, the systems that moved most, `better` and `worse`, and the after capture's verdict |
 | Code | `module_build` | `reload?` (true), `warnings?`, `target?` | rebuilds the game module with the project's CMake tree (the one the loaded module came from) and maps the new build into the server: new components and systems are live for the next call, no restart; compiler errors come back as `{severity, file, line, col, message}` |
 | | `module_test` | `filter?` (default `^<game>_`) | `ctest` in the module's build tree: each test's result, the output's end when one failed |
@@ -148,6 +155,13 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_lock` / `asset_unlock` / `asset_locks` | `path`, `note?`, `ttl?` (1800 s) / `path`, `force?` / — | while you hold a lock, other agents' writes to that file are refused |
 | | `task_list` / `task_add` / `task_claim` / `task_update` | `status?` / `title`, `notes?`, `depends?`, `files?` / `id?` / `id`, `status?`, `notes?` | the shared `tasks.mctasks`; a claim is never granted twice, and waits for its dependencies |
 | | `scene_switch` / `scene_documents` | `path` / — | several scenes open at once, each keeping its unsaved edits |
+| | `scene_diff` | `a`, `b?` (default: the open scene) | what changed between two scenes: entities added, removed or changed by id, renames, components and fields by name; `identical`, counts and a text `report` (the same as `mce scene diff`) |
+| | `scene_lint` | `path?` (default: the open scene) | mistakes that load fine: unnamed or same-named siblings, zero scale, a transform that is not a number, a missing parent, parents that loop back (`parent_cycle`), a reference to an entity the scene lacks (`dangling_entity_ref`); `clean`, `findings` (entity, name, kind) and a text `report` (the same as `mce scene lint`) |
+| | `scene_lint_fix` | `path` (a scene under assets/) | repairs what `scene_lint` finds and writes the file in the canonical text: empty names become `Entity <id>`, repeated sibling names get ` (2)`, ` (3)`, a missing parent, a parent loop or a missing reference is dropped, a transform that is not a number returns to its default, a zero scale axis becomes 1. `fixed`, `written` (false: nothing to fix, the file is untouched) and the text `report` of what was found (the same as `mce_scene_lint --fix`). The open scene is not changed: `scene_open` reloads it |
+| | `scene_lint_all` | `fix` (optional) | `scene_lint` over every scene and prefab under assets/: `clean`, `scenes_checked`, `findings` (total), `unreadable` (files that do not parse) and `files`, one row per file with findings or unreadable (path, number of findings, text `report`). Read-only; with `fix: true` every file with findings is repaired and written back (adds `fixed`, per file and total) |
+| | `scene_stats` | `path?` (default: the open scene) | what the scene holds: `entities`, `roots`, `max_depth`, `prefab_instances`, `min` / `max` of the local positions, `components` (type, entities) and a text `report` (the same as `mce scene stats`) |
+| | `scene_find` | `path?` (default: the open scene), `name?`, `component?`, `prefab?` | the entities that match: `name` is a part of the entity name (ignoring case), `component` a component type it carries, `prefab` keeps only prefab instances; every condition given must hold. `count`, `hits` (entity, name, hierarchy path) and a text `report` (the same lines as `mce scene find`) |
+| | `asset_used_by` | `path` (under assets/) or `guid` (`guid:<uuid>`) | the assets whose files name this one, so you see what a delete or rewrite would break: `count` and `used_by` (paths). The Assets panel's **Used by...**. Only asset files are read: a script that loads by path, the start scene and files outside `assets/` are not seen |
 | | `report_friction` | `summary`, `area`, `severity?` (major), `tool?`, `expected?`, `actual?`, `workaround?`, `details?` | appends a note on what the engine made hard to the project's `friction.jsonl`; `mce friction` collects them |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
@@ -205,7 +219,11 @@ too, so the 3D gameplay components read like a debugger: a `NavAgent3D`'s `state
 `torque` and `broken`; a `Ragdoll3D`'s `parts`, `root_position` and `settled`; a `Vehicle3D`'s
 `speed`, `rpm`, `gear` and `wheels_on_ground`; a sensor's `hit`, `count` and `enters`.
 `tests/mcp/test_mcp_gameplay3d.cpp` builds `samples/07_gameplay3d` this way, from an empty
-project, and checks it with `inspect`.
+project, and checks it with `inspect`. `tests/mcp/test_mcp_movement.cpp` does the same for `samples/08_movement`:
+a lift (a `Joint3D` slider with a velocity motor), a course read back through `CharacterController3D.crouched`
+and `CameraFollow3D.arm`, and a race of `VehicleDriver3D` karts read through `laps_done` and the `fired` count of a
+`ShakeTrigger` with `"on": "Skid"`. A waypoint chain is easiest created last to first, so each `Waypoint3D.next`
+names an entity that exists; close the loop with `component_set`.
 
 `trace` samples fields while the run goes, as series: `{"trace": {"every": 10, "fields":
 [{"entity": "Player", "field": "LocalTransform.position"}, {"entity": "Player", "field":
@@ -384,6 +402,16 @@ bots play from the actor's position through the game's input actions.
 
 ### 14.3.1 Scenarios (.mctest) and bots
 
+`mce test <project> [path]` plays the same scenarios from a terminal or CI with no agent (it starts the project's MCP server, calls
+`test_run`, prints each scenario as pass or FAIL with the failed checks and any script errors, and exits 1 on a failure or when
+there are none).
+
+`mce inspect <project> --component Type` is the `run_headless` tool's `inspect` for a terminal: it plays the scene (`--ticks`, default 300)
+and prints the live component values of every entity with that component and/or of `--entity` ids or names as JSON (Transient runtime fields
+such as `ScriptVars.v` included; `--show A,B` picks the components). The state hash goes to stderr; it exits 3 when a script failed, as
+`mce_player -headless` does. `--trace Hero:LocalTransform.position.x` (repeatable, at most 16; `--every N`, default 10) samples a field while the
+run plays and prints one row per sampled tick (at most 1000), so you see how a value moved, not only where it ended; with only `--trace` no entity dump is printed.
+
 A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag.mctest`):
 
 ```json
@@ -400,6 +428,8 @@ A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag
     { "entity": "Player", "field": "LocalTransform.position.x", ">": 10, "tick": 600 },
     { "entity": "Score", "field": "ScoreBoard.coins", "value": 3 },
     { "event": "CoinCollected", ">=": 3 },
+    { "count": "Enemy", "<=": 3 },
+    { "script": "enemy.luau", "metric": "peak_steps", "<=": 400 },
     { "log_errors": 0 },
     { "log_contains": "level complete" }
   ],
@@ -422,6 +452,9 @@ A check names one thing and compares it: `{"entity", "field"}` (a component fiel
 name `my_game::CoinCollected`, or `CoinCollected` when one event type has that name; an unknown
 name fails the check with a note listing the game's events),
 `scene` (the scene the run is in, by source path, after the game's `scene::request_change`),
+`count` (how many live entities have that component, ones the run spawned included: `{"count": "Enemy", "<=": 3}`; it needs a comparison and a known component type),
+`script` (a scene script's step profile, `mce profile`'s numbers: `{"script": "enemy.luau", "metric": "peak_steps", "<=": 400}`; the script by its path or the end of it, `metric` is
+`peak_steps`, `avg_steps`, `total_steps` or `updates`; an unknown script name fails the check with the scripts that ran listed; steps are deterministic, so a budget regression fails a test),
 `log_contains`, `log_errors` / `log_warnings` (the most allowed) or `feel` (`deaths`,
 `idle_ticks`, `stuck_ticks`, `stuck_spots`, `distance`, `cells`, `finished_tick`). The comparison
 is `"value": x` (equal), an operator key (`"<=": 3`, `">": 0`, `"!=": "Idle"`) or `"op"` with
@@ -437,6 +470,19 @@ them) from the actor's position, so they need no game code:
 | `walk_to` | heads for `target` (a point `[x, y(, z)]` or an entity; done within `reach`, default 0.5 m, or when the target entity is gone), through the `through` waypoints first, in order (points or entities: around a pond, past each pickup; `{"at": ..., "wait": ticks}` stands still there first, on a pressure plate or a lift); when it stops getting closer it jumps (side view) or sidesteps (top-down); `air_jumps` (0-4) presses Jump again in the air for a double jump or a flap. The run goes on half a second after the arrival, so the game can react (a door, a pickup, a scene change) | `actor`, `target`, `through`, `plane`, `reach`, `air_jumps` |
 | `explore` | wanders in seeded random directions, turning when blocked (and jumping, side view); coverage shows in `cells_visited` | `actor`, `plane`, `seed` |
 | `masher` | holds a seeded random chord of `actions` (default Move, Jump, Fire, Confirm, Cancel), a new one every `period` ticks (8): crash and soft-lock hunting | `actions`, `period`, `seed`, `actor?` |
+
+Every bot also takes three optional keys that make it act, not only move (a stealth test needs no
+custom C++ system):
+
+- `hold`: action names held down the whole run, e.g. `["Crouch"]` for a crouch walk.
+- `hold_when`: `[{"action": "Crouch", "entity": "Sentry", "field": "Perceiver.sees", "value": 1}]` holds the
+  action on the ticks the field check is true (the same `entity` / `field` / `value` or `{">": 5}` wording as a
+  test's checks). Several entries are independent, so a bot can crouch while a sentry sees it.
+- `stop_when`: one field check, `{"entity": ..., "field": ..., "value": ...}`. While it is true the bot stands
+  still (no steering, no jump, a `wait` is paused), e.g. freeze while `Perceiver.sees` is 1.
+
+A `walk_to` waypoint (in `through`, or the `target`) can also be `{"at": ..., "wait": ticks, "press": ["Interact"]}`:
+the `press` actions go out for one tick when the bot arrives, once per waypoint.
 
 `plane` is `xy` (top-down 2D or flying: `Move` is the direction), `x` (side view: `Move.x` and
 `Jump`) or `xz` (3D on the ground: `Move` is `(x, -z)`, forward is -Z). Bots are deterministic:

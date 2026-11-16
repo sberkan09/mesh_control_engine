@@ -1,0 +1,1 @@
+- M-GROUNDMIST plan (docs only): `docs/milestones/M-GROUNDMIST.md` adds an opt-in `GroundMist` component and a pure mist level of the hour of day and `Weather.wetness` that the extract feeds into the existing volumetric height fog (or the exp² fog when volumetrics are off) for dawn mist banks that burn off, with no new shader and no new state; steps 13a to 13c.

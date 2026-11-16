@@ -1,0 +1,1 @@
+- Fixed a use-after-free in the OBJ importer tests found by the linux-asan integration run: two cases viewed the cooked mesh through a `MeshView` of a temporary byte vector. Test-only change; the importer is unaffected.

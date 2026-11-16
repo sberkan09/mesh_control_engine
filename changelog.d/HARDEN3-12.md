@@ -1,0 +1,1 @@
+- core: a float convar now refuses `nan`, `inf` and an overflowing number (`1e999`) from the console, the command line and the settings file, and keeps its value.

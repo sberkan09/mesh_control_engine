@@ -50,6 +50,11 @@ doc.submit(batch, sort_layer);
 - **Anchors** are parent-relative min/max plus pixel offsets at UI scale 1; the host's
   `UpdateContext::ui_scale` multiplies them. The engine has no UI-scale convar: `ui_gallery`
   declares its own `ui.scale` and passes it (times the display scale) in `ui_scale`.
+- **UI size at 1080p.** `mce_player` follows the display's own scale, so a UI authored for a 1280x720
+  window looks small on a 1920x1080 monitor at scale 1. Set the convar `ui.reference_height` to the height you
+  authored for (`720`): the UI then grows with the window's short side over it (1.5 at 1080p, 3 at 4K), on top
+  of the player's `ui_scale` setting, and never shrinks below what the display asks (a phone with its own scale
+  keeps it). The default is 0, which leaves the scale as it was.
 - **Navigation** is geometric when no edges are authored (a grid is navigable from any corner);
   `Confirm` fires once per press.
 - **Modal** documents take focus and block the pointer; a HUD document never takes focus.
@@ -102,7 +107,15 @@ ui::build_document(data, doc);                          // the skin (data.font, 
   `UiAnchors`, `UiStackLayout` and `UiGridLayout` fields, by the names the editor shows.
 - `"fill": true` and `"at": [x, y, width, height]` are `Builder::fill` and `Builder::at`. A Panel
   with `"modal": true` is `Builder::modal`'s veil; a Tabs widget's `"tabs"` are `Builder::tab`
-  pages and its `"value"` is the page shown.
+  pages and its `"value"` is the page shown. A `"kind": "Minimap"` widget draws a map of the world
+  around a tracked entity from `MapMarker`s (its `"minimap"` object is `UiMinimap`; section 9.15).
+- **Inventory widgets** (M-INVENTORY 4b) need no widget kind: a document shows an inventory with Text widgets whose
+  *names* the stock player recognizes anywhere in the tree. `slot_1` to `slot_24` show the entity's `Inventory` slots
+  (`Potion x5`, `Iron Sword`, or nothing), `equip_head`, `equip_body`, `equip_hands`, `equip_feet`, `equip_weapon`,
+  `equip_offhand`, `equip_accessory1` and `equip_accessory2` show its `Equipment`, and `inventory_weight` shows
+  `3.5 / 20.0 kg` (or `3.5 kg` without a limit). `status_1` to `status_8` show the entity's `StatusEffects` slots as `elixir 3.5s` (an item cooldown reads `cd:potion 1.2s`; empty slots are blank). The entity is the `UiScreen`'s own when it has an `Inventory`, else the
+  first one in the world (the player's). The texts are the catalog's item names as they are; a localized game keeps
+  localization keys there and maps them itself. Lay the slots out with a Grid or Stack like any Text widgets.
 - A Text widget's `"text_align"` (`Left`, the default, `Center` or `Right`) places its lines
   across its own rect, so a centered title needs no wrapping Stack: give it the full width
   (`"anchors"` or `"at"` with a width) and `"text_align": "Center"`. In C++ it is
@@ -171,6 +184,11 @@ Gameplay never includes `mce/ui`; it talks to the screens only through data:
   as `"format"`, a printf format with one `%f` / `%e` / `%g`, default `%g`; other widgets as their
   value). The field is read from the screen's own entity when it has the component, else from the
   first scene entity that does, and the binding waits until one does.
+  A Panel or Image with a `"bind"` shows or hides: it is visible while the field is within its
+  `"range": [lo, hi, step]`, `lo <= value <= hi` (`samples/09_openworld`'s wanted stars are five Panels bound to
+  `Wanted3D/level` with `lo` 1 to 5; each mission's HUD shows its Active panel with `[1, 1, 0]` on `Mission/state`,
+  PASSED with `[2, 2, 0]`). A reflected enum field binds as its number (`Mission/state`: Idle 0, Active 1, Complete 2,
+  Failed 3). Start such a widget with `"visible": false`. A Slider bound to a field is a read-only bar (`"interactable": false`).
 - **Buttons to gameplay**: a widget's `"action": "Resume"` raises that input action. A confirmed
   button presses it for one tick, a slider, toggle or tabs change presses it with `x` = the new
   value, and a cancelled modal panel (Cancel / Esc) presses its own action. The action rides in
@@ -200,7 +218,10 @@ screen's entity shows, hides and holds it on input actions (the stock kit instal
 
 - `show_on` / `hide_on` name the actions that show and hide the screen: a button's `"action"`, a
   panel's Cancel action, Esc (`Pause` once screens are in the scene) or an `-input` script line.
-- `load_on` loads `scene` (often the scene itself, which restarts it: "Quit to title").
+- `load_on` loads `scene`. Loading the scene you are in restarts it, with every screen back at its authored
+  `visible`: a title screen that is `visible: true` in that scene shows again. Keep the title in its own scene
+  (`title.mcscene`, its Play button's `load_on` loading the level) so that Retry loads the level and "Quit to
+  title" loads the title; one scene holding both cannot tell a restart from a first start.
 - `quit_on` ends the game, as the window's close button does: `mce_player` quits cleanly (the
   `-save` slot is written), a headless run stops there and play mode in the editor pauses. Game
   code asks the same with `scene::request_quit(world)`.
@@ -209,6 +230,41 @@ screen's entity shows, hides and holds it on input actions (the stock kit instal
   tick is part of the run, so a script that pauses and resumes replays with the same state hash.
   Code reads it with `World::held()`, and a system that must run while held registers with
   `World::run_when_held`.
+- `keep_audio: true` (with `pause`) lets the sound go on under the screen: the audio bridge runs on held ticks,
+  so sources keep playing, fades and ducks continue and new sources start, and every `SfxTrigger` (a menu
+  click, a hover tick) fires. The game itself stays held. Without it a pause is silent and total, as before:
+  a `SfxTrigger` waits with its `fire` flag set until the screen hides. A scene that wants a quieter pause adds an
+  `AudioSnapshot` for it.
+
+#### Screens that react to the game (`UiFlowRules`)
+
+`UiFlow` answers input. `UiFlowRules` (on the same entity as the `UiScreen`) answers what the game does: a
+signal, or a number crossing a value. Up to eight rules, evaluated in order after `UiFlow`'s actions, and
+also on held ticks (a paused game can still open a screen).
+
+```json
+"UiFlowRules": { "rules": [
+    { "when": "Signal", "name": "ending", "act": "Show" },
+    { "when": "FieldEquals", "field": "Score/lives", "value": 0, "act": "Show", "act2": "Quit" },
+    {}, {}, {}, {}, {}, {} ] }
+```
+
+- `when` is `Action` (an input action pressed), `Signal` (a sequence `emit`, a timeline event key, a behavior-tree
+  emit node or Luau `mce.signal` with that id; it acts the tick after it was emitted, like every event) or
+  `FieldEquals` / `FieldAbove` / `FieldBelow` (a numeric or bool field, `"Component/field"`, read from the first
+  entity that has the component, so use a singleton).
+- A field rule fires when its condition turns true, not on every tick it holds; it fires again after the
+  condition has been false once. A path that does not resolve never fires.
+- A scene lists all eight rules of the array (`{}` for an unused one: no action, nothing happens); the editor and
+  `write_scene_component` do this for you. A typo in a field path never fires and is not reported.
+- `act` and `act2` run in that order: `Show`, `Hide`, `Toggle` act on this entity's `UiScreen`; `Load` loads
+  `scene`; `Quit` ends the game. Rules and `UiFlow` can sit on the same screen.
+- `SaveSlot` writes the save slot named in `field` (empty: `quick`; letters, digits, `_` and `-`, up to 64) with
+  `save::save_game`, and `LoadSlot` asks the host to apply it after the tick (`scene::request_load`; `scene` is
+  the scene to load first, if set). Both run while a pause screen holds the game, so a pause menu's SAVE and LOAD
+  are two rules. A bad name or a missing slot is logged and does nothing. Only fields marked `Save` on entities
+  with a `SaveKey` are stored (`13-sequences-fsm-saves.md`). `samples/09_openworld`'s Esc menu uses this, with an
+  options page of two sliders bound to `audio.master_db` and `input.look_sensitivity`.
 
 `projects/Undertow` uses all of this (`tools/author_ui_mcp.py`): a title, a pause menu, an options
 page with music and effects volume, and a HUD bound to the drone, the same documents drawn in two
@@ -296,6 +352,31 @@ the player and the editor define. Flags you will meet:
 | `Cheat` | refused from the console and the command line in shipped builds (`time_scale`); code may still set it |
 | `RequiresRestart` | read at start-up only (`headless`, `r.gl_debug`) |
 | `ReadOnly` | reported, never set |
+
+A project can ship its own defaults: the player reads `defaults.cfg` from the folder of the pack (inside it, for a
+`cooked/` directory; or the file named by `-defaults <path>`), lines of `name value` like `settings.cfg` (indentation
+and aligned columns are fine, `#` starts a comment line), and makes each the convar's default once the game starts,
+before the saved options load. A value given on the command line and a saved option still win, and `reset` goes
+back to the project's default; a default is never written to `settings.cfg`. A missing file is no error. An unknown
+name, a value the convar rejects, a `ReadOnly` convar and a `Cheat` convar in a build that locks cheats are warned
+about and skipped. Convars read before the game starts (`headless`, the window and platform switches, `r.gl_debug`,
+`pack`, `mods`, `scene`, `save_dir`, `language`, `liveops*`, `monetize*`, `steam.*`, and what a game module
+reads in `install()`) do not see the file, and `-help` lists the built-in defaults.
+
+Better, put the defaults in the pack so every platform carries them: a `.mcdefaults` file in the project's assets
+(`asset_create` makes one),
+
+```json
+{ "format": "mce-defaults", "version": 1, "guid": "<uuid>",
+  "convars": { "ui.reference_height": 720, "access.captions": true, "audio.music_db": -6 } }
+```
+
+cooks to a convar-defaults chunk that the player applies on every platform (desktop, web, phone) at the same point,
+before `defaults.cfg`, which overrides it for a developer's tweak. Only the game's own pack counts: a mod's pack is data, and its defaults are ignored with a warning.
+A project has one `.mcdefaults` file: with two the
+cook stops and names both. A text value is 1-128 bytes without leading or trailing spaces. A name is checked when the
+game runs: the cook does not know a game module's convars. A pack cooked without the file has no such chunk and starts
+exactly as before. Undertow ships `ui.reference_height = 720` this way.
 
 Every convar can be set on the command line as `-name value`, including a game module's own
 boot-time switches (`MCE_CVAR` in the module: the player applies them once the module loads and

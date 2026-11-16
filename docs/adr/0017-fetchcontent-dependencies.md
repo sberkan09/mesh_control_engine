@@ -31,3 +31,18 @@ oracle, ADR-0016), Jolt (ADR-0003), glslang (shader cook, ADR-0033) and, on macO
 `cmake/Dependencies.cmake` plus `cmake/macos/MetalDependencies.cmake`. SDL3 is also linked by `mce_rhi_metal`
 (privately) and by `mce_editor_layer` (headers only where it links the `mce_engine` umbrella, linked on Windows),
 not only by `mce_platform` and `mce_rhi_gl`.
+
+## Amendment 2026-10-17
+
+bc7enc_rdo (richgel999, MIT or Unlicense) joins the cook-time dependencies for block-compressed desktop textures
+(M-CONTENT step 1b, `mce_cook --textures bc`). It has no tags, so `cmake/Dependencies.cmake` pins the commit
+`b9438627eef73a1157e84201b6fa6eb2ffd6d9f0` (no `GIT_SHALLOW`, like tinyexr) and builds `bc7enc.cpp`, `rgbcx.cpp` and
+`bc7decomp.cpp` (tests) as `mce_bc7enc`, with `-ffp-contract=off` so the cooked bytes do not depend on the compiler. The
+repo's ISPC encoder, `ispc.exe` and RDO files are never built. The "bc7enc wall" and "bc7enc link wall" in
+`scripts/ci/check_walls.py` confine it to the cook's `texture_bc.cpp` (and its test). Cook golden hashes of BC output are
+guaranteed on x86_64 only until `tests/asset/test_cook_bc_arch.cpp` has run on arm64.
+
+ufbx (MIT or Unlicense, Samuli Raivio) joins the cook-time dependencies for FBX import (M-IMPORT3D step 3, ADR-0047): release v0.23.1 pinned by
+its commit `26a482ae66871d7de36eb722aa060bce95bce274` (no `GIT_SHALLOW`), built from `ufbx.c` through the cook's
+`ufbx_impl.c` as `mce_ufbx` with `-ffp-contract=off` / `/fp:precise`, OBJ and geometry-cache readers compiled out. The
+"ufbx wall" and "ufbx link wall" confine it to the cook's FBX importer and `tests/asset/`.

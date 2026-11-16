@@ -4,6 +4,8 @@
 
 #include <doctest/doctest.h>
 
+#include <string>
+
 #include "mce/convar.h"
 #include "mce/render/camera2d.h"
 #include "mce/render/sprite_batch.h"
@@ -147,4 +149,43 @@ TEST_CASE("M-ACCESS: subtitle_style reads the access convars") {
     ConVar::find(StringId("access.captions"))->reset();
     ConVar::find(StringId("access.subtitle_size"))->reset();
     ConVar::find(StringId("access.subtitle_background"))->reset();
+}
+
+TEST_CASE("M-HARDEN4: max_lines is capped at kMaxSubtitleLines and 0 shows nothing") {
+    SubFixture f;
+    SubtitleView v;
+    v.set_skin(f.skin);
+    SubtitleLine many[20];
+    static const char* const names[20] = {"l0",  "l1",  "l2",  "l3",  "l4",  "l5",  "l6",  "l7",  "l8",  "l9",
+                                          "l10", "l11", "l12", "l13", "l14", "l15", "l16", "l17", "l18", "l19"};
+    for (u32 i = 0; i < 20; ++i) many[i] = SubtitleLine{"", names[i], SubtitleKind::Speech};
+
+    SubtitleStyle st;
+    for (const u32 asked : {kMaxSubtitleLines - 1, kMaxSubtitleLines, kMaxSubtitleLines + 1, 1000u}) {
+        st.max_lines = asked;
+        v.update(Span<const SubtitleLine>(many, 20), screen(), st);
+        const u32 want = asked < kMaxSubtitleLines ? asked : kMaxSubtitleLines;
+        REQUIRE(v.shown() == want);
+        CHECK(v.shown_text(want - 1) == StringView("l19"));  // the newest shows last
+        CHECK(v.shown_text(0) == StringView(names[20 - want]));
+    }
+    st.max_lines = 0;
+    v.update(Span<const SubtitleLine>(many, 20), screen(), st);
+    CHECK(v.shown() == 0);
+    v.update(Span<const SubtitleLine>(), screen(), st);  // no lines at all
+    CHECK(v.shown() == 0);
+}
+
+TEST_CASE("M-HARDEN4: a line longer than the 256-byte display buffer is cut, not overrun") {
+    SubFixture f;
+    SubtitleView v;
+    v.set_skin(f.skin);
+    const std::string text(400, 'a');
+    const SubtitleLine one[] = {{"Ada", StringView(text.data(), text.size()), SubtitleKind::Speech}};
+    SubtitleStyle st;
+    v.update(Span<const SubtitleLine>(one, 1), screen(), st);
+    REQUIRE(v.shown() == 1);
+    CHECK(v.shown_text(0).size() <= 256);
+    CHECK(v.shown_text(0).starts_with("Ada: aaa"));
+    CHECK(v.box(0).size().x > 0.0f);
 }

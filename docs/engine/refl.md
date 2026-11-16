@@ -15,7 +15,8 @@ the umbrella.
   - `FieldKind`: `Bool`, signed and unsigned integers, `F32`/`F64`, `String` (a `FixedString<N>`), `Enum`,
     `Vec2`/`Vec3`/`Vec4`/`Quat`/`Color`, `AssetRef`, `EntityRef`, `Struct`. `field_kind_name()` names them.
   - `FieldFlags`: `ReadOnly` (shown, never written), `Transient` (never serialized into scenes), `Save`
-    (included in save games), `EditorRange` (editor min/max are set).
+    (included in save games), `EditorRange` (editor min/max are set), `WorldPoint` (a Vec3, or a fixed array
+    of them, holding a world-space point: a floating-origin rebase moves it, M-OPENWORLD A2).
   - `FieldRecord`: name (`StringId` and text), kind, byte offset, element size, `count` (> 1 for a fixed
     array), `type_id` of a referenced Struct/Enum/ref type, help text, flags, editor range, `StringOps` for
     String fields.
@@ -30,8 +31,8 @@ the umbrella.
     layout.
   - `MCE_REFL_STRUCT(T, fields...)`: plain value struct used as a nested field or schema.
   - `MCE_ENUM(E, values...)`: enumerator names and values.
-  - Field attributes: `Range{min, max}`, `Help{"text"}`, `ReadOnly`, `Transient`, `Save`. A field is a bare
-    member name or `(name, attributes...)`.
+  - Field attributes: `Range{min, max}`, `Help{"text"}`, `ReadOnly`, `Transient`, `Save`, `WorldPoint`. A
+    field is a bare member name or `(name, attributes...)`.
 - `mce/refl/field_traits.h`: `FieldTraits<T>` maps a member type to its `FieldKind`. Built in: bool,
   fixed-width integers, floats, `FixedString<N>`, math vectors, `quat`, `Color`, enums, and reflected structs.
   Higher layers specialize it for their handles: `mce::Entity` in `mce/ecs/entity.h` (EntityRef) and

@@ -1,0 +1,1 @@
+- Editor, M-SCENEREFS: `scene_lint` / `mce scene lint` also report a reference to an entity the scene lacks.

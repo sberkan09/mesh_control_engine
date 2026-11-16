@@ -1,0 +1,1 @@
+- M-LIGHTCOOKIE plan: opt-in light cookies (a texture projected by a spot light, or tiled over the sun, that shapes its light: window grids, foliage dapples, flashlight masks) in the forward local-light loop, the sun term and the volumetric light injection, render-side only (steps 40a to 40i); nothing is built yet.

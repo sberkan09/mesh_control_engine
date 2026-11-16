@@ -1,0 +1,1 @@
+- Editor, M-CAMBOOKMARK 2: Ctrl+1..9 stores the viewport's camera (2D and orbit) in a bookmark slot and 1..9 flies back to it; View > Camera bookmarks lists them; the slots are kept per project in `.mce/camera_bookmarks.txt`.

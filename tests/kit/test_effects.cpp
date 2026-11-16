@@ -9,10 +9,15 @@
 #include "mce/audio/components.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/kit/cinematic.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/effects.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/pathfinding.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/vehicles3d.h"
+#include "mce/input/actions.h"
 #include "mce/physics/module.h"
 #include "mce/physics/world2d.h"
 
@@ -185,6 +190,115 @@ TEST_CASE("effects: CameraFollow3D orbits at its distance and looks at the pivot
     CHECK(math::dot(forward, to_pivot) == doctest::Approx(1.0f));
 }
 
+namespace {
+
+struct ChaseScene {
+    World w;
+    u64 t = 0;
+    Entity target, cam;
+    explicit ChaseScene(u8 chase, bool vehicle, f32 vehicle_speed = 8.0f) {
+        w.register_components<LocalTransform, Vehicle3D>();
+        install_effects(w, nullptr);
+        Vehicle3D v;
+        v.speed = vehicle_speed;
+        target = vehicle ? w.spawn_with(at(0, 0, 0), v) : w.spawn_with(at(0, 0, 0));
+        CameraFollow3D f;
+        f.target = target;
+        f.smoothing = 0.0f;
+        f.chase = chase;
+        f.orbit_speed = 2.0f;
+        cam = w.spawn_with(at(0, 0, 0), f);
+        w.tick(kDt, t++);
+    }
+    // The target moves `speed` m/s along `dir` (unit, flat) for `seconds`.
+    void drive(math::vec3 dir, f32 speed, f32 seconds) {
+        for (u32 i = 0; i < static_cast<u32>(seconds * 60.0f); ++i) {
+            w.try_get_mut<LocalTransform>(target)->position = w.try_get<LocalTransform>(target)->position + dir * (speed * kDt);
+            w.tick(kDt, t++);
+        }
+    }
+    f32 yaw() { return w.try_get<CameraFollow3D>(cam)->yaw; }
+};
+
+}  // namespace
+
+TEST_CASE("effects: CameraFollow3D chase turns the camera behind a moving target (M-OPENWORLD-POLICE 4)") {
+    {  // chase 2: any target; heading +X puts the camera on -X
+        ChaseScene s(2, false);
+        s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(std::sin(s.yaw()) < -0.99f);  // the camera's back vector is (sin yaw, cos yaw): -X
+        CHECK(s.w.try_get<LocalTransform>(s.cam)->position.x < s.w.try_get<LocalTransform>(s.target)->position.x - 3.0f);
+        s.drive({0.0f, 0.0f, -1.0f}, 6.0f, 3.0f);  // then it heads -Z: camera on +Z (yaw 0)
+        CHECK(std::cos(s.yaw()) > 0.99f);
+    }
+    {  // off by default
+        ChaseScene s(0, false);
+        s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(s.yaw() == 0.0f);
+    }
+    {  // chase 1 follows a Vehicle3D driving forward, not a walker and not a reversing car
+        ChaseScene walker(1, false);
+        walker.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(walker.yaw() == 0.0f);
+        ChaseScene reversing(1, true, -6.0f);
+        reversing.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(reversing.yaw() == 0.0f);
+        ChaseScene car(1, true, 8.0f);
+        car.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(std::sin(car.yaw()) < -0.99f);
+    }
+    {  // below chase_min_speed (3 m/s) nothing turns
+        ChaseScene s(2, false);
+        s.drive({1.0f, 0.0f, 0.0f}, 1.5f, 3.0f);
+        CHECK(s.yaw() == 0.0f);
+    }
+}
+
+TEST_CASE("effects: chase ignores a target swap and speed jitter at the threshold (M-OPENWORLD-POLICE 4)") {
+    {  // swapping the target to an entity far away is not a speed: the yaw does not move on the swap
+        ChaseScene s(2, false);
+        const Entity far_away = s.w.spawn_with(at(500, 0, 500));
+        s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 0.0f);
+        s.w.try_get_mut<CameraFollow3D>(s.cam)->target = far_away;
+        const f32 before = s.yaw();
+        s.w.tick(kDt, s.t++);
+        CHECK(s.yaw() == before);
+    }
+    {  // between 70% and 100% of chase_min_speed it keeps chasing once started, but never starts
+        ChaseScene s(2, false);
+        s.drive({1.0f, 0.0f, 0.0f}, 2.6f, 3.0f);  // 2.6 < 3: does not start
+        CHECK(s.yaw() == 0.0f);
+        s.drive({1.0f, 0.0f, 0.0f}, 3.2f, 0.5f);  // starts
+        const f32 started = s.yaw();
+        CHECK(started != 0.0f);
+        s.drive({1.0f, 0.0f, 0.0f}, 2.6f, 0.5f);  // 2.6 >= 2.1: keeps going
+        CHECK(std::fabs(s.yaw()) > std::fabs(started));
+        s.drive({1.0f, 0.0f, 0.0f}, 1.5f, 0.5f);  // below 70%: stops
+        const f32 stopped = s.yaw();
+        s.drive({1.0f, 0.0f, 0.0f}, 1.5f, 0.5f);
+        CHECK(s.yaw() == stopped);
+    }
+    {  // mode 2 is any moving target, a reversing car included (mode 1 skips it)
+        ChaseScene s(2, true, -6.0f);
+        s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(std::sin(s.yaw()) < -0.99f);
+    }
+}
+
+TEST_CASE("effects: the Look input holds a chasing camera for chase_hold seconds") {
+    ChaseScene s(2, false);
+    input::InputState in;
+    in.look = {0.5f, 0.0f};
+    s.w.set_resource(in);
+    s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 0.2f);  // the player turns the camera
+    const f32 held = s.yaw();
+    s.w.resource<input::InputState>().look = {0.0f, 0.0f};
+    s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 1.0f);  // inside chase_hold (1.5 s): the yaw stays where the player left it
+    CHECK(s.yaw() == held);
+    s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);  // then it eases behind the heading
+    CHECK(std::sin(s.yaw()) < -0.99f);
+}
+
 TEST_CASE("effects: PathAgents walk on a NavGrid built from the scene's colliders") {
     World w;
     w.register_components<LocalTransform>();
@@ -253,4 +367,118 @@ TEST_CASE("M-ACCESS: reduced motion scales the view's shake, never the camera's 
     CHECK(still.position.x == doctest::Approx(2.0f));
     CHECK(still.position.y == doctest::Approx(3.0f));
     CHECK(still.rotation == doctest::Approx(0.0f));
+}
+
+namespace {
+
+struct WreckRig {
+    World w;
+    u64 t = 0;
+    Entity car, neighbour, cam;
+    WreckRig() {
+        w.register_components<LocalTransform>();
+        w.register_event<audio::PlaySfx>(Phase::FixedUpdate_Pre);
+        install_particles(w, nullptr);
+        install_combat3d(w, nullptr);
+        install_effects(w, nullptr);
+        auto wreck = [&](f32 x) {
+            Health3D h;
+            h.max = h.current = 50.0f;
+            ParticleEmitter3D em;
+            em.emitting = 0;
+            ParticleBurst b;
+            b.count = 60;
+            b.on = FireOn::Died;
+            b.keep_emitting = 1;
+            SfxTrigger sfx;
+            sfx.clip.guid = asset::Guid{7, 8};
+            sfx.on = FireOn::Died;
+            ShakeTrigger shake;
+            shake.trauma = 0.35f;
+            shake.on = FireOn::Died;
+            return w.spawn_with(at(x, 0, 0), h, em, b, sfx, shake, audio::AudioSpatial{});
+        };
+        car = wreck(4.0f);
+        neighbour = wreck(9.0f);
+        CameraShake3D cs;
+        cam = w.spawn_with(at(0, 0, 0), cs);
+    }
+    void run(u32 n) {
+        for (u32 i = 0; i < n; ++i) w.tick(kDt, t++);
+    }
+    u64 state() {
+        DamageInfo hit;
+        hit.amount = 100.0f;
+        REQUIRE(apply_damage(w, car, hit));
+        run(2);
+        return w.state_hash();
+    }
+};
+
+}  // namespace
+
+TEST_CASE("effects: FireOn Died bursts and lights a 3D emitter, sounds where it burns and shakes the camera") {
+    WreckRig r;
+    r.run(2);
+    CHECK(r.w.try_get<ParticleBurst>(r.car)->fired == 0);
+    CHECK(r.w.try_get<ParticleEmitter3D>(r.car)->emitting == 0);
+    const u64 sfx_before = sfx_pushed(r.w);
+
+    DamageInfo hit;
+    hit.amount = 100.0f;
+    REQUIRE(apply_damage(r.w, r.car, hit));
+    r.run(2);
+    const ParticleEmitter3D& em = *r.w.try_get<ParticleEmitter3D>(r.car);
+    CHECK(r.w.try_get<ParticleBurst>(r.car)->fired == 1);
+    CHECK(em.burst == 60);
+    CHECK(em.burst_version == 1);
+    CHECK(em.emitting == 1);
+    CHECK(r.w.try_get<SfxTrigger>(r.car)->fired == 1);
+    CHECK(r.w.try_get<ShakeTrigger>(r.car)->fired == 1);
+    CHECK(sfx_pushed(r.w) - sfx_before == 1);
+    CHECK(r.w.try_get<CameraShake3D>(r.cam)->trauma > 0.0f);
+
+    // A living neighbour is untouched, and nothing fires twice.
+    CHECK(r.w.try_get<ParticleBurst>(r.neighbour)->fired == 0);
+    CHECK(r.w.try_get<ParticleEmitter3D>(r.neighbour)->emitting == 0);
+    r.run(10);
+    CHECK(r.w.try_get<ParticleBurst>(r.car)->fired == 1);
+    CHECK(r.w.try_get<ParticleEmitter3D>(r.car)->burst_version == 1);
+}
+
+TEST_CASE("effects: the Died wreck run twice has the same state hash") {
+    auto run = [] {
+        WreckRig r;
+        r.run(2);
+        return r.state();
+    };
+    CHECK(run() == run());
+}
+
+TEST_CASE("effects: FireOn Fired bursts the weapon's aim_from camera and kicks the view") {
+    World w;
+    w.register_components<LocalTransform>();
+    install_particles(w, nullptr);
+    install_combat3d(w, nullptr);
+    install_effects(w, nullptr);
+    ParticleBurst b;
+    b.count = 6;
+    b.on = FireOn::Fired;
+    ShakeTrigger kick;
+    kick.trauma = 0.04f;
+    kick.on = FireOn::Fired;
+    const Entity cam = w.spawn_with(at(0, 2, 5), ParticleEmitter3D{}, b, kick, CameraShake3D{});
+    Weapon3D gun;
+    gun.aim_from = cam;
+    gun.magazine = 0;  // never runs dry
+    const Entity player = w.spawn_with(at(0, 1, 0), gun);
+    u64 t = 0;
+    for (u32 i = 0; i < 3; ++i) w.tick(kDt, t++);
+    CHECK(w.try_get<ParticleBurst>(cam)->fired == 0);
+
+    w.try_get_mut<Weapon3D>(player)->fire = 1;
+    for (u32 i = 0; i < 3; ++i) w.tick(kDt, t++);
+    CHECK(w.try_get<ParticleBurst>(cam)->fired >= 1);
+    CHECK(w.try_get<ParticleEmitter3D>(cam)->burst_version >= 1);
+    CHECK(w.try_get<ShakeTrigger>(cam)->fired >= 1);
 }

@@ -1,0 +1,1 @@
+- Kit (M-CASHPICKUP 1): `CashPickup3D` pays the first wallet holder that touches it, once or on a respawn timer. Record: `docs/milestones/M-CASHPICKUP.md`.

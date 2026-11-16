@@ -84,7 +84,7 @@ MCE_COMPONENT(Locomotion3D, (animator, Help{"the entity with the Animator; empty
               (smoothing, Range{0, 2}, Help{"seconds for the speeds to follow the motion"}),
               (stride_speed, Range{0, 50}, Help{"m/s the moving clips are authored at: play rate = speed / this; 0 = off"}),
               (min_rate, Range{0, 8}), (max_rate, Range{0, 8}), (ground_speed, ReadOnly, Transient),
-              (vertical_speed, ReadOnly, Transient), (local_move, ReadOnly, Transient), (last_position, ReadOnly, Transient),
+              (vertical_speed, ReadOnly, Transient), (local_move, ReadOnly, Transient), (last_position, ReadOnly, Transient, WorldPoint),
               (grounded, ReadOnly, Transient), (crouched, ReadOnly, Transient), (seen, ReadOnly, Transient),
               (found, ReadOnly, Transient))
 

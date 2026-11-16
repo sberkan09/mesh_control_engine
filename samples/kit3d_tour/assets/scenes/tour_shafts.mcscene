@@ -1,0 +1,421 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-000000000017",
+ "name": "tour_shafts",
+ "entities": [
+  {
+   "id": 1,
+   "name": "Field",
+   "components": {
+    "Terrain3D": {
+     "terrain": "guid:b0a30000-0000-4000-8000-000000000021"
+    },
+    "TerrainCollider3D": {
+     "friction": 0.9
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {
+     "sun_direction": [
+      0.04,
+      -0.07,
+      0.997
+     ],
+     "sun_intensity": 2.0,
+     "sun_shadows": 0,
+     "sun_color": [
+      1.0,
+      0.85,
+      0.65
+     ],
+     "ambient_sky": [
+      0.3,
+      0.3,
+      0.36
+     ],
+     "ambient_ground": [
+      0.14,
+      0.12,
+      0.1
+     ],
+     "fog_density": 0.02,
+     "fog_color": [
+      0.7,
+      0.62,
+      0.55
+     ],
+     "exposure": 1.0,
+     "bloom": 1,
+     "bloom_intensity": 0.1
+    },
+    "SunShafts3D": {
+     "enabled": 1,
+     "intensity": 3.0,
+     "length": 1.0,
+     "decay": 0.98
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1,
+     "fov_deg": 60
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      1.6,
+      10.0
+     ],
+     "rotation": [
+      0.0349,
+      0,
+      0,
+      0.9994
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Wall left",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.19,
+      0.18,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -5.6,
+      0.9,
+      4.0
+     ],
+     "scale": [
+      8.0,
+      2.4,
+      0.3
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "Wall right",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.19,
+      0.18,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      5.6,
+      0.9,
+      4.0
+     ],
+     "scale": [
+      8.0,
+      2.4,
+      0.3
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Trunk 1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -9.2,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Trunk 2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -6.9,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Trunk 3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -4.6,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Trunk 4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.3,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Trunk 5",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Trunk 6",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      2.3,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Trunk 7",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      4.6,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Trunk 8",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      6.9,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 14,
+   "name": "Trunk 9",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.12,
+      0.09,
+      0.07,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      9.2,
+      4.5,
+      -4.0
+     ],
+     "scale": [
+      1.5,
+      9.0,
+      1.5
+     ]
+    }
+   }
+  }
+ ]
+}

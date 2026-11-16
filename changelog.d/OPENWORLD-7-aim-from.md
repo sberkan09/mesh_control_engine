@@ -1,0 +1,1 @@
+- Kit (M-OPENWORLD-GAPS 2a): `Weapon3D::aim_from` makes a weapon shoot from another entity's pose (a camera) and fall back to its own when that entity is gone (168 to 176 bytes). The 09_openworld gun is now the player's, so `Confiscate3D` and a new `AmmoShop3D` work there. Record: `docs/milestones/M-OPENWORLD-GAPS.md`.

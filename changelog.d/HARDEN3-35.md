@@ -1,0 +1,1 @@
+- Tests: physics2d `World2D::set_awake`, `each_body` and `set_motor_speed`.

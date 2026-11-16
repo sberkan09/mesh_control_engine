@@ -1,0 +1,1 @@
+- Tests: `WebSocketHost::pending_bytes` (queued by send, drained by flush, zero when closed or for an unknown peer).

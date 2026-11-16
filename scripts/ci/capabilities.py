@@ -49,8 +49,8 @@ INTERNAL_CHUNKS = {
 # Asset types imported from a file format (a sidecar picks the importer) rather than a JSON source.
 IMPORTED = {
     "Mesh": ".gltf / .glb",
-    "Texture": ".png / .jpg",
-    "Sfx": ".wav / .ogg / .mcsound (sound set)",
+    "Texture": ".png / .jpg / .tga / .bmp",
+    "Sfx": ".wav / .ogg / .mp3 / .flac / .mcsound (sound set)",
     "Font": ".ttf",
     "Scene": ".mcscene (scene_* tools)",
     "Prefab": ".mcprefab (prefab_* tools)",
@@ -87,7 +87,7 @@ def chunk_types():
 
 
 def mcp_kinds():
-    text = read(ROOT / "src/editor/mcp/src/asset_tools.cpp")
+    text = read(ROOT / "src/editor/core/src/asset_kinds.cpp")  # the table the MCP asset tools share (M-ASSETNEW)
     return {m.group(1): m.group(2) for m in re.finditer(r'^\s*\{"(\w+)", "(\.\w+)", "mce-[\w-]+", \d+,', text, re.M)}
 
 

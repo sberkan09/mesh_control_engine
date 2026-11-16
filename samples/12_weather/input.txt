@@ -1,0 +1,1 @@
+# 12_weather needs no input: the forecast is the script (60 ticks a second; transitions are 10 s = 600 ticks).

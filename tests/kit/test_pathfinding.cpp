@@ -474,3 +474,34 @@ TEST_CASE("pathfinding: PathAgent drives a physics body through its velocity") {
     CHECK(p.y == doctest::Approx(0.5f).epsilon(0.02));
     CHECK(math::length(w.resource<physics::World2D>().linear_velocity(e)) == doctest::Approx(0.0f));
 }
+
+TEST_CASE("pathfinding: cell_bounds and cell_of_index agree with index, cell_center and cell_at") {
+    const NavGrid g(5, 3, 2.0f, {10.0f, -4.0f});
+
+    // Row-major: x runs fastest, and the two conversions are inverses over the whole grid.
+    CHECK(g.cell_of_index(0) == GridCell{0, 0});
+    CHECK(g.cell_of_index(4) == GridCell{4, 0});
+    CHECK(g.cell_of_index(5) == GridCell{0, 1});
+    CHECK(g.cell_of_index(14) == GridCell{4, 2});
+    for (u32 i = 0; i < g.cell_count(); ++i) CHECK(g.index(g.cell_of_index(i)) == i);
+
+    // Bounds start at origin + cell * size and span one cell.
+    const math::aabb2 b = g.cell_bounds({1, 2});
+    CHECK(b.min.x == 12.0f);
+    CHECK(b.min.y == 0.0f);
+    CHECK(b.max.x == 14.0f);
+    CHECK(b.max.y == 2.0f);
+
+    // The centre is the middle of the bounds, and a point there maps back to the cell.
+    const math::vec2 c = g.cell_center({1, 2});
+    CHECK(c.x == (b.min.x + b.max.x) * 0.5f);
+    CHECK(c.y == (b.min.y + b.max.y) * 0.5f);
+    CHECK(g.cell_at(c) == GridCell{1, 2});
+
+    // Outside the grid the bounds still follow the lattice, but the cell reads as blocked.
+    const math::aabb2 out = g.cell_bounds({-1, -1});
+    CHECK(out.min.x == 8.0f);
+    CHECK(out.min.y == -6.0f);
+    CHECK_FALSE(g.contains({-1, -1}));
+    CHECK_FALSE(g.walkable({-1, -1}));
+}

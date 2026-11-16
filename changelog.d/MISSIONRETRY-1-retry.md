@@ -1,0 +1,1 @@
+- Kit (M-MISSIONRETRY 1): `MissionRetry` puts a failed mission back to Idle after a delay so its marker can run it again. Record: `docs/milestones/M-MISSIONRETRY.md`.

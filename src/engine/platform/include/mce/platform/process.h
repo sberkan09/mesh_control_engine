@@ -25,6 +25,10 @@ public:
     // Blocks until the child exits; returns its exit code (-1 if never started). With capture,
     // `output` receives everything it wrote.
     i32 wait(Array<char>* output = nullptr);
+    // With capture: waits until the child wrote something, copies up to `cap` bytes of it to `buf` and
+    // returns the count; 0 once the child closed its output (call wait() then for the exit code). Bytes
+    // read here are not in wait()'s `output`. For a caller that shows progress while the child runs.
+    usize read_some(char* buf, usize cap);
     void kill();
     // Exit code after running() returned false or wait() returned.
     i32 exit_code() const { return exit_code_; }

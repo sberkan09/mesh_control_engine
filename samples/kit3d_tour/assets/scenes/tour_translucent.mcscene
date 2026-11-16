@@ -1,0 +1,240 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-000000000013",
+ "name": "tour_translucent",
+ "entities": [
+  {
+   "id": 1,
+   "name": "Field",
+   "components": {
+    "Terrain3D": {
+     "terrain": "guid:b0a30000-0000-4000-8000-000000000021"
+    },
+    "TerrainCollider3D": {
+     "friction": 0.9
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {
+     "sun_direction": [
+      -0.5622,
+      -0.1227,
+      0.8178
+     ],
+     "sun_intensity": 2.2,
+     "sun_shadows": 1,
+     "sun_color": [
+      1.0,
+      0.82,
+      0.6
+     ],
+     "ambient_sky": [
+      0.2,
+      0.25,
+      0.36
+     ],
+     "ambient_ground": [
+      0.1,
+      0.09,
+      0.08
+     ],
+     "exposure": 0.9,
+     "bloom": 1,
+     "bloom_intensity": 0.08
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1,
+     "fov_deg": 55
+    },
+    "LocalTransform": {
+     "position": [
+      0.6,
+      1.5,
+      7.2
+     ],
+     "rotation": [
+      -0.0262,
+      0,
+      0,
+      0.9997
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Leaf row",
+   "components": {
+    "Foliage3D": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000040",
+     "count": 12,
+     "half_extents": [
+      3.4,
+      1.4
+     ],
+     "scale_min": 0.95,
+     "scale_max": 1.3,
+     "random_yaw": 0,
+     "wind_amplitude": 0.06,
+     "wind_height": 1.2,
+     "wind_flutter": 0.01,
+     "seed": 7,
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      -1.6,
+      0,
+      -1.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "Paper screen",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "material": "guid:b0a30000-0000-4000-8000-000000000045",
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      3.6,
+      1.0,
+      -1.6
+     ],
+     "scale": [
+      0.3,
+      2.0,
+      0.005
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Lantern shade",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000045"
+    },
+    "LocalTransform": {
+     "position": [
+      0.2,
+      1.3,
+      2.0
+     ],
+     "scale": [
+      0.6,
+      0.8,
+      0.6
+     ]
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Lantern lamp",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.7,
+      0.38,
+      1
+     ],
+     "intensity": 1.2,
+     "radius": 6
+    },
+    "LocalTransform": {
+     "position": [
+      0.2,
+      1.3,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Wax sphere",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000046",
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      1.9,
+      0.5,
+      2.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Plain sphere",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      3.1,
+      0.5,
+      2.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Skin sphere",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      -1.4,
+      0.5,
+      2.2
+     ]
+    }
+   }
+  }
+ ]
+}

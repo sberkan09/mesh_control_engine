@@ -1,0 +1,1 @@
+- Editor, M-SELHISTORY 1: `SelectionHistory` remembers the entities you selected (64 entries, same twice is one, entries ahead drop on a new selection) and steps back and forward over the ones that still exist; Alt+Left / Alt+Right follow.

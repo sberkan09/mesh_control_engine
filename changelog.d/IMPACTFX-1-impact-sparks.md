@@ -1,0 +1,1 @@
+- Kit (M-IMPACTFX): `ImpactFx3D` (`mce/kit/impact_fx.h`): a pooled particle emitter that jumps to each `WeaponHit3D` point and bursts. Sample: sparks where the player's (and anyone's) shots land. Record: `docs/milestones/M-IMPACTFX.md`.

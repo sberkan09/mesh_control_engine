@@ -1,0 +1,1 @@
+- Assets menu, M-ASSETNEW step 3 (closes the milestone): the Assets panel gets a + New button (a starter file of any JSON source kind, cooked before it is written, opened in its panel) and Duplicate and Delete entries in its right-click menu (Delete lists the assets that still name the file).

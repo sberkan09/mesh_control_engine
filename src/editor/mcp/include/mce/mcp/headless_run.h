@@ -20,12 +20,23 @@ struct ScriptFailure {
     FixedString<256> error;  // "<file>:<line>: message"
 };
 
+// What a scene script cost during the run (M-SCRIPTPROF 1): interrupt steps per update(), against the budget.
+struct ScriptProfile {
+    FixedString<64> name;
+    bool failed = false;
+    u32 peak_steps = 0;
+    u64 total_steps = 0;
+    u64 updates = 0;
+    u32 budget_steps = 0;  // the per-update limit
+};
+
 struct HeadlessRun {
     u64 ticks = 0;
     usize entities = 0;  // spawned by the scene
     u64 state_hash = 0;
     WorldMetrics metrics;
     Array<ScriptFailure> script_errors;  // the scene's scripts that failed, in load order
+    Array<ScriptProfile> scripts;        // every scene script's step profile, in load order
 };
 
 // Called every `kProgressTicks` ticks and after the last one.

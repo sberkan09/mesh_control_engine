@@ -178,3 +178,39 @@ TEST_CASE("AudioDevice: finish_releases drains more releases than one callback t
     for (ClipHandle c : clips) CHECK_FALSE(dev->is_clip_registered(c));
     CHECK(dev->stats().mix_sample == 480);  // drained without mixing
 }
+
+TEST_CASE("clip table: kMaxClips registrations succeed, the next one fails, a release frees a slot") {
+    AudioDesc d;
+    d.backend = Backend::Silent;
+    auto dev = AudioDevice::create(d).value();
+    Array<f32> clip = test::dc_clip(480, 0.1f);
+    Array<ClipHandle> all;
+    for (u32 i = 0; i < kMaxClips; ++i) {
+        auto r = dev->register_clip(test::payload(clip));
+        REQUIRE(r.has_value());
+        all.push_back(r.value());
+        if (i % 16 == 15) dev->update();  // drain the command FIFO
+    }
+    dev->update();
+    auto over = dev->register_clip(test::payload(clip));
+    CHECK_FALSE(over.has_value());
+
+    dev->release_clip(all[7]);
+    CHECK(dev->finish_releases(1000));
+    CHECK(dev->register_clip(test::payload(clip)).has_value());
+    CHECK_FALSE(dev->register_clip(test::payload(clip)).has_value());
+}
+
+TEST_CASE("voice handles: kMaxHandles plays in one tick are accepted, the next one is dropped") {
+    AudioDesc d;
+    d.backend = Backend::Silent;
+    auto dev = AudioDevice::create(d).value();
+    Array<f32> clip = test::dc_clip(480000, 0.5f);  // ten seconds: no voice ends while we count
+    const ClipHandle h = dev->register_clip(test::payload(clip)).value();
+    for (u32 i = 0; i < kMaxHandles; ++i) {
+        CHECK_FALSE(dev->play(h).is_null());  // no update() between: the mixer has freed nothing yet
+    }
+    CHECK(dev->live_handles() == kMaxHandles);
+    CHECK(dev->play(h).is_null());
+    CHECK(dev->live_handles() == kMaxHandles);
+}

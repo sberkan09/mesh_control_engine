@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "mce/ecs/hierarchy.h"
+#include "mce/ecs/origin.h"
 #include "mce/log.h"
 #include "mce/scene/scene.h"
 
@@ -96,6 +97,8 @@ void SceneStreaming::instantiate(World& world, Record& r, asset::AnyHandle handl
         fail(r, made.error().code);
         return;
     }
+    // Chunk scenes are authored in absolute coordinates; after a rebase they land relative to the origin.
+    shift_entities(world, r.spawned.span(), origin_offset(world));
     r.state = ChunkState::Loaded;
     ++stats_.total_loads;
 }
@@ -243,7 +246,37 @@ void install_streaming(World& world, asset::AssetSystem& assets, StreamingConfig
     world.set_resource(SceneStreaming(&assets, config));
 }
 
+bool update_floating_origin(World& world) {
+    MCE_ASSERT_MSG(!world.in_phase(), "update_floating_origin moves the world: call it between ticks");
+    if (world.find_component(kTypeHash<FloatingOrigin3D>) == ecs::kInvalidComponent) return false;
+    const FloatingOrigin3D* cfg = nullptr;
+    world.query<const FloatingOrigin3D>().each([&](const FloatingOrigin3D& c) {
+        if (!cfg) cfg = &c;
+    });
+    if (!cfg || !cfg->enabled || !(cfg->snap > 0.0f)) return false;
+    const FloatingOrigin3D c = *cfg;
+    bool have = false;
+    math::vec3 focus;
+    world.query<const StreamingFocus>().each([&](Entity e, const StreamingFocus& f) {
+        if (!have && f.enabled) {
+            focus = position_of(world, e);
+            have = true;
+        }
+    });
+    if (!have) return false;
+    WorldOrigin& o = install_world_origin(world, c.snap);
+    const f32 threshold = math::max(c.threshold, o.snap);
+    const bool far = std::fabs(focus.x) > threshold || std::fabs(focus.z) > threshold ||
+                     (c.vertical && std::fabs(focus.y) > threshold);
+    if (!far) return false;
+    const auto cells_of = [&](f32 v) { return static_cast<i32>(std::floor(v / o.snap + 0.5f)); };
+    const i32 cells[3] = {cells_of(focus.x), c.vertical ? cells_of(focus.y) : 0, cells_of(focus.z)};
+    rebase_world(world, cells);
+    return true;
+}
+
 void pump_streaming(World& world, PumpMode mode) {
+    update_floating_origin(world);
     if (SceneStreaming* s = world.try_resource<SceneStreaming>()) s->pump(world, mode);
 }
 

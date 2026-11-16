@@ -10,19 +10,36 @@ mce_add_library(mce_render
         src/atmosphere.cpp
         src/camera2d.cpp
         src/clusters.cpp
+        src/edge_outline.cpp
         src/forward3d.cpp
         src/forward3d_scale.cpp
+        src/heat_haze.cpp
+        src/lens_flare.cpp
+        src/lens_rain.cpp
+        src/light_cookie.cpp
         src/mesh.cpp
         src/quality.cpp
         src/renderer.cpp
         src/scene3d.cpp
         src/sort_key.cpp
+        src/static_merge.cpp
         src/sprite_animation.cpp
         src/sprite_batch.cpp
         src/terrain.cpp
+        src/translucency.cpp
+        src/sun_shafts.cpp
+        src/cloud_shadow.cpp
+        src/cirrus.cpp
+        src/halo.cpp
+        src/caustics.cpp
+        src/ssr_blur.cpp
+        src/gi_probes.cpp
+        src/dynres.cpp
         src/text.cpp
         src/texture_store.cpp
         src/types.cpp
+        src/underwater.cpp
+        src/water_optics.cpp
         src/video.cpp
         src/plmpeg_impl.c
     PUBLIC_DEPS

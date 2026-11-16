@@ -1,0 +1,1 @@
+- Tests: `player_soak` runs `mce_player -headless` for 1500 ticks under a capture and fails when the live heap allocation count grows (new milestone M-SOAK, step 1).

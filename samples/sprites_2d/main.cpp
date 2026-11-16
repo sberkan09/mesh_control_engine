@@ -332,6 +332,10 @@ int main(int argc, char** argv) {
         } else {
             rhi::DeviceDesc dd;
             dd.debug_layer = cv_gl_debug.get_bool();
+            // Every sprite's four vertices (96 bytes) go through the frame slot's geometry ring: the 4 MiB
+            // default holds ~40000, past which record_2d's draws are dropped.
+            const usize sprites = static_cast<usize>(math::max<i64>(cv_sprites.get_int(), 0));
+            dd.geometry_ring_bytes = math::max(dd.geometry_ring_bytes, 1 * MiB + sprites * 4 * sizeof(render::SpriteVertex));
             auto device = rhi::create_default_device(*window.value(), dd);
             if (!device) {
                 rc = fail("render device creation failed", device.error());
@@ -339,6 +343,10 @@ int main(int argc, char** argv) {
                 SpritesApp app(*window.value(), *device.value());
                 app::AppDesc desc;
                 desc.name = "sprites_2d";
+                // The frame's batch and command stream live in the frame arena: ~540 bytes a sprite (measured),
+                // so the 16 MiB default holds ~30000. Room for -sprites with a margin.
+                const usize per_frame = 4 * MiB + sprites * 640;
+                desc.frame_arena_size = math::max(desc.frame_arena_size, per_frame);
                 desc.platform = &app;
                 desc.fences = device.value().get();
                 app::RunStats stats;

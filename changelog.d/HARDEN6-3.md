@@ -1,0 +1,1 @@
+- tests(asset): the glTF skin cook at the `kMaxSkinJoints` limit: 0 and 257 joints are refused, 256 passes the count check.

@@ -261,6 +261,19 @@
       0,
       2
      ]
+    },
+    "ScriptParams": {
+     "names": "patrol_speed chase_speed",
+     "v": [
+      1.6,
+      3.4,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
     }
    }
   },

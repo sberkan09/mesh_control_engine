@@ -149,6 +149,7 @@ A cave level that makes its footsteps ring and muffles the music:
     "AudioBusEffects": { "bus": "Music", "lowpass_hz": 1200 } } }
 ```
 
+- The editor's Mixer panel (Window menu) edits these components without hunting for the entities.
 - One entity per bus and per reverb unit counts: the first in ECS order wins. Removing it (or changing
   scene) puts that bus back to dry and unfiltered, or turns the unit off.
 - A new cutoff glides there by an octave every 512 frames (about 10 ms), so a filter that closes
@@ -251,7 +252,44 @@ The player chooses what shows (all `Saved`, on the stock options screen's Audio 
 | `access.subtitle_size` | 1 | text size (0.5..3), on top of `ui_scale` and `access.text_scale` |
 | `access.subtitle_background` | 0.6 | the box's opacity; 0 draws outlined text with no box |
 
+Subtitles, captions and the cutscene skip prompt are drawn with the engine's pixel font unless the
+project names a theme: set `ui.overlay_theme` to the GUID of a UI theme asset (12) and its Body font (else its
+Title font) is used for them. A theme with no font, or one that does not load, is logged and the pixel font
+stays. Only the font changes; sizes and colors still follow the `access.*` convars.
+
 The default NPC dialogue box (21) follows `access.subtitle_speaker` and scales its box opacity by
 `access.subtitle_background`. Captions are presentation only: the lines live in a resource, never
 in a component, so a run hashes the same with them on or off. A host with its own UI reads the
 lines with `kit::caption_lines` and draws them with `ui::SubtitleView`.
+
+## 10.9 Engines, shots, footsteps and sirens
+
+A game with cars, guns and police needs sounds that follow the world. Six components put them in the scene next to
+an ordinary `AudioSource`, with no code (`samples/09_openworld` uses all four):
+
+| Component | Goes on | What it does |
+|---|---|---|
+| `EngineAudio` | a `Vehicle3D` entity that also has a looping, `play_on_start`, 3D `AudioSource` | The engine runs while a driver sits in the `VehicleSeat3D` or the car moves faster than 0.5 m/s, otherwise it is silent (`parked_db`). With t = \|speed\| / `top_speed` (0..1), the pitch goes from `idle_pitch` to `top_pitch` and the gain from `idle_db` to `top_db`. Traffic cars have no driver entity, so they sound while they roll |
+| `WeaponAudio` | a `Weapon3D` entity | Each shot (`WeaponFired3D`) plays `shot` at the muzzle in 3D, and each landed shot (`WeaponHit3D`) plays `hit` where it lands. Give them sound sets (10.3) so they vary |
+| `ImpactAudio` | a `RigidBody3D` with `contact_events` (a car) | A `ContactBegin3D` closing faster than `min_speed` plays `clip` at the contact, from `quiet_db` up to `loud_db` at `full_speed`, at most once per `min_gap` seconds |
+| `FootstepAudio` | a `CharacterController3D` entity | While grounded and not seated in a car, a step plays `clip` (a sound set) at the feet every `stride` metres, so running steps faster |
+| `ClockAudio` | an entity with a looping `AudioSource` | Its gain follows the `WorldClock` (chapter 9): `off_db` by day, `on_db` at night, rising over `fade_hours` after `on_hour` and falling over `fade_hours` after `off_hour`. A night bed of crickets and a city bed that thins out at night are the same component |
+| `SirenAudio` | an entity with a looping `AudioSource` | Silent until the first `Wanted3D` reaches `min_level`, then it slides to `active_db` at `slew_db_per_s` |
+
+Pitch comes from the voice's own playback rate (`AudioSource.pick_rate`, see 10.3), so do not add `AudioDoppler` to an
+`EngineAudio` source. The systems read only sim state (speed, events, wanted level), so a replay sounds the same, and
+a world without audio (a headless sim) is left untouched. The fields they write are engine-written and part of the state hash.
+
+**Bus layout of the sample.** Everything that is part of the world (engines, shots, footsteps, sirens, the city bed) is on
+`SFX`; `Music` and `Voice` stay free for a score and mission lines (they can duck `SFX` with `AudioDuck`, 10.5). The
+master has an `AudioLimiter` (-1 dB) so a gunfight does not clip, and an `AudioSnapshot` with `while_paused` muffles and
+lowers `SFX` behind the pause screen.
+
+
+
+**A radio with no code.** `samples/09_openworld` plays two looping stations on the `Music` bus as ordinary `AudioSource`s that
+play muted all the time (`gain_db` -60), so a station resumes mid-loop when it is switched on. A small Luau script
+(`scripts/radio.luau`) keeps the dial in `ScriptVars` and, while the player's `Rider3D.seated` is 1, lets Q (`Radio`) cycle
+station 1, station 2, off by setting `gain_db` with `mce.set`. `Music` streams two clips at a time (a third would play from
+memory and log a warning), so a game with more stations sets the others to `SFX`-bus sources or swaps clips. The tracks are
+written by `gen_assets.py` with the standard library only.

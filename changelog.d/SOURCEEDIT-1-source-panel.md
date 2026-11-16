@@ -1,0 +1,1 @@
+- Source panel, M-SOURCEEDIT: any JSON source file opens as text in a Source panel (a double click on a kind with no panel of its own, or Edit source... in the Assets menu). The cook checks the text as you type and lists problems with line and column; Save writes only text the cook accepts.

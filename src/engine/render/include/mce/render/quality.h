@@ -9,9 +9,24 @@
 //   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
 //   terrain LOD error (M-TERRAIN): 4 px on Low, 2 px on Medium, 1 px on High; splat layers: weight blend on
 //   Low, height blend on Medium, height blend and triplanar on High
+//   (M-DYNRES 46b: dynamic resolution is allowed in every tier, ceiling = render_scale, floor 0.5 on Low and Medium, 0.65 on High)
+//   (M-CAUSTICS 52a: caustics under water are off on Low, 2 pattern octaves on Medium, 3 on High)
+//   (M-CLOUDSHADOW 51b: cloud shadows are off on Low, 2 noise octaves on Medium, 3 on High)
+//   (M-SUNSHAFTS 45b: sun light shafts are off on Low, 16 samples on Medium, 32 on High)
+//   (M-UNDERWATER 44b: the camera under water look is on in every tier: a flat tint on Low, per-pixel distance, lid and one
+//   wobble octave on Medium, two octaves on High)
+//   (M-HEATHAZE 43b: heat haze is off on Low, up to 4 volumes on Medium, up to 8 on High)
+//   (M-LENSRAIN 42b: rain on the camera lens is off on Low, one drop grid on Medium, two on High)
+//   (M-LENSFLARE 38b: the sun lens flare is off on Low, without starburst on Medium, complete on High)
+//   (M-OUTLINE 39b: the edge outline is on in every tier: 4 taps on Low, 8 on Medium and High)
+//   (M-LIGHTCOOKIE 40b: light cookies are on in every tier; the tier bounds the cost: 128 / 256 / 512 texel layers, 4 / 8 / 16
+//   layers and 4 / 8 / 16 cookied lights on Low / Medium / High)
+//   (M-TRANSLUCENT 41b: material translucency and wrap are on in every tier; Low drops the back side's ambient and the
+//   forward-scatter lobe; cvar r.translucency)
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
 //   motion blur, every tier keeps auto exposure and the color grade; M-VISUAL2 1: Low drops
-//   screen-space reflections)
+//   screen-space reflections; M-PARTICLEQ 28a: particle_scale, the share of a weather emitter's rate and
+//   max_particles kept, is 0.5 on Low and 1 on Medium and High)
 //
 // Render scale shrinks the 3D targets (HDR, depth, bloom chain); the tonemap/FXAA pass upsamples
 // into the full-size output, so 2D and UI drawn afterwards stay sharp.
@@ -38,6 +53,87 @@ struct QualitySettings {
     bool dof_motion_blur = true; // PostFx::dof and PostFx::motion_blur are honored
     bool ssr = true;             // ScreenSpaceReflections::enabled is honored (M-VISUAL2 1)
     bool contact_shadows = true; // ContactShadows::enabled is honored (M-VISUAL2 3)
+    // M-WETSURFACE 5a: WetSurfaces is honored (off: wetness 0) and, separately, its puddles. Low keeps the
+    // darkening and the lower roughness but drops puddles. wet_puddles has no effect while wet_surfaces is off
+    // (wetness 0 draws the dry frame, puddles included).
+    bool wet_surfaces = true;
+    bool wet_puddles = true;
+    // M-SNOWCOVER 6a: SnowCover is honored (off: cover 0) and, separately, its noise breakup. Low keeps the
+    // whitening and drops the noise. snow_noise has no effect while snow_cover is off (cover 0 draws the
+    // snowless frame, noise included).
+    bool snow_cover = true;
+    bool snow_noise = true;
+    // M-RAINFX 7a: Ripples are honored (off: strength 0, the ripple-less frame). Low turns them off.
+    bool rain_ripples = true;
+    // M-CLOUDS 9a: Clouds are honored (off: coverage 0, the cloudless frame). Low turns them off.
+    bool clouds = true;
+    // M-CIRRUS 53a: the high cirrus layer is honored (off: coverage 0, the frame without it). Low turns it off.
+    bool cirrus = true;
+    // M-HALO 54a: the ice halos and sun dogs are honored (off: strength 0). Low turns them off.
+    bool halo = true;
+    // M-NIGHTSKY 14c: the night sky is honored (off: no moon, no stars). Low keeps the moon disk but drops the
+    // stars and the twinkle.
+    bool night_sky = true;
+    // M-WATER 15b: the water plane is honored (off: no plane). Low keeps a flat tinted plane with the sky
+    // reflection: no animated normals, no foam.
+    bool water = true;
+    // M-AURORA 16b: the aurora curtains are honored (off: level 0, the frame without them). Low turns them off.
+    bool aurora = true;
+    // M-RAINBOW 17b: the rainbow is honored (off: level 0, the frame without it). Low turns it off.
+    bool rainbow = true;
+    // M-METEOR 18b: meteors are honored (off: level 0, the frame without them). Low turns them off.
+    bool meteor = true;
+    // M-LENSFLARE 38b: the sun lens flare is honored (off: PostFx::flare.enabled false, the frame without the pass),
+    // and, separately, its starburst (the per-pixel angular term). Low turns the flare off; Medium drops the starburst.
+    bool lens_flare = true;
+    bool lens_flare_starburst = true;
+    // M-LENSRAIN 42b: rain on the camera lens is honored (off: PostFx::rain.enabled false, the frame without the pass), and
+    // the number of overlaid drop grids the pass draws (Low 0, Medium 1, High 2).
+    bool lens_rain = true;
+    u32 lens_rain_layers = 2;
+    // M-HEATHAZE 43b: heat haze is honored (off: PostFx::haze.count 0, the frame without the pass), and the number of
+    // volumes it draws (Low 0, Medium 4, High 8).
+    bool heat_haze = true;
+    u32 heat_haze_volumes = 8;
+    // M-UNDERWATER 44b: the camera under water look is honored (off: PostFx::underwater.enabled false, the frame without the
+    // pass) in every tier, and the detail it draws with (Low 0 a flat tint, Medium 1, High 2).
+    bool underwater = true;
+    u32 underwater_detail = 2;
+    // M-SUNSHAFTS 45b: sun light shafts are honored (off: PostFx::shafts.enabled false, the frame without the pass) and the
+    // samples per pixel the pass walks (Low 0 and off, Medium 16, High 32). A tier property: no scene field sets it.
+    bool sun_shafts = true;
+    u32 sun_shafts_samples = 32;
+    // M-CLOUDSHADOW 51b: cloud shadows are honored (off: PostFx::cloud_shadow.enabled false, the frame without the pass) and
+    // the noise octaves the pass reads (Low 0 and off, Medium 2, High 3 = the sky's own). A tier property: no scene field sets it.
+    bool cloud_shadows = true;
+    u32 cloud_shadow_octaves = 3;
+    // M-CAUSTICS 52a: caustics are honored (off: PostFx::caustics.enabled false, the frame without the pass) and the
+    // pattern octaves the pass sums (Low 0 and off, Medium 2, High 3). A tier property: no scene field sets it.
+    bool caustics = true;
+    u32 caustics_octaves = 3;
+    // M-DYNRES 46b: dynamic resolution is honored (off: PostFx::dynres.enabled false, the fixed render_scale) and the lowest
+    // scale it may reach (Low 0.5, Medium 0.5, High 0.65: the best tier does not drop to a visibly soft picture). The tier's
+    // render_scale is the ceiling. A tier property: no scene field sets it.
+    bool dynres = true;
+    f32 dynres_floor = 0.65f;
+    // M-OUTLINE 39b: the edge outline is honored (off: PostFx::outline.enabled false) in every tier, and, separately,
+    // its wide kernel (8 taps; Low uses the 4-tap cross).
+    bool edge_outline = true;
+    bool edge_outline_wide = true;
+    // M-LIGHTCOOKIE 40b: light cookies are honored (off: every cookie reads as none) in every tier; the tier bounds the
+    // cost: the atlas layer size in texels, the layers (distinct cookie textures) and the cookied lights per frame.
+    bool light_cookies = true;
+    u32 light_cookie_size = 512;
+    u32 light_cookie_layers = 16;
+    u32 light_cookie_lights = 16;
+    // M-TRANSLUCENT 41b: material translucency and wrap are honored in every tier (art direction); the tier bounds the cost.
+    // Low drops the back side's ambient (the ambient keeps the full diffuse) and the forward-scatter lobe.
+    bool translucency = true;
+    bool translucency_ambient = true;
+    bool translucency_scatter = true;
+    // M-PARTICLEQ 28a: the share of rate and max_particles a render-side weather emitter keeps (0..1); Low 0.5,
+    // Medium and High 1. No CVar. The weather particles read it in a later step (28b).
+    f32 particle_scale = 1.0f;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -45,6 +141,10 @@ struct QualitySettings {
     // per map), and splat layers meet by height rather than by weight alone.
     bool terrain_triplanar = true;
     bool terrain_height_blend = true;
+    // M-VISUAL3 2: parallax occlusion mapping fades out at this view depth (meters; 0 = off) and a
+    // material's march steps are clamped to `parallax_max_steps`. Low: off. Medium: 15 m, 16 steps.
+    f32 parallax_distance = 30.0f;
+    u32 parallax_max_steps = 32;
 };
 
 QualitySettings quality_settings(QualityTier tier);
@@ -55,8 +155,29 @@ QualityTier quality_tier();
 // Forward3D creation knobs: msaa, shadow_size, render_scale.
 void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
 // Per-scene knobs: cascade count and resolution, bloom, FXAA, TAA, depth of field and motion blur (off
-// on Low). Distances and splits stay the scene's.
+// on Low). Distances and splits stay the scene's. Also the sun lens flare (PostFx::flare): `enabled` is turned off
+// by the Low tier (lens_flare false) and `r.lens_flare 0`, starburst is zeroed when the tier has no starburst, and
+// the ranges are clamped (NaN -> the default): intensity 0..4 (NaN 1), visibility 0..1 (NaN 1), halo 0..4 (NaN 1),
+// halo_radius 0.02..0.6 (NaN 0.25), ghost_count 0..6, ghost_intensity 0..4 (NaN 1), ghost_spacing 0.25..2 (NaN 1),
+// ghost_chroma 0..1 (NaN 0.5), starburst 0..4 (NaN 0), starburst_rays 2..16, occlusion_radius 0.002..0.1 (NaN
+// 0.015), edge_fade 0.01..0.5 (NaN 0.1). And the lens rain (PostFx::rain): `enabled` is turned off by the Low tier
+// (lens_rain false) and `r.lens_rain 0`; amount 0..1 (NaN 0), density 0..4 (NaN 1), size 0.25..4 (NaN 1), refraction
+// 0..2 (NaN 1), blur 0..1 (NaN 0.35), trail 0..1 (NaN 0.5), fall_speed 0..2 (NaN 0.25). And the heat haze (PostFx::haze): `count` becomes 0 on the Low tier (heat_haze false) and
+// `r.heat_haze 0`, is trimmed to the tier's heat_haze_volumes and kHeatHazeMaxVolumes, a volume with a non-finite centre is
+// dropped (the rest close up), and per volume radius 0.05..50 (NaN 1), strength 0..2 (NaN 0.5), rise 0..4 (NaN 0.6), scale
+// 0.25..4 (NaN 1), softness 0..1 (NaN 0.5). And the underwater look (PostFx::underwater): `enabled` is turned off by `underwater` false and `r.underwater 0`, strength 0..1 (NaN 1), wobble 0..2 (NaN 0.5), fog_scale
+// 0.25..4 (NaN 1), band 0 or 0.05..2 (NaN 0). And the dynamic resolution (PostFx::dynres): `enabled` is turned off by the tier (dynres false) and `r.dynres 0`, target_ms 4..100 (NaN 14), min_scale 0.5..1 (NaN 0.6), max_scale min_scale..1 (NaN 1), headroom 0.05..0.5 (NaN 0.15). And the sun shafts (PostFx::shafts): `enabled` is turned off by the tier (sun_shafts false) and `r.sun_shafts 0`, intensity 0..4 (NaN 1), length 0.1..1 (NaN 0.85), decay 0.8..1 (NaN 0.97), threshold 0.05..16 (NaN 1), cap 0..8 (NaN 1.5), visibility 0..1 (NaN 1), scatter_m 5..500 (NaN 60). And the cloud shadows (PostFx::cloud_shadow): `enabled` is turned off by the tier (cloud_shadows false) and `r.cloud_shadows 0`, strength 0..1 (NaN 0.6), softness 0..1 (NaN 0.3). And the caustics (PostFx::caustics): `enabled` is turned off by the tier (caustics false) and `r.caustics 0`, strength 0..4 (NaN 1), scale 0.25..16 (NaN 2), speed 0..4 (NaN 1), absorption 0..4 (NaN 0.15), max_depth 0.5..200 (NaN 30). And the edge outline (PostFx::outline): `enabled` is turned off by the tier
+// (edge_outline false) and `r.edge_outline 0`; colour 0..16 per channel (NaN: 0.02, 0.02, 0.025), opacity 0..1 (NaN 1),
+// thickness 0.5..4 (NaN 1), depth_threshold 0.001..1 (NaN 0.05), normal_threshold 0.01..2 (NaN 0.4), depth_weight and
+// normal_weight 0..1 (NaN 1), fade_start 0..10000 (NaN 30), fade_end 0..10000 (NaN 80) and never below fade_start.
 void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& post);
+// Light cookies (M-LIGHTCOOKIE 40b): a spot light's cookie fields. `cookie` becomes ~0u (no cookie) when the tier
+// (light_cookies false) or `r.light_cookies 0` says off; cookie_strength is clamped to 0..1 (NaN 1), cookie_edge to 0..1
+// (NaN 0) and cookie_roll wrapped to [-pi, pi] (NaN or infinite 0). Nothing else of the light changes.
+void apply_quality(const QualitySettings& q, PointLight& light);
+// The sun's cookie: `texture` becomes ~0u under the same two switches; strength 0..1 (NaN 1), size 0.5..1000 (NaN 20),
+// offset components any finite value (NaN or infinite 0) and roll wrapped to [-pi, pi] (NaN or infinite 0).
+void apply_quality(const QualitySettings& q, SunCookie& cookie);
 // The irradiance volume's runtime updates (a scene that turned them off keeps them off).
 void apply_quality(const QualitySettings& q, GiVolume& gi);
 // Volumetric fog: off on Low; the froxel grid no finer than the tier's (a scene's coarser grid stays).
@@ -65,5 +186,64 @@ void apply_quality(const QualitySettings& q, Volumetrics& v);
 void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr);
 // Contact shadows: off on Low (the cascades remain).
 void apply_quality(const QualitySettings& q, ContactShadows& c);
+// Parallax occlusion mapping: its distance and step cap (off on Low).
+void apply_quality(const QualitySettings& q, ParallaxSettings& p);
+// Wet surfaces: the weather's wetness, zeroed when the tier or `r.wet_surfaces 0` switches them off;
+// puddles_enabled follows the tier (and means nothing at wetness 0). wetness, puddles, darken and roughness are
+// clamped to 0..1 (NaN to 0) and puddle_scale to 0.25..256 m. Unlike the in-place overloads above it returns a
+// copy: the extract builds the value from kit data and hands it straight to Scene3D::set_wet_surfaces, which
+// exposes no mutable reference to apply it to.
+WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet);
+// Snow cover: the weather's cover, zeroed when the tier or `r.snow_cover 0` switches it off; noise_enabled
+// follows the tier (and means nothing at cover 0). cover, coverage and wind_bias are clamped to 0..1 (NaN to 0)
+// and noise_scale to 0.25..256 m. Returns a copy for the same reason as the WetSurfaces overload: the extract
+// builds the value from kit data and hands it straight to Scene3D::set_snow_cover, which exposes no mutable
+// reference to apply it to.
+SnowCover apply_quality(const QualitySettings& q, const SnowCover& snow);
+// Rain ripples: the weather's ripples, strength zeroed when the tier or `r.rain_ripples 0` switches them off.
+// strength, density and ring_width are clamped to 0..1 (NaN to 0), speed to 0.1..10 (NaN to 1, the nominal
+// rate); `enabled` passes through. Returns a copy for the same reason as the SnowCover overload.
+Ripples apply_quality(const QualitySettings& q, const Ripples& ripples);
+// Clouds: the weather's cloud layer, coverage zeroed when the tier or `r.clouds 0` switches it off. coverage and
+// density are clamped to 0..1 (NaN to 0), scale_m to 50..20000 (NaN to 900), speed to 0..10 (NaN to 1),
+// height_m to 100..20000 (NaN to 2000) and wind_dir is normalized (NaN / zero to +x); `enabled` passes through.
+// Returns a copy for the same reason as the SnowCover overload.
+Clouds apply_quality(const QualitySettings& q, const Clouds& clouds);
+// Cirrus: the high streak layer, coverage zeroed when the tier (Low) or `r.cirrus 0` switches it off. coverage and
+// density are clamped to 0..1 (NaN to 0 and 0.35), scale_m to 200..40000 (NaN 3000), stretch to 1..16 (NaN 6), speed
+// to 0..10 (NaN 2), height_m to 1000..30000 (NaN 9000) and wind_dir is normalized (NaN / zero to +x); `enabled` passes
+// through. In-range values pass bit for bit. Returns a copy for the same reason as the SnowCover overload.
+Cirrus apply_quality(const QualitySettings& q, const Cirrus& cirrus);
+// Halo: the ice-crystal halo and sun dogs, strength zeroed when the tier (Low) or `r.halo 0` switches it off. All four
+// gains are clamped to 0..1 (NaN to 0, 1, 0.5 and 1); `enabled` passes through. In-range values pass bit for bit.
+Halo apply_quality(const QualitySettings& q, const Halo& halo);
+// NightSky: the moon and stars. `r.nightsky 0` zeroes moon_intensity and star_density (the frame without it);
+// the Low tier (night_sky false) keeps the moon disk but zeroes star_density and star_twinkle. moon_dir is
+// normalized (NaN / zero to +y), moon_cos_size is clamped to 0.9..1 (NaN to 0.9995), moon_intensity to 0..8,
+// moon_color per channel, moon_phase, star_density, star_twinkle and night_fade to 0..1, star_brightness to 0..4
+// (all NaN to 0, except star_brightness NaN to 1); a non-finite star_time becomes 0; `enabled` passes through.
+// Returns a copy for the same reason as the SnowCover overload.
+NightSky apply_quality(const QualitySettings& q, const NightSky& sky);
+// WaterSurface: `r.water 0` turns `enabled` off (no plane, the frame without it); the Low tier (water false) zeroes
+// amplitude and foam_amount (flat plane, no foam). Clamps: level_y -1000..1000 (NaN 0), half_extent 1..20000 (NaN
+// 500), wave_count 1..8, amplitude 0..10 (NaN 0), wavelength 1..500 (NaN 24), steepness / reflectivity / roughness /
+// foam_amount 0..1 (NaN 0, roughness NaN 0.08, reflectivity NaN 1), speed_scale 0..4 (NaN 1), colors 0..1 per
+// channel (NaN 0), depth_scale_m 0.1..200 (NaN 8), foam_width_m 0.05..20 (NaN 1.5); wind_dir is normalized (NaN /
+// zero -> +x) and a non-finite time becomes 0. Returns a copy for the same reason as the SnowCover overload.
+WaterSurface apply_quality(const QualitySettings& q, const WaterSurface& water);
+// AuroraSky: `r.aurora 0` and the Low tier (aurora false) zero `level` (the frame without it). Clamps: level 0..4,
+// base_height 0.02..0.6, height_span 0.05..0.8, half_width_cos -1..1, curtain_count 1..6, speed 0..4, colors 0..1 per
+// channel (NaN to 0, except base_height 0.18, height_span 0.35, half_width_cos 0.8192, curtain_count 3, speed 1); azimuth
+// is normalized (NaN / zero -> (0, 1)) and a non-finite time becomes 0; `enabled` passes through. Returns a copy for
+// the same reason as the SnowCover overload.
+AuroraSky apply_quality(const QualitySettings& q, const AuroraSky& aurora);
+// RainbowSky: `r.rainbow 0` and the Low tier (rainbow false) zero `level` (the frame without it). Clamps: level 0..4
+// (NaN 0), band_width 0.5..2 (NaN 1), secondary 0..1 (NaN 0); anti_solar is normalized (NaN / zero -> (0, 0, 1));
+// `enabled` passes through. Returns a copy for the same reason as the SnowCover overload.
+RainbowSky apply_quality(const QualitySettings& q, const RainbowSky& rainbow);
+// MeteorSky: `r.meteor 0` and the Low tier (meteor false) zero `level` (the frame without it). Clamps: level 0..4
+// (NaN 0), rate 0..30 (NaN 4), brightness 0..4 (NaN 1), length 0.5..2 (NaN 1), speed 0.5..2 (NaN 1), time 0..60
+// (non-finite 0), seed 0..65535; `enabled` passes through. Returns a copy for the same reason as the SnowCover overload.
+MeteorSky apply_quality(const QualitySettings& q, const MeteorSky& meteor);
 
 }  // namespace mce::render

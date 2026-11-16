@@ -19,7 +19,8 @@ bool is_tab_button(const Document& doc, WidgetId w, u32& index, WidgetId& tabs) 
 AccessRole role_of(const Document& doc, WidgetId w) {
     switch (doc.kind(w)) {
         case WidgetKind::Text: return AccessRole::Text;
-        case WidgetKind::Image: return AccessRole::Image;
+        case WidgetKind::Image:
+        case WidgetKind::Minimap: return AccessRole::Image;
         case WidgetKind::Button: {
             u32 i = 0;
             WidgetId tabs;

@@ -1,0 +1,1 @@
+- 09_openworld: a ring of 16 tracer boxes draws a short bright line along every shot.

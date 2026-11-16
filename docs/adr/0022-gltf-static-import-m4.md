@@ -36,7 +36,10 @@ unorm16 UVs → `CHNK_MESH` with bounds, sub-mesh ranges and a material) and §2
    `check_walls.py` keeps it out of runtime targets (FR-AST-010).
 7. **Scope lock (`assets.md` risk 2).** Supported extensions: `KHR_texture_transform`, `KHR_materials_unlit`,
    `KHR_materials_emissive_strength`. Any other *required* extension is an error naming it; merely *used* ones warn.
-   Skins, morph targets, cameras and lights are ignored with a warning. Every error names the file and the JSON
+   Skins, morph targets, cameras and lights are ignored with a warning. *(Later steps widened this: skins (M5b), the
+   material extensions (M-VISUAL2 4), and M-IMPORT3D step 1: sparse accessors, `KHR_mesh_quantization`,
+   `EXT_meshopt_compression`, `JOINTS_1+`, baked default morph weights; see `docs/user-guide/08-3d.md` section 8.4.
+   The meshopt codec and filter sources compile into `mce_meshopt` for the decoders.)* Every error names the file and the JSON
    pointer of the offending element (FR-AST-040's "file + line" for a binary-ish format).
 8. **`MeshView::read` validates everything** — offsets, node parent order, channel ranges, and every index against
    its submesh's vertex range — because the payload is untrusted bytes and its indices reach the GPU.

@@ -76,6 +76,7 @@ const Tree kTrees[] = {
      R"({"sequence": [{"task": "spawn", "prefab": "guid:a2000000-0000-4000-8000-000000000100"},
                       {"task": "spawn", "prefab": "guid:a2000000-0000-4000-8000-000000000100", "key": "spot", "offset": [0, 1, 0]}]})"},
     {"bell", nullptr, R"({"sequence": [{"wait": 0.1}, {"task": "raise", "event": "bell"}, {"wait": 10}]})"},
+    {"probe", R"({"p": "vec3", "who": "entity", "n": "float"})", R"({"task": "probe", "key": "p"})"},
     {"listener", R"({"heard": "bool"})",
      R"({"sequence": [{"task": "wait_event", "event": "bell"}, {"set": "heard", "value": true}, {"task": "log", "text": "heard the bell"}]})"},
 };
@@ -123,6 +124,24 @@ BtStatus task_spin(kit::BtTaskCall& c) {
     return BtStatus::Running;
 }
 
+// "probe" reads the position its node's key names, then the entity key (index 1) and the number key (index 2).
+struct Probe {
+    bool by_node = false, by_entity = false, by_number = false, bad_index = false;
+    math::vec3 node_pos, entity_pos;
+    Entity found;
+};
+Probe g_probe;
+
+BtStatus task_probe(kit::BtTaskCall& c) {
+    g_probe = Probe{};
+    g_probe.by_node = kit::bt_key_position(c, g_probe.node_pos);
+    g_probe.by_entity = kit::bt_key_position(c, 1, g_probe.entity_pos, &g_probe.found);
+    math::vec3 ignored;
+    g_probe.by_number = kit::bt_key_position(c, 2, ignored);
+    g_probe.bad_index = kit::bt_key_position(c, 40, ignored);
+    return BtStatus::Success;
+}
+
 LocalTransform at(f32 x, f32 y, f32 z) { return LocalTransform{{x, y, z}, math::quat::identity(), {1, 1, 1}}; }
 
 struct Stage {
@@ -138,6 +157,7 @@ struct Stage {
         world.register_components<LocalTransform>();
         kit::install_ai(world, &assets);
         world.resource<kit::BtRegistry>().register_task("spin", &task_spin);
+        world.resource<kit::BtRegistry>().register_task("probe", &task_probe);
     }
     asset::Guid tree(const char* name) {
         for (usize i = 0; i < std::size(kTrees); ++i)
@@ -471,4 +491,37 @@ TEST_CASE("ai: cook errors for aborts and stock task arguments; the reader check
     n[0].abort = static_cast<u8>(asset::BtAbort::Self);  // only guards abort
     asset::write_behavior_tree(h, Span<const asset::BtKey>(&k, 1), Span<const asset::BtNode>(n, 3), Span<const char>(strings, 2), payload);
     CHECK_FALSE(static_cast<bool>(asset::BtView::read(payload.span())));
+}
+
+TEST_CASE("ai: bt_key_position reads a vec3 key, an entity key's world position, and refuses the rest") {
+    Stage s;
+    const Entity mark = s.world.spawn_with(at(4, 0, -2));
+    const Entity e = s.brain("probe", at(0, 0, 0));
+    SUBCASE("a vec3 key answers by the node's key; an unset entity key, a number key and a bad index refuse") {
+        REQUIRE(kit::bb_set_vector(s.world, e, "p", {1, 2, 3}));
+        s.run(2);
+        CHECK(g_probe.by_node);
+        CHECK(g_probe.node_pos.x == doctest::Approx(1.0f));
+        CHECK(g_probe.node_pos.y == doctest::Approx(2.0f));
+        CHECK(g_probe.node_pos.z == doctest::Approx(3.0f));
+        CHECK_FALSE(g_probe.by_entity);  // "who" was never set
+        CHECK_FALSE(g_probe.by_number);  // a number key has no position
+        CHECK_FALSE(g_probe.bad_index);  // past the tree's keys
+    }
+    SUBCASE("an entity key answers with its position and the entity") {
+        REQUIRE(kit::bb_set_vector(s.world, e, "p", {0, 0, 0}));
+        REQUIRE(kit::bb_set_entity(s.world, e, "who", mark));
+        s.run(2);
+        CHECK(g_probe.by_entity);
+        CHECK(g_probe.entity_pos.x == doctest::Approx(4.0f));
+        CHECK(g_probe.entity_pos.z == doctest::Approx(-2.0f));
+        CHECK(g_probe.found == mark);
+    }
+    SUBCASE("an entity without a transform refuses") {
+        const Entity bare = s.world.spawn();
+        REQUIRE(kit::bb_set_vector(s.world, e, "p", {0, 0, 0}));
+        REQUIRE(kit::bb_set_entity(s.world, e, "who", bare));
+        s.run(2);
+        CHECK_FALSE(g_probe.by_entity);
+    }
 }

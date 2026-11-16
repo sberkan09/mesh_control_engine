@@ -323,6 +323,200 @@ TEST_CASE("report_friction: notes from several agents append to the project's fr
     CHECK(alice.fails("report_friction", R"({"summary":"x"})").find("area") != std::string::npos);
 }
 
+TEST_CASE("scene_diff: unsaved edits against the file, then two saved scenes, then identical after a save") {
+    const std::string root = demo_project("mcp_team_scene_diff");
+    Agent alice(root, "alice");
+    alice.ok("component_set", R"({"entity":"Crate A","component":"LocalTransform","path":"position","value":[5,5,0]})");
+    alice.ok("entity_create", R"({"name":"Gem"})");
+    alice.ok("entity_delete", R"({"entity":"Crate B"})");
+
+    auto d = alice.ok("scene_diff", R"({"a":"scenes/demo.mcscene"})");  // the file on disk against the open scene
+    CHECK_FALSE(d.v().get("identical").as_bool());
+    CHECK(d.v().get("added").as_number() == 1);
+    CHECK(d.v().get("removed").as_number() == 1);
+    CHECK(d.v().get("changed").as_number() == 1);
+    const std::string report = str(d.v().get("report"));
+    CHECK(report.find("+ Gem") != std::string::npos);
+    CHECK(report.find("- Crate B") != std::string::npos);
+    CHECK(report.find("~ Crate A") != std::string::npos);
+    CHECK(report.find("LocalTransform.position") != std::string::npos);
+
+    alice.ok("scene_save", R"({"path":"scenes/edited.mcscene"})");  // a second file: the saved edits
+    auto files = alice.ok("scene_diff", R"({"a":"scenes/demo.mcscene","b":"scenes/edited.mcscene"})");
+    CHECK(str(files.v().get("against")) == "scenes/edited.mcscene");
+    CHECK(str(files.v().get("report")).find("+ Gem") != std::string::npos);
+    CHECK(alice.ok("scene_diff", R"({"a":"scenes/edited.mcscene"})").v().get("identical").as_bool());  // nothing unsaved now
+
+    CHECK(alice.fails("scene_diff", R"({"a":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+    CHECK(alice.fails("scene_diff", R"({"b":"scenes/demo.mcscene"})").find("'a'") != std::string::npos);
+}
+
+TEST_CASE("scene_stats: the open scene with unsaved edits, then a saved file by path") {
+    const std::string root = demo_project("mcp_team_scene_stats");
+    Agent alice(root, "alice");
+    const double before = alice.ok("scene_stats").v().get("entities").as_number();
+    alice.ok("entity_create", R"({"name":"Lantern","components":{"LocalTransform":{"position":[3,1,0]}}})");
+    auto open = alice.ok("scene_stats");
+    CHECK(open.v().get("entities").as_number() == before + 1);
+    CHECK(open.v().get("has_bounds").as_bool());
+    CHECK(open.v().get("components").size() > 0);
+    CHECK(str(open.v().get("report")).find("entities: ") == 0);
+
+    // The file on disk has none of the edits yet.
+    auto disk = alice.ok("scene_stats", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(str(disk.v().get("scene")) == "scenes/demo.mcscene");
+    CHECK(disk.v().get("entities").as_number() == before);
+    alice.ok("scene_save");
+    CHECK(alice.ok("scene_stats", R"({"path":"scenes/demo.mcscene"})").v().get("entities").as_number() == before + 1);
+
+    CHECK(alice.fails("scene_stats", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+}
+
+TEST_CASE("scene_find: the open scene with unsaved edits, then a saved file by path") {
+    const std::string root = demo_project("mcp_team_scene_find");
+    Agent alice(root, "alice");
+    const double before = alice.ok("scene_find").v().get("count").as_number();  // no condition: every entity
+    alice.ok("entity_create", R"({"name":"Lantern Post"})");
+    alice.ok("entity_create", R"({"name":"Lantern","components":{"LocalTransform":{"position":[3,1,0]}}})");
+    auto open = alice.ok("scene_find", R"({"name":"LANTERN"})");
+    CHECK(open.v().get("count").as_number() == 2);
+    CHECK(str(open.v().get("hits").at(0).get("name")) == "Lantern Post");
+    CHECK(str(open.v().get("hits").at(0).get("path")) == "Lantern Post");
+    CHECK(str(open.v().get("report")).find("Lantern (id ") != std::string::npos);
+    CHECK(alice.ok("scene_find").v().get("count").as_number() == before + 2);
+    CHECK(alice.ok("scene_find", R"({"name":"Lantern","component":"LocalTransform"})").v().get("count").as_number() == 2);
+    CHECK(alice.ok("scene_find", R"({"name":"Lantern","prefab":true})").v().get("count").as_number() == 0);
+
+    // The file on disk has none of the edits yet.
+    CHECK(alice.ok("scene_find", R"({"path":"scenes/demo.mcscene","name":"Lantern"})").v().get("count").as_number() == 0);
+    alice.ok("scene_save");
+    auto saved = alice.ok("scene_find", R"({"path":"scenes/demo.mcscene","name":"Lantern"})");
+    CHECK(str(saved.v().get("scene")) == "scenes/demo.mcscene");
+    CHECK(saved.v().get("count").as_number() == 2);
+
+    CHECK(alice.fails("scene_find", R"({"component":"NoSuchThing"})").find("unknown component") != std::string::npos);
+    CHECK(alice.fails("scene_find", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+}
+
+TEST_CASE("asset_used_by: the assets that name an asset, by path or by guid") {
+    const std::string root = demo_project("mcp_team_asset_used_by");
+    Agent alice(root, "alice");
+    auto all = alice.ok("asset_list");
+    const cook::JsonValue assets = all.v().get("assets");
+    REQUIRE(assets.size() > 0);
+    bool scene_names_one = false;
+    for (u32 i = 0; i < assets.size(); ++i) {
+        const std::string guid = str(assets.at(i).get("guid"));
+        const std::string path = str(assets.at(i).get("path"));
+        auto by_guid = alice.ok("asset_used_by", std::string(R"({"guid":")") + guid + R"("})");
+        auto by_path = alice.ok("asset_used_by", std::string(R"({"path":")") + path + R"("})");
+        const double count = by_guid.v().get("count").as_number();
+        CHECK(count == by_path.v().get("count").as_number());
+        const cook::JsonValue users = by_guid.v().get("used_by");
+        CHECK(static_cast<double>(users.size()) == count);
+        for (u32 u = 0; u < users.size(); ++u)
+            if (str(users.at(u)) == "scenes/demo.mcscene") scene_names_one = true;
+    }
+    CHECK(scene_names_one);  // the demo scene names its textures
+    CHECK(alice.fails("asset_used_by").find("give one of") != std::string::npos);
+    CHECK(alice.fails("asset_used_by", R"({"path":"textures/nope.png"})").find("no registered asset") != std::string::npos);
+    CHECK(alice.fails("asset_used_by", R"({"guid":"nonsense"})").find("guid:<uuid>") != std::string::npos);
+}
+
+TEST_CASE("scene_lint: the open scene with unsaved edits, then a saved file by path") {
+    const std::string root = demo_project("mcp_team_scene_lint");
+    Agent alice(root, "alice");
+    CHECK(alice.ok("scene_lint").v().get("clean").as_bool());  // the demo scene is tidy
+
+    alice.ok("entity_create", R"({"name":"Crate A"})");  // a second sibling called Crate A
+    alice.ok("entity_create", R"({"name":"Flat","components":{"LocalTransform":{"scale":[1,0,1]}}})");
+    auto open = alice.ok("scene_lint");
+    CHECK_FALSE(open.v().get("clean").as_bool());
+    const std::string report = str(open.v().get("report"));
+    CHECK(report.find("Crate A") != std::string::npos);
+    CHECK(report.find("duplicate name among its siblings") != std::string::npos);
+    CHECK(report.find("Flat") != std::string::npos);
+    CHECK(report.find("scale of zero on an axis") != std::string::npos);
+    CHECK(open.v().get("findings").size() == 2);
+    CHECK(str(open.v().get("findings").at(0).get("kind")) == "duplicate_sibling_name");
+
+    // The file on disk has none of the edits yet.
+    CHECK(alice.ok("scene_lint", R"({"path":"scenes/demo.mcscene"})").v().get("clean").as_bool());
+    alice.ok("scene_save");
+    auto saved = alice.ok("scene_lint", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(str(saved.v().get("scene")) == "scenes/demo.mcscene");
+    CHECK(saved.v().get("findings").size() == 2);
+
+    CHECK(alice.fails("scene_lint", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+}
+
+TEST_CASE("scene_lint_fix: repairs a saved scene, leaves a tidy one alone, refuses a missing one") {
+    const std::string root = demo_project("mcp_team_scene_lint_fix");
+    Agent alice(root, "alice");
+    auto tidy = alice.ok("scene_lint_fix", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(tidy.v().get("fixed").as_number() == 0);
+    CHECK_FALSE(tidy.v().get("written").as_bool());
+
+    alice.ok("entity_create", R"({"name":"Crate A"})");
+    alice.ok("entity_create", R"({"name":"Flat","components":{"LocalTransform":{"scale":[1,0,1]}}})");
+    alice.ok("scene_save");
+    CHECK_FALSE(alice.ok("scene_lint", R"({"path":"scenes/demo.mcscene"})").v().get("clean").as_bool());
+
+    auto fixed = alice.ok("scene_lint_fix", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(fixed.v().get("fixed").as_number() == 2);
+    CHECK(fixed.v().get("written").as_bool());
+    CHECK(str(fixed.v().get("report")).find("duplicate name among its siblings") != std::string::npos);
+    CHECK(alice.ok("scene_lint", R"({"path":"scenes/demo.mcscene"})").v().get("clean").as_bool());
+    CHECK(alice.ok("scene_lint_fix", R"({"path":"scenes/demo.mcscene"})").v().get("fixed").as_number() == 0);  // idempotent
+
+    CHECK(alice.fails("scene_lint_fix", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+    CHECK(alice.fails("scene_lint_fix").find("path") != std::string::npos);
+}
+
+TEST_CASE("scene_lint_all: the whole project at once, then clean after the files are repaired") {
+    const std::string root = demo_project("mcp_team_scene_lint_all");
+    Agent alice(root, "alice");
+    auto tidy = alice.ok("scene_lint_all");
+    CHECK(tidy.v().get("clean").as_bool());
+    CHECK(tidy.v().get("scenes_checked").as_number() >= 1);
+    CHECK(tidy.v().get("files").size() == 0);
+
+    alice.ok("entity_create", R"({"name":"Crate A"})");
+    alice.ok("entity_create", R"({"name":"Flat","components":{"LocalTransform":{"scale":[1,0,1]}}})");
+    alice.ok("scene_save");
+    auto dirty = alice.ok("scene_lint_all");
+    CHECK_FALSE(dirty.v().get("clean").as_bool());
+    CHECK(dirty.v().get("findings").as_number() == 2);
+    REQUIRE(dirty.v().get("files").size() == 1);
+    CHECK(str(dirty.v().get("files").at(0).get("path")) == "scenes/demo.mcscene");
+    CHECK(str(dirty.v().get("files").at(0).get("report")).find("scale of zero on an axis") != std::string::npos);
+
+    alice.ok("scene_lint_fix", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(alice.ok("scene_lint_all").v().get("clean").as_bool());
+}
+
+TEST_CASE("scene_lint_all fix:true repairs every file in one call and a second run finds nothing") {
+    const std::string root = demo_project("mcp_team_scene_lint_all_fix");
+    Agent alice(root, "alice");
+    alice.ok("entity_create", R"({"name":"Crate A"})");
+    alice.ok("entity_create", R"({"name":"Flat","components":{"LocalTransform":{"scale":[1,0,1]}}})");
+    alice.ok("scene_save");
+
+    CHECK_FALSE(alice.ok("scene_lint_all", R"({"fix":false})").v().get("clean").as_bool());  // false is still read-only
+    auto fixed = alice.ok("scene_lint_all", R"({"fix":true})");
+    CHECK(fixed.v().get("clean").as_bool());
+    CHECK(fixed.v().get("findings").as_number() == 2);
+    CHECK(fixed.v().get("fixed").as_number() == 2);
+    REQUIRE(fixed.v().get("files").size() == 1);
+    CHECK(fixed.v().get("files").at(0).get("fixed").as_number() == 2);
+
+    auto again = alice.ok("scene_lint_all", R"({"fix":true})");
+    CHECK(again.v().get("findings").as_number() == 0);
+    CHECK(again.v().get("fixed").as_number() == 0);
+    CHECK(again.v().get("files").size() == 0);
+    CHECK(alice.fails("scene_lint_all", R"({"fix":"yes"})").find("fix") != std::string::npos);
+}
+
 // ---- M-WORKFLOW step 2: three agents on one scene (SBA-181, issue #378)
 
 TEST_CASE("scene_open reloads from disk: a teammate's saved entity (and child) shows up, even when the scene is already open") {

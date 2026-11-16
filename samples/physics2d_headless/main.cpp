@@ -13,6 +13,7 @@
 
 #include "mce/core.h"
 #include "mce/ecs/transform.h"
+#include "mce/physics/joint2d.h"
 #include "mce/physics/module.h"
 
 using namespace mce;
@@ -131,7 +132,36 @@ public:
         world.spawn_with(body(BodyType::Static), collider(ColliderShape::box({1.5f, 0.3f}), true), at({0, 0.3f}));
         world.spawn_with(body(BodyType::Kinematic), collider(ColliderShape::box({0.3f, 0.6f})), CharacterController2D{},
                          CharacterGround2D{}, Player{}, at({-2, 1}));
+        build_joints();
         return ok();
+    }
+
+    // A plank bridge hinged between two posts and a door hanging from a beam, all Joint2D components.
+    void build_joints() {
+        const f32 y = 6.0f;
+        const Entity post_l = world.spawn_with(body(BodyType::Static), collider(ColliderShape::box({0.5f, 0.5f})), at({-7.5f, y}));
+        const Entity post_r = world.spawn_with(body(BodyType::Static), collider(ColliderShape::box({0.5f, 0.5f})), at({-0.5f, y}));
+        Entity prev = post_l;
+        for (int i = 0; i < 6; ++i) {
+            Joint2D j;
+            j.connected = prev;
+            j.anchor = {-0.5f, 0.0f};  // the plank's left end: the pivot is placed from this body's pose
+            prev = world.spawn_with(body(BodyType::Dynamic), collider(ColliderShape::box({0.48f, 0.08f})),
+                                    at({-7.0f + 0.5f + static_cast<f32>(i), y}), j);
+        }
+        Joint2D end;  // on the right post: its left edge is the last plank's right end
+        end.connected = prev;
+        end.anchor = {-0.5f, 0.0f};
+        world.add(post_r, end);
+
+        const Entity beam = world.spawn_with(body(BodyType::Static), collider(ColliderShape::box({0.3f, 0.2f})), at({6.0f, 9.0f}));
+        Joint2D hinge;
+        hinge.connected = beam;
+        hinge.anchor = {0.0f, 1.0f};  // the top of the door
+        hinge.limits = 1;
+        hinge.lower = -60.0f;
+        hinge.upper = 60.0f;
+        world.spawn_with(body(BodyType::Dynamic), collider(ColliderShape::box({0.1f, 1.0f})), at({6.4f, 8.0f}, 0.4f), hinge);
     }
 
     void on_tick(const app::TickContext& t) override {
@@ -159,8 +189,8 @@ int main(int argc, char** argv) {
     const World2D::Stats st = pw.stats();
     const u64 hash = hash_combine(sample.world.state_hash(), pw.hash_state(kFnv64Offset));
     const f64 ticks = sample.ticks ? static_cast<f64>(sample.ticks) : 1.0;
-    std::printf("physics2d_headless: %llu ticks | %u bodies, %u contacts | tick %.3f ms | hash %016llx\n",
-                static_cast<unsigned long long>(sample.ticks), st.bodies, st.contacts, sample.tick_ms_total / ticks,
+    std::printf("physics2d_headless: %llu ticks | %u bodies, %u joints, %u contacts | tick %.3f ms | hash %016llx\n",
+                static_cast<unsigned long long>(sample.ticks), st.bodies, st.joints, st.contacts, sample.tick_ms_total / ticks,
                 static_cast<unsigned long long>(hash));
     log::shutdown();
     return rc;

@@ -1,0 +1,1 @@
+- Editor, M-SNAPSEL: Edit > Snap to grid rounds the selected entities' world X and Y to the snap step.

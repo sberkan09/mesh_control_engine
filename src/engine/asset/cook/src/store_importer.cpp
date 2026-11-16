@@ -90,13 +90,7 @@ public:
             error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-store\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kStoreFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported store catalog version (this cook reads version %u)", kStoreFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kStoreFormatVersion, "store catalog", file, kStage, diags)) return false;
 
         const JsonValue admob = doc.get("admob");
         if (admob.valid()) {

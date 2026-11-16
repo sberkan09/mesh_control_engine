@@ -15,6 +15,7 @@ namespace mce::script {
 // The C functions reach the host's per-run context through this (a friend of ScriptHost).
 struct HostAccess {
     using FieldHandle = ScriptHost::FieldHandle;
+    using StateWatch = ScriptHost::StateWatch;
     static ScriptHost& host(lua_State* L) { return *static_cast<ScriptHost*>(lua_callbacks(L)->userdata); }
     static Frame* frame(ScriptHost& h) { return h.frame_; }
     static u32 current(ScriptHost& h) { return h.current_; }
@@ -57,6 +58,17 @@ u8* scratch_default(ScriptHost& host, const refl::TypeRecord& type, usize offset
 
 // Adds the entity, events, input, scene and physics functions to the table at the stack top.
 void register_world_api(lua_State* L);
+// The `mission` and `marker` globals (api_missions.cpp).
+void register_mission_api(lua_State* L);
+// The `inventory` global (api_inventory.cpp).
+void register_inventory_api(lua_State* L);
+
+// The `status` global (api_status.cpp).
+void register_status_api(lua_State* L);
+// The `clock` global (api_clock.cpp).
+void register_clock_api(lua_State* L);
+// The `weather` global (api_weather.cpp).
+void register_weather_api(lua_State* L);
 
 }  // namespace detail
 }  // namespace mce::script

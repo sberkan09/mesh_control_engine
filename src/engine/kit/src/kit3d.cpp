@@ -6,8 +6,23 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/kit/chunk_lod3d.h"
+#include "mce/kit/decal_scatter.h"
+#include "mce/kit/dynamic_resolution.h"
+#include "mce/kit/gi_visibility.h"
+#include "mce/kit/edge_outline.h"
+#include "mce/kit/heat_haze.h"
+#include "mce/kit/lens_flare.h"
+#include "mce/kit/lens_rain.h"
+#include "mce/kit/light_cookie.h"
+#include "mce/kit/light_flicker.h"
+#include "mce/kit/static_merge3d.h"
+#include "mce/kit/sun_shafts.h"
+#include "mce/kit/cloud_shadow.h"
+#include "mce/kit/caustics.h"
 #include "mce/log.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
@@ -21,15 +36,15 @@ static_assert(sizeof(SpotLight3D) == 64);
 static_assert(sizeof(ReflectionProbe3D) == 64);
 static_assert(sizeof(GiVolume3D) == 88);
 static_assert(sizeof(Camera3DComponent) == 24);
-static_assert(sizeof(Environment3D) == 440);
+static_assert(sizeof(Environment3D) == 504);
 static_assert(sizeof(BoxCollider3D) == 40);
 static_assert(sizeof(MeshCollider3D) == 32);
-static_assert(sizeof(Foliage3D) == 120);
+static_assert(sizeof(Foliage3D) == 240);
 static_assert(sizeof(Decal3D) == 96);
 static_assert(sizeof(ParticleEmitter3D) == 184);
 static_assert(sizeof(Terrain3D) == 80);
 static_assert(sizeof(TerrainCollider3D) == 8);
-static_assert(sizeof(TerrainFoliage3D) == 128);
+static_assert(sizeof(TerrainFoliage3D) == 160);
 
 // The asset system mesh colliders read their meshes from (install_kit3d's argument).
 struct Kit3DAssets {
@@ -179,6 +194,16 @@ void kit3d_environment(Frame& f) {
     });
 }
 
+// Floating origin (M-OPENWORLD A2): every body, character and world-held joint moves with the entities, and so
+// do the static copies a game placed in world space.
+void kit3d_origin_shift(World& w, const math::vec3& d, void*) {
+    if (Physics3D* phys = w.try_resource<Physics3D>()) phys->world.shift_origin(d);
+    if (StaticInstances3D* si = w.try_resource<StaticInstances3D>()) {
+        for (StaticInstance3D& c : si->instances) c.position = c.position - d;
+        for (StaticCell3D& c : si->cells) c.center = c.center - d;
+    }
+}
+
 }  // namespace
 
 u32 StaticInstances3D::mesh_slot(asset::Guid mesh) {
@@ -260,11 +285,24 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     }
     world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, GiVolume3D, Camera3DComponent, Animator,
                               Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D, Terrain3D,
-                              TerrainCollider3D, TerrainFoliage3D>();
+                              TerrainCollider3D, TerrainFoliage3D, StaticMerge3D, ChunkLod3D>();
+    world.register_components<GiVisibility3D>();  // M-GI2 50h: read by Kit3DExtract on the GiVolume3D's entity; no system
+    world.register_components<LensFlare3D>();  // M-LENSFLARE 38d: read by Kit3DExtract; no system
+    world.register_components<SunShafts3D>();  // M-SUNSHAFTS 45d: read by Kit3DExtract; no system
+    world.register_components<CloudShadow3D>();  // M-CLOUDSHADOW 51d: read by Kit3DExtract; no system
+    world.register_components<Caustics3D>();  // M-CAUSTICS 52c: read by Kit3DExtract; no system
+    world.register_components<DynamicResolution3D>();  // M-DYNRES 46d: read by Kit3DExtract; no system
+    world.register_components<LensRain3D>();  // M-LENSRAIN 42d: advanced by kit_lens_rain (install_weather), read by Kit3DExtract
+    world.register_components<HeatHaze3D>();  // M-HEATHAZE 43d: read by Kit3DExtract; no system
+    world.register_components<EdgeOutline3D>();  // M-OUTLINE 39d: read by Kit3DExtract; no system
+    world.register_components<LightCookie3D, SunCookie3D>();  // M-LIGHTCOOKIE 40g: read by Kit3DExtract; no system
+    world.register_components<LightFlicker3D>();  // M-FLICKER 36a: read by Kit3DExtract (36b); no system
+    world.register_components<DecalScatter3D>();  // M-DECALSCATTER 35a: read by Kit3DExtract (35b); no system
     world.set_resource(Environment3D{});
     world.set_resource(Kit3DAssets{assets});
     if (!world.try_resource<StaticInstances3D>()) world.set_resource(StaticInstances3D{});
     if (!world.try_resource<Physics3D>()) world.set_resource(Physics3D{});
+    on_origin_shift(world, &kit3d_origin_shift);
     world.add_system(Phase::Startup, "kit3d_environment", &kit3d_environment);
     world.add_system(Phase::Startup, "kit3d_colliders", &kit3d_colliders, "kit3d_environment");
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_physics", &kit3d_physics);

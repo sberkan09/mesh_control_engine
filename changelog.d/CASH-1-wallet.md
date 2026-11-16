@@ -1,0 +1,1 @@
+- Kit (M-CASH 1): `Wallet3D`, `CashDrop3D` (a kill pays the killer), `CashChanged3D`, `give_cash` / `take_cash`. Record: `docs/milestones/M-CASH.md`.

@@ -1,0 +1,1 @@
+- tests(asset): the mesh LOD cook at the `kMaxMeshLods` limit: `lod_levels` 3 cooks, 4 and -1 are refused.

@@ -1,0 +1,1 @@
+- Tests: `asset_path_valid`, `relative_asset_path` and `move_asset` (GUID and extension kept, paths leaving assets/ refused) now have cases.

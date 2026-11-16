@@ -6,6 +6,7 @@ mce_add_test(test_ecs
         test_determinism.cpp
         test_change_detection.cpp
         test_hierarchy.cpp
+        test_origin.cpp
     DEPS
         mce::mce_ecs)
 
@@ -14,6 +15,7 @@ mce_add_test(test_ecs_scene UMBRELLA
     SOURCES
         test_prefab.cpp
         test_save.cpp
+        test_save_golden.cpp
     DEPS
         mce::mce_ecs_scene
         mce::mce_asset_cook

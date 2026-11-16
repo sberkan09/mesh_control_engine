@@ -1,0 +1,1 @@
+- Editor, M-SCENESTATS step 1: `scene_stats` / `format_stats` summarize a scene document (entities, depth, prefab instances, components in use, position bounds).

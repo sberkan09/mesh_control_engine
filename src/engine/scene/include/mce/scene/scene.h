@@ -47,7 +47,17 @@ struct SceneChange {
     asset::Guid current_guid;
     u32 changes = 0;           // scene changes applied so far
     bool quit = false;         // request_quit: the host ends the run after this tick
+    FixedString<64> load_slot;  // request_load: a save slot (save::load_game) to apply after this tick
 };
+
+// Asks the host to apply the save `slot` after this tick, on top of the scene that is loaded (a scene
+// change asked for in the same tick happens first). A missing or damaged slot is logged and the world
+// is left as it was; the host's own tick counter is not restored (mce.load in Luau).
+inline void request_load(World& world, StringView slot) {
+    SceneChange* c = world.try_resource<SceneChange>();
+    if (!c) c = &world.set_resource(SceneChange{});
+    c->load_slot.assign(slot);
+}
 
 // Asks the host to switch to `target` after this tick (the last request in a tick wins).
 inline void request_change(World& world, StringView target) {

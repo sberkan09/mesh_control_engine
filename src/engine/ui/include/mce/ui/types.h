@@ -4,6 +4,7 @@
 // and the MCP server reflect them without the renderer: they are registered under Ui* names,
 // because reflected type names are global and "Style" or "Axis" may well be a game's too.
 
+#include "mce/fixed_string.h"
 #include "mce/math/math.h"
 #include "mce/refl/macros.h"
 
@@ -12,13 +13,13 @@ namespace mce::ui {
 using math::Color;
 using math::vec2;
 
-enum class WidgetKind : u8 { Panel, Image, Text, Button, Toggle, Slider, Stack, Grid, Console, Scroll, Tabs };
+enum class WidgetKind : u8 { Panel, Image, Text, Button, Toggle, Slider, Stack, Grid, Console, Scroll, Tabs, Minimap };
 using UiWidgetKind = WidgetKind;
-MCE_ENUM(UiWidgetKind, Panel, Image, Text, Button, Toggle, Slider, Stack, Grid, Console, Scroll, Tabs)
+MCE_ENUM(UiWidgetKind, Panel, Image, Text, Button, Toggle, Slider, Stack, Grid, Console, Scroll, Tabs, Minimap)
 enum class WidgetState : u8 { Normal, Hover, Pressed, Focused, Disabled, Count };
 using UiWidgetState = WidgetState;
 MCE_ENUM(UiWidgetState, Normal, Hover, Pressed, Focused, Disabled, Count)
-inline constexpr u32 kWidgetKindCount = static_cast<u32>(WidgetKind::Tabs) + 1;
+inline constexpr u32 kWidgetKindCount = static_cast<u32>(WidgetKind::Minimap) + 1;
 
 // Which of the skin's fonts a widget's text uses (M-UI-DATA step 3: a theme has a font per role).
 // Auto: Button for buttons, toggles and sliders, Body for everything else.
@@ -141,5 +142,46 @@ struct GridLayout {
 };
 using UiGridLayout = GridLayout;
 MCE_REFL_STRUCT(UiGridLayout, (columns, Help{"0 = as many as fit the width"}), cell, spacing)
+
+// A Minimap widget (M-MISSION step 2): a top-down view of the world around a tracked entity, or the whole
+// world (`full_map`), with the map markers the host feeds it (mce/ui/minimap.h has the projection).
+// World positions are metres on the ground plane: x east, z south (north is -z). Heading is the tracked
+// entity's yaw in radians about +Y (0 faces north, -z).
+struct Minimap {
+    FixedString<32> track{"Player"};   // the entity name the host follows (kit::map_tracked_view); the ui reads only the view it is given
+    f32 radius = 50.0f;                // metres from the centre to the rim, at zoom 1
+    f32 zoom = 1.0f;                   // the visible radius is radius / zoom
+    bool rotate_with_heading = false;  // false: north up; true: the tracked entity's heading is up
+    bool clamp_to_rim = false;         // false: markers beyond the radius hide (always_visible ones still clamp)
+    bool full_map = false;             // the rect shows world_min .. world_max instead, north up, markers never clamp
+    Color background{0.05f, 0.07f, 0.06f, 0.75f};
+    vec2 world_min{-500, -500};        // full_map: the corner with the smallest x and z (north-west)
+    vec2 world_max{500, 500};          // full_map: the corner with the largest x and z (south-east)
+    f32 marker_px = 10.0f;             // a marker's size at UI scale 1
+    u32 layer_mask = ~0u;              // bit n shows markers of layer n
+};
+using UiMinimap = Minimap;
+MCE_REFL_STRUCT(UiMinimap, (track, Help{"the entity name the host follows with the view (default Player)"}),
+                (radius, Range{1, 100000}, Help{"metres from the centre to the rim at zoom 1"}),
+                (zoom, Range{0.05f, 64}, Help{"the visible radius is radius / zoom"}),
+                (rotate_with_heading, Help{"false: north up; true: the tracked entity's heading is up"}),
+                (clamp_to_rim, Help{"markers beyond the radius stick to the rim; false: they hide (always_visible markers still clamp)"}),
+                (full_map, Help{"show the whole world rectangle world_min .. world_max (north up) instead of the radius"}), background,
+                (world_min, Help{"full_map: north-west corner (x, z) in metres"}), (world_max, Help{"full_map: south-east corner (x, z) in metres"}),
+                (marker_px, Range{1, 128}, Help{"a marker's size in pixels at UI scale 1"}),
+                (layer_mask, Help{"bit n shows markers of layer n"}))
+
+// What the host feeds a Minimap each frame: where the tracked entity is and the markers to draw.
+struct MinimapView {
+    vec2 tracked{0, 0};                // x, z in metres
+    f32 heading = 0.0f;                // radians, yaw about +Y
+};
+struct MinimapMarker {
+    vec2 pos{0, 0};                    // x, z in metres
+    Color color{1, 1, 1, 1};
+    u32 icon = 0;                      // a region of the skin's sprite set; 0 draws a flat square
+    u32 layer = 0;                     // 0..31, against Minimap::layer_mask
+    bool always_visible = false;       // beyond the radius it sticks to the rim
+};
 
 }  // namespace mce::ui

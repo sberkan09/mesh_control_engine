@@ -1,0 +1,1 @@
+- Docs (M-TRAFFICAVOID): design note for passing a wreck through the oncoming lane on one-lane roads. Record: `docs/milestones/M-TRAFFICAVOID.md`.

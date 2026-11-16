@@ -311,3 +311,120 @@ TEST_CASE("remote config: a recorded run replays to the same hash with no fetche
     }
     set_consent(Consent::Unknown);
 }
+
+TEST_CASE("remote config: config_type_name names every type") {
+    CHECK(StringView(config_type_name(ConfigType::Int)) == StringView("int"));
+    CHECK(StringView(config_type_name(ConfigType::Float)) == StringView("float"));
+    CHECK(StringView(config_type_name(ConfigType::Bool)) == StringView("bool"));
+    CHECK(StringView(config_type_name(ConfigType::String)) == StringView("string"));
+}
+
+TEST_CASE("liveops: consent_name names every consent state") {
+    CHECK(StringView(consent_name(Consent::Unknown)) == StringView("unknown"));
+    CHECK(StringView(consent_name(Consent::Granted)) == StringView("granted"));
+    CHECK(StringView(consent_name(Consent::Denied)) == StringView("denied"));
+}
+
+namespace {
+
+struct CaptureSink final : ConfigFetchSink {
+    u32 fetched_calls = 0;
+    u32 failed_calls = 0;
+    void fetched(const ConfigValues&) override { ++fetched_calls; }
+    void fetch_failed() override { ++failed_calls; }
+};
+
+}  // namespace
+
+TEST_CASE("remote config: a file fetcher with no readable config fails the fetch, and says it needs no consent") {
+    const std::filesystem::path root = std::filesystem::path(MCE_TEST_TMP_DIR) / "rc_file_fetcher";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    std::filesystem::create_directories(root / "empty", ec);
+
+    {
+        FileConfigFetcher missing((root / "no_such_pack").string().c_str());
+        CHECK(StringView(missing.name()) == StringView("file"));
+        CHECK_FALSE(missing.needs_consent());
+        CaptureSink sink;
+        missing.fetch(sink);
+        CHECK(sink.failed_calls == 1);
+        CHECK(sink.fetched_calls == 0);
+    }
+    {
+        FileConfigFetcher empty((root / "empty").string().c_str());  // mounts, but holds no config
+        CaptureSink sink;
+        empty.fetch(sink);
+        CHECK(sink.failed_calls == 1);
+        CHECK(sink.fetched_calls == 0);
+    }
+}
+
+TEST_CASE("remote config: a damaged cache is ignored and the defaults stay in force") {
+    fresh_save_root("rc_bad_cache");
+    const byte junk[5] = {byte{1}, byte{2}, byte{3}, byte{4}, byte{5}};
+    REQUIRE(save::write("remote_config", Span<const byte>(junk, 5)));
+    REQUIRE(save::exists("remote_config"));
+
+    Game g;
+    g.start(nullptr);
+    g.step();
+    CHECK(g.seen().every == 3);  // the default, not whatever the cache held
+    CHECK(g.rc().get_string("motd", "?") == "Welcome");
+    CHECK(g.rc().values().size() == 4);
+    CHECK(g.rc().version() == 0);
+}
+
+TEST_CASE("remote config: a stream that is not a recording is refused and changes nothing") {
+    fresh_save_root("rc_replay_bad");
+    const byte junk[16] = {};
+    const Span<const byte> streams[] = {Span<const byte>(), Span<const byte>(junk, 3), Span<const byte>(junk, 16)};
+    for (const Span<const byte>& s : streams) {
+        Game g;
+        g.start(nullptr);
+        ConfigReplayer rp(s);
+        g.service.set_replayer(&rp);
+        CHECK(rp.corrupt());
+        for (int i = 0; i < 5; ++i) g.step();
+        CHECK(g.seen().every == 3);  // the defaults stay in force
+        CHECK(g.seen().version == 0);
+    }
+}
+
+TEST_CASE("remote config: a recording cut short stops the replay at the damage") {
+    fresh_save_root("rc_replay_cut");
+    set_consent(Consent::Granted);
+    ConfigRecorder rec;
+    {
+        ScriptedFetcher fetcher;
+        Game g;
+        g.start(&fetcher);
+        g.service.set_recorder(&rec);
+        for (int i = 0; i < 30; ++i) {
+            if (i == 10) g.rc().apply_fetched();
+            g.step();
+        }
+        CHECK(g.seen().every == 5);
+    }
+    const Span<const byte> whole = rec.bytes();
+    // Cut at several points inside the one recorded change, after the header.
+    for (usize cut = 1; cut <= 12; cut += 3) {
+        fresh_save_root("rc_replay_cut_2");
+        Game g;
+        g.start(nullptr);
+        ConfigReplayer rp(Span<const byte>(whole.data(), whole.size() - cut));
+        g.service.set_replayer(&rp);
+        CHECK_FALSE(rp.corrupt());  // the header is whole
+        for (int i = 0; i < 30; ++i) g.step();
+        CHECK(rp.corrupt());
+        CHECK(g.seen().every == 3);  // the cut change never applied
+    }
+    set_consent(Consent::Unknown);
+}
+
+TEST_CASE("remote config: an unbound handle has no values and answers with the default") {
+    const RemoteConfig none;
+    CHECK(none.values().empty());
+    CHECK(none.get<i64>("every", 42) == 42);
+    CHECK(none.version() == 0);
+}

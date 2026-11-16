@@ -1,0 +1,1 @@
+- Docs, M-LINTLOOP: the milestone record is closed (step 1 merged in #826).

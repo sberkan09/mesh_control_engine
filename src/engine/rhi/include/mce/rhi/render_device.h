@@ -36,6 +36,10 @@ struct DeviceCaps {
     u32 max_uniform_block_size = 0;
     bool shader_draw_parameters = false;  // gl_BaseInstanceARB for MDI (§3.2)
     bool timestamp_queries = false;       // CommandBuffer::write_timestamp produces values
+    // No timestamp queries, but write_timestamp outside passes still produces values: the CPU time a fence placed
+    // there passes, with idle GPU time between submits taken out (SDL GPU). Upper bounds, and each one splits the
+    // submit, so per-frame writers (Forward3D's stages) stay off; a measuring run brackets its frame (-perf_capture).
+    bool fence_timestamps = false;
     u32 storage_buffer_alignment = 256;   // offset alignment of set_storage_data ranges
     // Compute (M-VISUAL 1): create_compute_pipeline, dispatch, storage images. Backends without it
     // leave this false and refuse compute pipelines; renderers keep their CPU path there.
@@ -44,6 +48,10 @@ struct DeviceCaps {
     u32 max_compute_group_size[3] = {};      // local_size_x/y/z limits
     u32 max_compute_group_count[3] = {};     // dispatch() limits
     u32 max_storage_image_units = 0;         // bind_storage_image units
+    // Cooked texture formats the GPU can sample (M-CONTENT 1b): BC1/BC4/BC5/BC7 and ASTC 4x4 (LDR).
+    bool texture_bc = false;
+    bool texture_bc_srgb = false;  // BC1_SRGB specifically (BC7_SRGB rides on texture_bc); implies texture_bc
+    bool texture_astc = false;
 };
 
 // GPU timestamps of one completed frame (CommandBuffer::write_timestamp). Values are nanoseconds

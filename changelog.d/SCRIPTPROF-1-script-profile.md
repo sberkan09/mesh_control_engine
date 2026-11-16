@@ -1,0 +1,1 @@
+- `mce profile <project>`, M-SCRIPTPROF step 1: each scene script's updates, average and peak steps against its budget (also `run_headless`'s `scripts`).

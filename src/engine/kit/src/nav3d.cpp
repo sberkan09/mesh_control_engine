@@ -5,6 +5,7 @@
 #include "kit3d_internal.h"
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
@@ -97,10 +98,12 @@ bool build_mesh(World& w, Entity surface, const NavMeshSurface3D& s, physics::Na
         }
         const bool ok = mesh.load(assets->resolve(h.value()), s.max_agents);
         assets->release(asset::AnyHandle(h.value()));
+        mesh.set_origin_offset(origin_offset(w));  // a bake is in absolute coordinates
         return ok;
     }
     Array<byte> blob;
     if (!bake_scene_navmesh(w, surface, assets, blob)) return false;
+    mesh.set_origin_offset({});  // baked from the scene as it is now
     return mesh.load(blob.span(), s.max_agents);
 }
 
@@ -427,9 +430,26 @@ bool bake_scene_navmesh(World& w, Entity surface, asset::AssetSystem* assets, Ar
     return physics::bake_navmesh(g, settings, out, stats);
 }
 
+namespace {
+
+// Floating origin: the mesh stays put (its offset grows), the cached positions move with the entities.
+void nav3d_origin_shift(World& w, const math::vec3& d, void*) {
+    if (Nav3D* nav = w.try_resource<Nav3D>()) nav->mesh.set_origin_offset(nav->mesh.origin_offset() + d);
+    if (Nav3DState* st = w.try_resource<Nav3DState>()) {
+        for (AgentSlot& a : st->agents) {
+            a.target = a.target - d;
+            a.written = a.written - d;
+        }
+        for (ObstacleSlot& o : st->obstacles) o.center = o.center - d;
+    }
+}
+
+}  // namespace
+
 void install_nav3d(World& world, asset::AssetSystem* assets) {
     install_bodies3d(world, assets);
     if (world.try_resource<Nav3DState>()) return;
+    on_origin_shift(world, &nav3d_origin_shift);
     world.set_resource(Nav3DState{});
     world.set_resource(Nav3D{});
     world.register_components<NavMeshSurface3D, NavArea3D, NavLink3D, NavObstacle3D, NavAgent3D>();
