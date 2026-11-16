@@ -103,6 +103,11 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 4. **E5 look pass**: roads with markings and crossings (done, E7: [M-OPENWORLD-LOOK](M-OPENWORLD-LOOK.md)), a sky HDRI, tint/exposure check on GL and Metal, shot effects.
 5. **E6 day/night + weather** (A4, A5), **E7 missions + minimap** (A2, A3), **E8 shops, carjack, wrecks** (A10, A11).
 6. **E9 animation**: play the node clips, wheel spin, door and seat transitions.
+   Open since PR #873 was closed (2026-11-16): the character clips are still not played. The reusable part of #873 is the
+   `assets/anim/blocky.mcanim` graph (idle 0 m/s, walk 1.6, sprint 6, blended on `speed`) plus an `Animator` on each model and a
+   `Locomotion3D` on each root (player, police, walkers; roadblock officers now come from the `Roadblock3D` prefab). Redo it on
+   the current `gen_assets.py` without its `Locomotion3D.turn_rate`: `FaceVelocity3D` (M-FACEMOVE) turns the player now.
+   Branch `claude/project-thread-8kzlmq` keeps the old work for reference.
 7. **E10 gates**: screenshot gate, budget counters, scripted playthrough test, Mac soak.
 8. **E11 scale**: HLOD skyline, scene streaming, floating origin when the map outgrows 1 km² (A13, A14).
 
