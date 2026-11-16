@@ -1,6 +1,6 @@
 # M-FLOAT — Objects that ride the waves: an opt-in `Floater` that follows the drawn water surface (milestone record)
 
-**Status:** in progress (started 2026-11-12), steps 55a to 55d. 55a (plan, #1263) and 55b (component, helper, system, #1264) are merged; 55c (Luau and sample) is PR #1265 in CI; 55d (docs and close) is open. **Owner: routine 2 thread (the M-VISUAL
+**Status:** done (2026-11-16), steps 55a to 55d. 55a (plan, #1263), 55b (component, helper, system, #1264), 55c (Luau and the `13_water` sample, #1265) and 55d (docs and close) are merged. **Owner: routine 2 thread (the M-VISUAL line).** Known limits: a floater rides the drawn wave sum only (no buoyancy force, no rolling with a hull, no wake), the lean follows the surface normal at the origin only, and a parented entity is not driven.
 line).** Follow-up of M-WATER (`Water`, `water_height_at`, `water_normal_at`, the Luau `water.*` queries), M-WATER2
 (`WaterFlow`) and M-FREEZE ("gameplay still sees waves"). No Linear issues (free issue limit); this record is the tracker.
 No step writes a shader, so no step needs Opus.
