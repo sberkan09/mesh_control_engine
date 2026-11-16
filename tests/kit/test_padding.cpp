@@ -33,6 +33,7 @@
 #include "mce/kit/meteor.h"
 #include "mce/kit/season.h"
 #include "mce/kit/floater.h"
+#include "mce/kit/signal_head.h"
 #include "mce/kit/water_ice.h"
 #include "mce/kit/gi_visibility.h"
 #include "mce/kit/water_flow.h"
@@ -132,6 +133,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Meteor>("Meteor", sizeof(Meteor::pad_));  // meteor.h (M-METEOR 18a)
     expect_pad<Season>("Season", sizeof(Season::pad_));  // season.h (M-SEASONS 19a)
     expect_pad<Floater>("Floater", sizeof(Floater::pad_));  // floater.h (M-FLOAT 55b)
+    expect_pad<SignalHead>("SignalHead", sizeof(SignalHead::pad_));  // signal_head.h (M-SIGNALHEADS 56b)
     expect_pad<WaterIce>("WaterIce", sizeof(WaterIce::pad_));  // water_ice.h (M-FREEZE 20a)
     expect_pad<WaterFlow>("WaterFlow", sizeof(WaterFlow::pad_));  // water_flow.h (M-WATER2 49e)
     expect_pad<GiVisibility3D>("GiVisibility3D", 0);  // gi_visibility.h (M-GI2 50h)
