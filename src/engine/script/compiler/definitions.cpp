@@ -869,6 +869,18 @@ declare water: {
     -- an unknown key or a non-number raises and nothing is written
     set_flow: (settings: { enabled: number?, dir: number?, speed: number? }) -> (),
 }
+
+declare floater: {
+    -- Floater (M-FLOAT), on the given entity: the kit's kit_floater system keeps the entity on the drawn water surface
+    -- and leaning with it. Every function raises when the entity has no Floater (set never adds one).
+    enabled: (entity: Entity) -> number,
+    offset: (entity: Entity) -> number,
+    tilt: (entity: Entity) -> number,
+    follow: (entity: Entity) -> number,
+    -- every key optional, each value clamped (offset -50..50 metres, tilt and follow 0..1; enabled: any non-zero number is
+    -- 1); an unknown key or a non-number raises and nothing is written
+    set: (entity: Entity, settings: { enabled: number?, offset: number?, tilt: number?, follow: number? }) -> (),
+}
 )";
 
 const char* luau_type(const refl::FieldRecord& f) {

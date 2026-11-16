@@ -8,6 +8,9 @@
 -- 60 s (drive_environment 0, so the clock never moves the fixed sun); the sea freezes in winter and thaws in spring. The
 -- "ice:" line logs weather.water_frozen(), the freeze amount the renderer draws, every 150 ticks. The waves the crate rides
 -- are the authored ones: the freeze changes only how the water is drawn.
+-- M-FLOAT: the Buoy and the Raft carry a Floater, so kit_floater (not this script) puts them on the surface and leans them
+-- with it. The "floater:" line logs each one's y, the surface under it and its Floater offset (floater.offset), which
+-- the headless gate checks: y is the surface + offset.
 local X, Z, LIFT = 8, 4, 0.1
 function update()
     local crate = mce.find("Crate")
@@ -22,6 +25,12 @@ function update()
     if t % 150 == 0 then
         mce.log(string.format("water: height %.3f crate %.3f tilt %.3f submerged %s above %s at tick %d",
             h, h + LIFT, ny, tostring(water.submerged(X, h - 0.3, Z)), tostring(water.submerged(X, h + 0.3, Z)), t))
+        for _, f in ipairs({ { "Buoy", -6, 2 }, { "Raft", -2, 10 } }) do
+            local e = mce.find(f[1])
+            local p = mce.get(e, "LocalTransform", "position")
+            mce.log(string.format("floater: %s y %.3f surface %.3f offset %.3f at tick %d", f[1], p.y,
+                water.height_at(f[2], f[3]), floater.offset(e), t))
+        end
         mce.log(string.format("ice: frozen %.3f phase %.3f at tick %d", weather.water_frozen(), weather.season_phase(), t))
     end
 end

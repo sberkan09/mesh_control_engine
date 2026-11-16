@@ -601,6 +601,17 @@
 //                                              speed 0..5 m/s; enabled: any non-zero number is 1); an unknown key or a
 //                                              non-number raises an error that names the call and nothing is written
 //
+// Floating things (M-FLOAT step 55c) are the `floater` table over one entity's kit::Floater (mce/kit/floater.h):
+//
+//   floater.enabled(e) / offset(e) / tilt(e) / follow(e) -> number   the fields (offset in metres above the surface)
+//   floater.set(e, {enabled=, offset=, tilt=, follow=})   a table, every key optional, each value clamped (offset
+//                                              -50..50, tilt and follow 0..1; enabled: any non-zero number is 1); an
+//                                              unknown key or a non-number raises an error that names the call and
+//                                              nothing is written; it never adds a Floater
+//
+// Every function raises "floater.<name>: the entity has no Floater" for an entity without one. The system kit_floater
+// does the riding; a script only tunes it.
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -609,6 +620,7 @@
 #include "api.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cirrus.h"
+#include "mce/kit/floater.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/halo.h"
 #include "mce/kit/cloud_shadow.h"
@@ -3373,6 +3385,55 @@ const luaL_Reg kWaterLib[] = {
     {nullptr, nullptr},
 };
 
+// ---- Floating things (M-FLOAT step 55c) ----
+
+// The Floater on entity `e` (argument 1), or a Luau error that names the call.
+kit::Floater& check_floater(lua_State* L, const char* fn) {
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    kit::Floater* f = w.try_get_mut<kit::Floater>(e);
+    if (!f) luaL_error(L, "%s: the entity has no Floater", fn);
+    return *f;
+}
+
+#define MCE_FLOATER_GETTER(luaname, field)                                                      \
+    int l_floater_##luaname(lua_State* L) {                                                     \
+        lua_pushnumber(L, static_cast<double>(check_floater(L, "floater." #luaname).field));    \
+        return 1;                                                                               \
+    }
+MCE_FLOATER_GETTER(enabled, enabled)
+MCE_FLOATER_GETTER(offset, offset_y)
+MCE_FLOATER_GETTER(tilt, tilt)
+MCE_FLOATER_GETTER(follow, follow)
+#undef MCE_FLOATER_GETTER
+
+// floater.set(entity, {...}): validated before anything is written; never adds a Floater.
+int l_floater_set(lua_State* L) {
+    static const char* const kKeys[4] = {"enabled", "offset", "tilt", "follow"};
+    f64 value[4] = {};
+    bool given[4] = {};
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    lua_remove(L, 1);  // the settings table is read at index 1
+    read_settings(L, "floater.set", kKeys, 4, "enabled, offset, tilt, follow", value, given);
+    kit::Floater* f = w.try_get_mut<kit::Floater>(e);
+    if (!f) luaL_error(L, "floater.set: the entity has no Floater");
+    if (given[0]) f->enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) f->offset_y = static_cast<f32>(clamp_range(value[1], -50.0, 50.0));
+    if (given[2]) f->tilt = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) f->follow = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    return 0;
+}
+
+const luaL_Reg kFloaterLib[] = {
+    {"enabled", l_floater_enabled},
+    {"offset", l_floater_offset},
+    {"tilt", l_floater_tilt},
+    {"follow", l_floater_follow},
+    {"set", l_floater_set},
+    {nullptr, nullptr},
+};
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -3784,6 +3845,9 @@ void register_weather_api(lua_State* L) {
     lua_newtable(L);
     luaL_register(L, nullptr, kWaterLib);
     lua_setglobal(L, "water");
+    lua_newtable(L);
+    luaL_register(L, nullptr, kFloaterLib);
+    lua_setglobal(L, "floater");
 }
 
 }  // namespace mce::script::detail
