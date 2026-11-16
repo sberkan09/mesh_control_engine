@@ -1172,8 +1172,9 @@ def economy_and_missions(s, player):
                     "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 0.6},
                     "Health3D": {"max": 40, "team": 4, "destroy_on_death": 0},
                     "MapMarker": {"icon": 0, "color": [1, 0.2, 0.2, 1], "label": "Target", "always_visible": 1}})
+                # He stands still, so the graph's `speed` stays 0 and he plays the idle clip (no Locomotion3D needed).
                 s.add(title + " target model", {"ChildOf": {"parent": s.ref(man)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                                                "MeshRef": model_mesh("character-e")})
+                                                "MeshRef": model_mesh("character-e"), "Animator": {"graph": "guid:" + G_ANIM}})
                 obj = {"kind": "Kill", "target": s.ref(man), "count": 1}
             else:
                 x, z = (stop[1], stop[2]) if what == "interact" else stop

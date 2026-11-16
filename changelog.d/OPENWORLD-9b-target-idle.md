@@ -1,0 +1,1 @@
+- 09_openworld: the three mission target men play the idle clip instead of standing in the bind pose (an `Animator` on their model; M-OPENWORLD E9).
