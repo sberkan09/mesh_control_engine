@@ -489,6 +489,34 @@ TEST_CASE("shader_spirv: the sky and water stages with the cirrus layer") {
     }
 }
 
+// M-HALO 54b: the sky pass and the water, whose cirrus layer now carries the ice halo (halo_term through
+// MCE_GLSL_HALO, p_halo the last vec4 of PassU), compile for SDL GPU; the halo's text alone (kHaloGLSL, the GL twin
+// test's) is in both, cirrus_layer calls it behind p_halo.x > 0, and the sky stage stays under the 64 KiB budget.
+TEST_CASE("shader_spirv: the sky and water stages with the ice halo") {
+    using mce::render::shaders3d::kHaloGLSL;
+    using mce::render::shaders3d::kSkyFS;
+    using mce::render::shaders3d::kWaterFS;
+    CHECK(std::strstr(kSkyFS, kHaloGLSL) != nullptr);
+    CHECK(std::strstr(kWaterFS, kHaloGLSL) != nullptr);
+    CHECK(std::strstr(kSkyFS, "if (p_halo.x > 0.0) c += halo_term(d, sun, cs, a, pix);") != nullptr);
+    CHECK(std::strstr(kSkyFS, "vec4 p_halo;") != nullptr);
+    CHECK(std::strstr(kSkyFS, "p_free") == nullptr);  // PassU has no free vec4 left
+    std::printf("shader_spirv: kSkyFS %zu bytes, kWaterFS %zu bytes\n", std::strlen(kSkyFS), std::strlen(kWaterFS));
+    CHECK(std::strlen(kSkyFS) < 65536);
+    CHECK(std::strlen(kWaterFS) < 65536);
+    for (const auto& [src, name] : {std::pair{kSkyFS, "sky.frag"}, std::pair{kWaterFS, "water.frag"}}) {
+        FixedString<1024> log;
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, src, name, spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        CHECK(res.uniform_count >= 2);  // FrameU (0) and PassU (1)
+        CHECK(res.storage_count == 0);
+    }
+}
+
 // M-CAUSTICS 52b: the caustics fragment stage (render's shaders3d.h, the real source: MCE_GLSL_CAUSTICS_NOISE and
 // CausticsU) compiles for SDL GPU with its resources where Forward3D::record_caustics binds them: CausticsU at bank kPass
 // (1), the volumetric fog at sampler 4, post_source_ at 6 and the opaque prepass at 7; no storage buffers.

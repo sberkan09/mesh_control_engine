@@ -29,6 +29,8 @@ MCE_CVAR(cv_clouds, "r.clouds", true,
          "Cloud layer in the sky from the weather (Clouds; off = the cloudless frame)", CVarFlags::Saved);
 MCE_CVAR(cv_cirrus, "r.cirrus", true,
          "High cirrus streaks above the cloud layer (Cirrus; off = the frame without them)", CVarFlags::Saved);
+MCE_CVAR(cv_halo, "r.halo", true,
+         "Ice halo and sun dogs seen through the cirrus layer (Halo; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_nightsky, "r.nightsky", true,
          "Moon and stars in the night sky (NightSky; off = the moonless, starless frame)", CVarFlags::Saved);
 MCE_CVAR(cv_water, "r.water", true,
@@ -94,6 +96,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.rain_ripples = false;
             q.clouds = false;
             q.cirrus = false;
+            q.halo = false;
             q.night_sky = false;
             q.water = false;
             q.aurora = false;
@@ -390,6 +393,15 @@ Cirrus apply_quality(const QualitySettings& q, const Cirrus& cirrus) {
     out.speed = detail::ranged(cirrus.speed, 0.0f, 10.0f, 2.0f);
     out.wind_dir = detail::unit_wind_dir(cirrus.wind_dir);
     out.height_m = detail::ranged(cirrus.height_m, 1000.0f, 30000.0f, 9000.0f);
+    return out;
+}
+
+Halo apply_quality(const QualitySettings& q, const Halo& halo) {
+    Halo out = halo;
+    out.strength = q.halo && cv_halo.get_bool() ? detail::ranged(halo.strength, 0.0f, 1.0f, 0.0f) : 0.0f;
+    out.sun_dogs = detail::ranged(halo.sun_dogs, 0.0f, 1.0f, 1.0f);
+    out.moon = detail::ranged(halo.moon, 0.0f, 1.0f, 0.5f);
+    out.dispersion = detail::ranged(halo.dispersion, 0.0f, 1.0f, 1.0f);
     return out;
 }
 

@@ -1,11 +1,13 @@
 # 13_water's headless gates (M-WATER step 15d), run with cmake -P: mce_player plays the cooked pack and the script's log
 # lines pin the water (the script's tick counts from 0; the scene time at its tick N is N * dt). Gates:
-#   1. 600 ticks: 7 entities, no problem logged, the same state hash on two plays, 4 `water:` lines;
+#   1. 600 ticks: 9 entities, no problem logged, the same state hash on two plays, 4 `water:` lines;
 #   2. every `water:` line: the crate's y is the surface height + 0.1 (it follows water.height_at), the height is within
 #      the largest the four default waves can sum to (0.4 m * (1 + 0.6 + 0.4 + 0.27) = 0.908 m), the surface normal is
 #      near +y, a point 0.3 m under the surface is submerged and one 0.3 m over it is not;
 #   3. the surface moves: the lines show many different heights;
 #   4. 2700 ticks: the same bounds on all 18 lines;
+#   6. (M-FLOAT 55c) the `floater:` lines: the Buoy and the Raft carry a Floater; each line's y is the surface under it plus the
+#      Floater offset (0 and 0.05), so kit_floater rides the drawn waves with no script moving them; 9 entities now.
 #   5. (M-FREEZE 20c) the `ice:` lines: weather.water_frozen() of the WaterIce on the Water entity, over its Season (a 30-day
 #      year, start phase 0.6) and WorldClock (a 2 s day, so a 60 s year; drive_environment 0, the fixed sun does not move):
 #      the sea is open at tick 0, freezes (0.544 at tick 450, 1.000 at 750 to 900), thaws by tick 1200 and stays open; the
@@ -99,7 +101,7 @@ file(MAKE_DIRECTORY "${WORK_DIR}")
 # 1. The first 600 ticks.
 play(first -ticks 600 -input "${INPUT}")
 play(second -ticks 600 -input "${INPUT}")
-expect("${first}" "600 ticks, 7 entities, state_hash" "the run did not end after 600 ticks with 7 entities")
+expect("${first}" "600 ticks, 9 entities, state_hash" "the run did not end after 600 ticks with 9 entities")
 expect_not("${first}" "\\[error\\]|\\[warn\\]|does not load|failed at" "the run logged a problem")
 expect("${first}" "script: water: height 0.115 crate 0.215 tilt 0.989 submerged true above false at tick 0\n" "the crate did not start on the surface")
 expect("${first}" "script: water: height -0.520 crate -0.420 tilt 0.992 submerged true above false at tick 150\n" "the crate did not follow the trough at 2.5 s")
@@ -123,6 +125,36 @@ string(REGEX MATCHALL "script: ice: frozen [0-9.]+ phase [0-9.]+ at tick [0-9]+"
 list(LENGTH ice600 n_ice600)
 if(NOT n_ice600 EQUAL 4)
     message(FATAL_ERROR "expected 4 ice lines in 600 ticks, got ${n_ice600}")
+endif()
+
+# The floater lines (M-FLOAT 55c): y = surface + offset (three decimals each: a rounding step either way), the surface moves.
+function(check_floater_lines text count_var)
+    string(REGEX MATCHALL "script: floater: [A-Za-z]+ y [-0-9.]+ surface [-0-9.]+ offset [-0-9.]+ at tick [0-9]+" lines "${text}")
+    set(seen "")
+    foreach(line IN LISTS lines)
+        string(REGEX MATCH "floater: ([A-Za-z]+) y ([-0-9.]+) surface ([-0-9.]+) offset ([-0-9.]+) at tick ([0-9]+)" m "${line}")
+        milli("${CMAKE_MATCH_2}" ym)
+        milli("${CMAKE_MATCH_3}" sm)
+        milli("${CMAKE_MATCH_4}" om)
+        set(who "${CMAKE_MATCH_1}")
+        set(tick "${CMAKE_MATCH_5}")
+        math(EXPR gap "${ym} - ${sm} - ${om}")
+        if(gap LESS -2 OR gap GREATER 2)
+            message(FATAL_ERROR "the ${who} does not ride the surface (y ${ym}, surface ${sm}, offset ${om} in thousandths) at tick ${tick}")
+        endif()
+        list(APPEND seen "${who}:${ym}")
+    endforeach()
+    list(LENGTH lines n)
+    list(REMOVE_DUPLICATES seen)
+    list(LENGTH seen d)
+    if(d LESS 6)
+        message(FATAL_ERROR "the floaters did not move with the waves (${d} different heights in ${n} lines)")
+    endif()
+    set(${count_var} ${n} PARENT_SCOPE)
+endfunction()
+check_floater_lines("${first}" nf600)
+if(NOT nf600 EQUAL 8)
+    message(FATAL_ERROR "expected 8 floater lines (2 floaters, 4 times) in 600 ticks, got ${nf600}")
 endif()
 
 # 2. A longer run.

@@ -93,6 +93,41 @@
 //                                         a table, every key optional, each value clamped to the field's Range;
 //                                         an unknown key or a non-number raises an error that names the call
 //
+// Cirrus (M-CIRRUS step 53c) is the same kind of binding over the first kit::Cirrus (mce/kit/cirrus.h; install_weather
+// registers it). Named errors as above. All eight fields are authoring, so all are settable.
+//
+//   weather.cirrus_strength() -> number        Cirrus.strength (0..1)
+//   weather.cirrus_fair_coverage() -> number   Cirrus.fair_coverage (0..1)
+//   weather.cirrus_front_coverage() -> number  Cirrus.front_coverage (0..1)
+//   weather.cirrus_density() -> number         Cirrus.density (0..1)
+//   weather.cirrus_scale() -> number           Cirrus.scale_m (200..40000)
+//   weather.cirrus_stretch() -> number         Cirrus.stretch (1..16)
+//   weather.cirrus_speed_scale() -> number     Cirrus.speed_scale (0..10)
+//   weather.cirrus_height() -> number          Cirrus.height_m (1000..30000)
+//   weather.cirrus_coverage() -> number        read-only: kit::cirrus_coverage of the first Cirrus, the first Weather and
+//                                              the first WorldClock (day 0, hour 0 without one), 0..1, before the
+//                                              quality tier; a scene without a Weather raises
+//   weather.set_cirrus{strength=, fair_coverage=, front_coverage=, density=, scale=, stretch=, speed_scale=, height=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call, and
+//                                         nothing is written on an error
+//
+// Ice halo (M-HALO step 54c) is the same kind of binding over the first kit::Halo (mce/kit/halo.h; install_weather
+// registers it). Named errors as above. All four fields are authoring, so all are settable.
+//
+//   weather.halo_strength() -> number          Halo.strength (0..1)
+//   weather.halo_sun_dogs() -> number          Halo.sun_dogs (0..1)
+//   weather.halo_moon() -> number              Halo.moon (0..1)
+//   weather.halo_dispersion() -> number        Halo.dispersion (0..1)
+//   weather.halo_level() -> number             read-only: kit::halo_level of the first Halo over kit::cirrus_coverage of
+//                                              the first Cirrus, the first Weather and the first WorldClock (day 0, hour
+//                                              0 without one), 0..1, before the quality tier; a scene without a Cirrus
+//                                              or a Weather raises
+//   weather.set_halo{strength=, sun_dogs=, moon=, dispersion=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call, and
+//                                         nothing is written on an error
+//
 // Cloud shadows on the ground (M-CLOUDSHADOW step 51e) are the same kind of binding over the first kit::CloudShadow3D
 // (mce/kit/cloud_shadow.h, a kit3d component: install_kit3d registers it). The clouds themselves are the CloudLayer's.
 //
@@ -566,6 +601,17 @@
 //                                              speed 0..5 m/s; enabled: any non-zero number is 1); an unknown key or a
 //                                              non-number raises an error that names the call and nothing is written
 //
+// Floating things (M-FLOAT step 55c) are the `floater` table over one entity's kit::Floater (mce/kit/floater.h):
+//
+//   floater.enabled(e) / offset(e) / tilt(e) / follow(e) -> number   the fields (offset in metres above the surface)
+//   floater.set(e, {enabled=, offset=, tilt=, follow=})   a table, every key optional, each value clamped (offset
+//                                              -50..50, tilt and follow 0..1; enabled: any non-zero number is 1); an
+//                                              unknown key or a non-number raises an error that names the call and
+//                                              nothing is written; it never adds a Floater
+//
+// Every function raises "floater.<name>: the entity has no Floater" for an entity without one. The system kit_floater
+// does the riding; a script only tunes it.
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -573,7 +619,10 @@
 
 #include "api.h"
 #include "mce/kit/aurora.h"
+#include "mce/kit/cirrus.h"
+#include "mce/kit/floater.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/halo.h"
 #include "mce/kit/cloud_shadow.h"
 #include "mce/kit/caustics.h"
 #include "mce/kit/rain_ripples.h"
@@ -1561,6 +1610,117 @@ int l_weather_aurora_high_color(lua_State* L) { return push_aurora_color(L, chec
 int l_weather_aurora_gate(lua_State* L) {
     lua_pushnumber(L, static_cast<double>(kit::aurora_latitude_gate(check_aurora(L, "weather.aurora_gate"))));
     return 1;
+}
+
+kit::Cirrus& check_cirrus(lua_State* L, const char* fn) { return check_first<kit::Cirrus>(L, fn, "Cirrus"); }
+
+#define MCE_WEATHER_GETTER_CI(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_cirrus(L, "weather." #luaname).field));         \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_CI(cirrus_strength, strength)
+MCE_WEATHER_GETTER_CI(cirrus_fair_coverage, fair_coverage)
+MCE_WEATHER_GETTER_CI(cirrus_front_coverage, front_coverage)
+MCE_WEATHER_GETTER_CI(cirrus_density, density)
+MCE_WEATHER_GETTER_CI(cirrus_scale, scale_m)
+MCE_WEATHER_GETTER_CI(cirrus_stretch, stretch)
+MCE_WEATHER_GETTER_CI(cirrus_speed_scale, speed_scale)
+MCE_WEATHER_GETTER_CI(cirrus_height, height_m)
+#undef MCE_WEATHER_GETTER_CI
+
+// weather.cirrus_coverage(): kit::cirrus_coverage with the inputs Kit3DExtract's cirrus block uses (the first Weather,
+// the first WorldClock's day and hour, 0 and 0 without one), before the quality tier.
+int l_weather_cirrus_coverage(lua_State* L) {
+    const kit::Cirrus& c = check_cirrus(L, "weather.cirrus_coverage");
+    World& w = world_of(L);
+    const kit::Weather* wx = first_weather(w);
+    if (!wx) luaL_error(L, "weather.cirrus_coverage: the scene has no Weather entity");
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* type = refl::find_type(StringId("WorldClock"));
+    if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<kit::WorldClock>().each([&](Entity, kit::WorldClock& k) {
+            if (found) return;
+            found = true;
+            day = k.day;
+            hour = k.hour;
+        });
+    }
+    lua_pushnumber(L, static_cast<double>(kit::cirrus_coverage(c, *wx, kit::cirrus_day_fraction(day, hour))));
+    return 1;
+}
+
+// weather.set_cirrus{...}: validated before anything is written.
+int l_weather_set_cirrus(lua_State* L) {
+    static const char* const kKeys[8] = {"strength", "fair_coverage", "front_coverage", "density",
+                                         "scale",    "stretch",       "speed_scale",    "height"};
+    f64 value[8] = {};
+    bool given[8] = {};
+    read_settings(L, "weather.set_cirrus", kKeys, 8,
+                  "strength, fair_coverage, front_coverage, density, scale, stretch, speed_scale, height", value, given);
+    kit::Cirrus& c = check_cirrus(L, "weather.set_cirrus");
+    if (given[0]) c.strength = static_cast<f32>(clamp_range(value[0], 0.0, 1.0));
+    if (given[1]) c.fair_coverage = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) c.front_coverage = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) c.density = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) c.scale_m = static_cast<f32>(clamp_range(value[4], 200.0, 40000.0));
+    if (given[5]) c.stretch = static_cast<f32>(clamp_range(value[5], 1.0, 16.0));
+    if (given[6]) c.speed_scale = static_cast<f32>(clamp_range(value[6], 0.0, 10.0));
+    if (given[7]) c.height_m = static_cast<f32>(clamp_range(value[7], 1000.0, 30000.0));
+    return 0;
+}
+
+kit::Halo& check_halo(lua_State* L, const char* fn) { return check_first<kit::Halo>(L, fn, "Halo"); }
+
+#define MCE_WEATHER_GETTER_HA(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_halo(L, "weather." #luaname).field));           \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_HA(halo_strength, strength)
+MCE_WEATHER_GETTER_HA(halo_sun_dogs, sun_dogs)
+MCE_WEATHER_GETTER_HA(halo_moon, moon)
+MCE_WEATHER_GETTER_HA(halo_dispersion, dispersion)
+#undef MCE_WEATHER_GETTER_HA
+
+// weather.halo_level(): kit::halo_level over the cirrus cover of the same inputs weather.cirrus_coverage() reads.
+int l_weather_halo_level(lua_State* L) {
+    const kit::Halo& h = check_halo(L, "weather.halo_level");
+    const kit::Cirrus& c = check_cirrus(L, "weather.halo_level");
+    World& w = world_of(L);
+    const kit::Weather* wx = first_weather(w);
+    if (!wx) luaL_error(L, "weather.halo_level: the scene has no Weather entity");
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* type = refl::find_type(StringId("WorldClock"));
+    if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<kit::WorldClock>().each([&](Entity, kit::WorldClock& k) {
+            if (found) return;
+            found = true;
+            day = k.day;
+            hour = k.hour;
+        });
+    }
+    const f32 cover = kit::cirrus_coverage(c, *wx, kit::cirrus_day_fraction(day, hour));
+    lua_pushnumber(L, static_cast<double>(kit::halo_level(h, cover)));
+    return 1;
+}
+
+// weather.set_halo{...}: validated before anything is written.
+int l_weather_set_halo(lua_State* L) {
+    static const char* const kKeys[4] = {"strength", "sun_dogs", "moon", "dispersion"};
+    f64 value[4] = {};
+    bool given[4] = {};
+    read_settings(L, "weather.set_halo", kKeys, 4, "strength, sun_dogs, moon, dispersion", value, given);
+    kit::Halo& h = check_halo(L, "weather.set_halo");
+    if (given[0]) h.strength = static_cast<f32>(clamp_range(value[0], 0.0, 1.0));
+    if (given[1]) h.sun_dogs = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) h.moon = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) h.dispersion = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    return 0;
 }
 
 // The night fade Kit3DExtract hands aurora_level: 0 with no clock, else 1 - smoothstep of the sun's own elevation over
@@ -3225,6 +3385,55 @@ const luaL_Reg kWaterLib[] = {
     {nullptr, nullptr},
 };
 
+// ---- Floating things (M-FLOAT step 55c) ----
+
+// The Floater on entity `e` (argument 1), or a Luau error that names the call.
+kit::Floater& check_floater(lua_State* L, const char* fn) {
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    kit::Floater* f = w.try_get_mut<kit::Floater>(e);
+    if (!f) luaL_error(L, "%s: the entity has no Floater", fn);
+    return *f;
+}
+
+#define MCE_FLOATER_GETTER(luaname, field)                                                      \
+    int l_floater_##luaname(lua_State* L) {                                                     \
+        lua_pushnumber(L, static_cast<double>(check_floater(L, "floater." #luaname).field));    \
+        return 1;                                                                               \
+    }
+MCE_FLOATER_GETTER(enabled, enabled)
+MCE_FLOATER_GETTER(offset, offset_y)
+MCE_FLOATER_GETTER(tilt, tilt)
+MCE_FLOATER_GETTER(follow, follow)
+#undef MCE_FLOATER_GETTER
+
+// floater.set(entity, {...}): validated before anything is written; never adds a Floater.
+int l_floater_set(lua_State* L) {
+    static const char* const kKeys[4] = {"enabled", "offset", "tilt", "follow"};
+    f64 value[4] = {};
+    bool given[4] = {};
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    lua_remove(L, 1);  // the settings table is read at index 1
+    read_settings(L, "floater.set", kKeys, 4, "enabled, offset, tilt, follow", value, given);
+    kit::Floater* f = w.try_get_mut<kit::Floater>(e);
+    if (!f) luaL_error(L, "floater.set: the entity has no Floater");
+    if (given[0]) f->enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) f->offset_y = static_cast<f32>(clamp_range(value[1], -50.0, 50.0));
+    if (given[2]) f->tilt = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) f->follow = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    return 0;
+}
+
+const luaL_Reg kFloaterLib[] = {
+    {"enabled", l_floater_enabled},
+    {"offset", l_floater_offset},
+    {"tilt", l_floater_tilt},
+    {"follow", l_floater_follow},
+    {"set", l_floater_set},
+    {nullptr, nullptr},
+};
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -3284,6 +3493,22 @@ const luaL_Reg kWeatherLib[] = {
     {"caustics_absorption", l_weather_caustics_absorption},
     {"caustics_max_depth", l_weather_caustics_max_depth},
     {"set_caustics", l_weather_set_caustics},
+    {"cirrus_strength", l_weather_cirrus_strength},
+    {"cirrus_fair_coverage", l_weather_cirrus_fair_coverage},
+    {"cirrus_front_coverage", l_weather_cirrus_front_coverage},
+    {"cirrus_density", l_weather_cirrus_density},
+    {"cirrus_scale", l_weather_cirrus_scale},
+    {"cirrus_stretch", l_weather_cirrus_stretch},
+    {"cirrus_speed_scale", l_weather_cirrus_speed_scale},
+    {"cirrus_height", l_weather_cirrus_height},
+    {"cirrus_coverage", l_weather_cirrus_coverage},
+    {"set_cirrus", l_weather_set_cirrus},
+    {"halo_strength", l_weather_halo_strength},
+    {"halo_sun_dogs", l_weather_halo_sun_dogs},
+    {"halo_moon", l_weather_halo_moon},
+    {"halo_dispersion", l_weather_halo_dispersion},
+    {"halo_level", l_weather_halo_level},
+    {"set_halo", l_weather_set_halo},
     {"rain_level", l_weather_rain_level},
     {"wind_level", l_weather_wind_level},
     {"audio_rain_db", l_weather_audio_rain_db},
@@ -3620,6 +3845,9 @@ void register_weather_api(lua_State* L) {
     lua_newtable(L);
     luaL_register(L, nullptr, kWaterLib);
     lua_setglobal(L, "water");
+    lua_newtable(L);
+    luaL_register(L, nullptr, kFloaterLib);
+    lua_setglobal(L, "floater");
 }
 
 }  // namespace mce::script::detail

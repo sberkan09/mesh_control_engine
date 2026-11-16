@@ -223,7 +223,7 @@ TEST_CASE("caustics extract: no water plane in the frame keeps the disabled defa
         CHECK(r.frame().enabled);
         r.world.destroy(w);
         CHECK(is_default(r.frame()));
-        CHECK(r.scene.water().enabled);  // the stale plane the extract no longer refreshes; the feed does not trust it
+        CHECK_FALSE(r.scene.water().enabled);  // the extract clears the carrier when no enabled Water drives it
     }
     SUBCASE("a disabled Water") {
         Rig r(false);

@@ -609,6 +609,22 @@ struct Cirrus {
     u8 pad_[3] = {};
 };
 
+// Ice-crystal halo optics seen through the Cirrus layer (M-HALO 54a seam; the sky shader draws a 22 degree ring and two
+// sun dogs round the sun and a fainter ring round the moon in 54b, the kit extract fills it in 54c). `strength` 0..1 is
+// the overall gain (0 = off: the frame is the one without it; the shader also scales it by the cirrus coverage, so a
+// clear sky or the Low tier shows none), `sun_dogs` 0..1 the gain of the two parhelia, `moon` 0..1 the moon ring's share
+// of `strength`, `dispersion` 0..1 the red-inside, blue-outside colour fringe (0 = white). NaN falls back to the
+// defaults (strength 0). `enabled` is a pass-through switch for the caller; apply_quality does not change it. No
+// implicit padding (the explicit pad_ is zeroed), so a default value compares bit for bit.
+struct Halo {
+    f32 strength = 0.0f;
+    f32 sun_dogs = 1.0f;
+    f32 moon = 0.5f;
+    f32 dispersion = 1.0f;
+    bool enabled = true;
+    u8 pad_[3] = {};
+};
+
 // Night sky in the sky pass (M-NIGHTSKY 14c; the kit extract drives it from the Moon, the quality tiers gate it):
 // `moon_dir` is the unit direction toward the moon (not the way its light travels), `moon_cos_size` the cosine of
 // the disk's angular radius (0.9..1; default 0.9995, exaggerated so a phase reads), `moon_intensity` the disk
@@ -1034,6 +1050,7 @@ public:
     void set_ripples(const Ripples& r) { ripples_ = r; }
     void set_clouds(const Clouds& c) { clouds_ = c; }
     void set_cirrus(const Cirrus& c) { cirrus_ = c; }
+    void set_halo(const Halo& h) { halo_ = h; }
     void set_night_sky(const NightSky& n) { night_sky_ = n; }
     void set_water(const WaterSurface& w) { water_ = w; }
     void set_aurora(const AuroraSky& a) { aurora_ = a; }
@@ -1107,6 +1124,7 @@ public:
     const Ripples& ripples() const { return ripples_; }
     const Clouds& clouds() const { return clouds_; }
     const Cirrus& cirrus() const { return cirrus_; }
+    const Halo& halo() const { return halo_; }
     const NightSky& night_sky() const { return night_sky_; }
     const WaterSurface& water() const { return water_; }
     const AuroraSky& aurora() const { return aurora_; }
@@ -1205,6 +1223,7 @@ private:
     Ripples ripples_;
     Clouds clouds_;
     Cirrus cirrus_;
+    Halo halo_;
     NightSky night_sky_;
     WaterSurface water_;
     AuroraSky aurora_;

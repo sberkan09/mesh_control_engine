@@ -15,7 +15,9 @@
 
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
+#include "mce/kit/cirrus.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/halo.h"
 #include "mce/kit/lightning_bolt.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -30,6 +32,7 @@
 #include "mce/kit/rainbow.h"
 #include "mce/kit/meteor.h"
 #include "mce/kit/season.h"
+#include "mce/kit/floater.h"
 #include "mce/kit/water_ice.h"
 #include "mce/kit/gi_visibility.h"
 #include "mce/kit/water_flow.h"
@@ -128,6 +131,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Rainbow>("Rainbow", sizeof(Rainbow::pad_));  // rainbow.h (M-RAINBOW 17a)
     expect_pad<Meteor>("Meteor", sizeof(Meteor::pad_));  // meteor.h (M-METEOR 18a)
     expect_pad<Season>("Season", sizeof(Season::pad_));  // season.h (M-SEASONS 19a)
+    expect_pad<Floater>("Floater", sizeof(Floater::pad_));  // floater.h (M-FLOAT 55b)
     expect_pad<WaterIce>("WaterIce", sizeof(WaterIce::pad_));  // water_ice.h (M-FREEZE 20a)
     expect_pad<WaterFlow>("WaterFlow", sizeof(WaterFlow::pad_));  // water_flow.h (M-WATER2 49e)
     expect_pad<GiVisibility3D>("GiVisibility3D", 0);  // gi_visibility.h (M-GI2 50h)
@@ -153,6 +157,8 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<LightCookie3D>("LightCookie3D", sizeof(LightCookie3D::pad_));  // light_cookie.h (M-LIGHTCOOKIE 40g)
     expect_pad<SunCookie3D>("SunCookie3D", sizeof(SunCookie3D::pad_));  // light_cookie.h (M-LIGHTCOOKIE 40g)
     expect_pad<DecalScatter3D>("DecalScatter3D", sizeof(DecalScatter3D::pad_));  // decal_scatter.h (M-DECALSCATTER 35a)
+    expect_pad<Cirrus>("Cirrus", 0);  // cirrus.h (M-CIRRUS 53c): eight f32, no padding
+    expect_pad<Halo>("Halo", 0);  // halo.h (M-HALO 54c): four f32, no padding
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 

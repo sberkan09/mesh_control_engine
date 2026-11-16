@@ -47,6 +47,8 @@
 #include "mce/kit/sun_shafts.h"
 #include "mce/kit/cloud_shadow.h"
 #include "mce/kit/caustics.h"
+#include "mce/kit/cirrus.h"
+#include "mce/kit/halo.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
 #include "mce/kit/gi_visibility.h"
@@ -1258,6 +1260,61 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         scene.set_clouds(shown);
         cloud_cover = shown.coverage;
     }
+    {  // cirrus (M-CIRRUS 53c): the first Cirrus with a Weather and no equirect sky texture; written every frame (the
+       // default, coverage 0, otherwise) so a stale one never survives. The clock is the first WorldClock (day 0, hour 0
+       // without one), the wind direction the first WindDirection (+x without one).
+        const Weather* weather = nullptr;
+        const Cirrus* cirrusc = nullptr;
+        const WindDirection* cirrus_wd = nullptr;
+        u32 clock_day = 0;
+        f32 clock_hour = 0.0f;
+        bool have_clock = false;
+        world.query<const Weather&>().each([&](const Weather& c) {
+            if (!weather) weather = &c;
+        });
+        world.query<const Cirrus&>().each([&](const Cirrus& c) {
+            if (!cirrusc) cirrusc = &c;
+        });
+        world.query<const WindDirection&>().each([&](const WindDirection& c) {
+            if (!cirrus_wd) cirrus_wd = &c;
+        });
+        world.query<const WorldClock&>().each([&](const WorldClock& c) {
+            if (have_clock) return;
+            have_clock = true;
+            clock_day = c.day;
+            clock_hour = c.hour;
+        });
+        render::Cirrus cirrus;  // coverage 0 by default (off)
+        if (weather && cirrusc && env.sky_texture.guid == asset::Guid{}) {
+            cirrus.coverage = cirrus_coverage(*cirrusc, *weather, cirrus_day_fraction(clock_day, clock_hour));
+            cirrus.density = cirrusc->density;
+            cirrus.scale_m = cirrusc->scale_m;
+            cirrus.stretch = cirrusc->stretch;
+            cirrus.speed = weather->wind * cirrusc->speed_scale;
+            if (cirrus_wd) cirrus.wind_dir = wind_direction_vector(*cirrus_wd);  // else the default +x
+            cirrus.height_m = cirrusc->height_m;
+            cirrus.enabled = true;
+        }
+        scene.set_cirrus(render::apply_quality(quality_, cirrus));
+    }
+    {  // ice halo (M-HALO 54c): the first Halo, read through the cirrus cover the frame carries (so no Cirrus, no Weather,
+       // an equirect sky texture, the Low tier and `r.cirrus 0` all leave it 0); written every frame (the default
+       // otherwise) so a stale one never survives.
+        const Halo* haloc = nullptr;
+        world.query<const Halo&>().each([&](const Halo& c) {
+            if (!haloc) haloc = &c;
+        });
+        render::Halo halo;  // strength 0 by default (off)
+        const f32 cover = scene.cirrus().coverage;
+        if (haloc && cover > 0.0f) {
+            halo.strength = halo_level(*haloc, cover);
+            halo.sun_dogs = haloc->sun_dogs;
+            halo.moon = haloc->moon;
+            halo.dispersion = haloc->dispersion;
+            halo.enabled = true;
+        }
+        scene.set_halo(render::apply_quality(quality_, halo));
+    }
     const f32 dark = [&] {  // 0 by day, 1 at night: shared by the night sky and the aurora
         const f32 t = clamp((sun_elevation_natural + 0.1f) / 0.2f, 0.0f, 1.0f);
         return 1.0f - t * t * (3.0f - 2.0f * t);
@@ -1400,8 +1457,10 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         }
         scene.set_meteor(shown);
     }
-    bool water_plane = false;  // M-CAUSTICS 52c: this frame's extract set an enabled plane (Scene3D keeps a stale one)
-    {  // water (M-WATER 15b): the first Water; nothing is set without one, when disabled or with a non-finite level
+    bool water_plane = false;  // M-CAUSTICS 52c: this frame's extract set an enabled plane
+    {  // water (M-WATER 15b): the first Water; without one, when disabled or with a non-finite level the carrier is cleared
+        // (Scene3D::begin does not reset it: a removed or disabled Water must not keep drawing last frame's plane)
+        scene.set_water(render::WaterSurface{});
         const Water* water = nullptr;
         const WindDirection* water_wd = nullptr;
         world.query<const Water&>().each([&](const Water& c) {

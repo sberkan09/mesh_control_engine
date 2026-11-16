@@ -6,7 +6,10 @@
 #include <cstring>
 
 #include "mce/ecs/world.h"
+#include "mce/kit/cirrus.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/floater.h"
+#include "mce/kit/halo.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
@@ -330,6 +333,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<Moon>();        // M-NIGHTSKY 14a: read by Kit3DExtract (14b, 14e); no system
     world.register_components<Water>();       // M-WATER 15a: read by Kit3DExtract (15b) and the water helpers; no system
     world.register_components<WaterFlow>();   // M-WATER2 49e: read by Kit3DExtract and the flow helpers; no system
+    install_floater(world);                   // M-FLOAT 55b: kit_floater rides entities on the drawn surface (after kit_wind_direction)
     world.register_components<Aurora>();      // M-AURORA 16a: read by Kit3DExtract (16b) and the aurora helpers; no system
     world.register_components<Rainbow>();     // M-RAINBOW 17a: read by Kit3DExtract (17b) and the rainbow helpers; no system
     world.register_components<Meteor>();      // M-METEOR 18a: read by Kit3DExtract (18b) and the meteor helpers; no system
@@ -347,6 +351,8 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<Season>();      // M-SEASONS 19a: read by Kit3DExtract (19b) and the season helpers; no system
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
     world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
+    world.register_components<Cirrus>();      // M-CIRRUS 53c: read by Kit3DExtract and cirrus_coverage; no system
+    world.register_components<Halo>();        // M-HALO 54c: read by Kit3DExtract and halo_level; no system
     world.register_components<WeatherAudio>();  // M-WEATHERAUDIO 10a: kit_weather_audio writes AudioSource::gain_db
     install_weather_audio(world);
     world.register_components<LightningBolt>();  // M-LIGHTNINGBOLT 11a: read by kit_lightning

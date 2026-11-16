@@ -1,0 +1,1 @@
+- M-FLOAT step 55c: Luau `floater.set(e, {...})` and the `floater.*` getters over an entity's `Floater` (typed in `definitions.cpp`, named errors, nothing written on error), and the `13_water` sample carries a Buoy and a Raft. The sample's state hash and entity count (7 to 9) change on purpose; the headless gate checks that each floater's y is the surface plus its offset.

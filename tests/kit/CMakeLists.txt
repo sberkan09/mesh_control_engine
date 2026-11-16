@@ -89,6 +89,7 @@ mce_add_test(test_kit UMBRELLA
         test_meteor.cpp
         test_season.cpp
         test_water_ice.cpp
+        test_floater.cpp
         test_leaf_fall.cpp
         test_firefly.cpp
         test_pollen.cpp
@@ -109,6 +110,8 @@ mce_add_test(test_kit UMBRELLA
         test_sun_shafts_extract.cpp
         test_cloud_shadow_extract.cpp
         test_caustics_extract.cpp
+        test_cirrus.cpp
+        test_halo.cpp
         test_dynamic_resolution.cpp
         test_dynamic_resolution_extract.cpp
         test_underwater_extract.cpp

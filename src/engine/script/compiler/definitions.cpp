@@ -275,6 +275,33 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (strength and softness 0..1); an unknown key or a
     -- non-number raises and nothing is written; `enabled` is not settable
     set_cloud_shadow: (settings: { strength: number?, softness: number? }) -> (),
+    -- Cirrus (M-CIRRUS), the first one in the scene; the getters raise when there is none (or when the world has no
+    -- weather). cirrus_coverage is read-only, from the same helper the extract uses with the first Weather and
+    -- WorldClock (0..1, before the quality tier); it also raises when there is no Weather
+    cirrus_strength: () -> number,
+    cirrus_fair_coverage: () -> number,
+    cirrus_front_coverage: () -> number,
+    cirrus_density: () -> number,
+    cirrus_scale: () -> number,
+    cirrus_stretch: () -> number,
+    cirrus_speed_scale: () -> number,
+    cirrus_height: () -> number,
+    cirrus_coverage: () -> number,
+    -- every key optional, each value clamped to the field's range (strength, fair_coverage, front_coverage and density
+    -- 0..1, scale 200..40000 m, stretch 1..16, speed_scale 0..10, height 1000..30000 m); an unknown key or a non-number
+    -- raises and nothing is written
+    set_cirrus: (settings: { strength: number?, fair_coverage: number?, front_coverage: number?, density: number?, scale: number?, stretch: number?, speed_scale: number?, height: number? }) -> (),
+    -- Halo (M-HALO), the first one in the scene, the ice-crystal ring and sun dogs seen through the cirrus; the getters
+    -- raise when there is none (or when the world has no weather). halo_level is read-only, from the same helper the
+    -- extract uses over the cirrus cover (0..1, before the quality tier); it also raises when there is no Cirrus or no
+    -- Weather
+    halo_strength: () -> number,
+    halo_sun_dogs: () -> number,
+    halo_moon: () -> number,
+    halo_dispersion: () -> number,
+    halo_level: () -> number,
+    -- every key optional, each value clamped to 0..1; an unknown key or a non-number raises and nothing is written
+    set_halo: (settings: { strength: number?, sun_dogs: number?, moon: number?, dispersion: number? }) -> (),
     -- Caustics3D (M-CAUSTICS), the first one in the scene; the getters raise when there is none (or when the world has
     -- no kit3d components)
     caustics_strength: () -> number,
@@ -841,6 +868,18 @@ declare water: {
     -- every key optional, each value clamped (dir 0..360 degrees, speed 0..5 m/s; enabled: any non-zero number is 1);
     -- an unknown key or a non-number raises and nothing is written
     set_flow: (settings: { enabled: number?, dir: number?, speed: number? }) -> (),
+}
+
+declare floater: {
+    -- Floater (M-FLOAT), on the given entity: the kit's kit_floater system keeps the entity on the drawn water surface
+    -- and leaning with it. Every function raises when the entity has no Floater (set never adds one).
+    enabled: (entity: Entity) -> number,
+    offset: (entity: Entity) -> number,
+    tilt: (entity: Entity) -> number,
+    follow: (entity: Entity) -> number,
+    -- every key optional, each value clamped (offset -50..50 metres, tilt and follow 0..1; enabled: any non-zero number is
+    -- 1); an unknown key or a non-number raises and nothing is written
+    set: (entity: Entity, settings: { enabled: number?, offset: number?, tilt: number?, follow: number? }) -> (),
 }
 )";
 
