@@ -61,6 +61,7 @@ mce_add_test(test_editor UMBRELLA
         test_timeline_editor.cpp
         test_transform_gizmo.cpp
         test_ui_document.cpp
+        test_inspector_sweep.cpp
         test_undo.cpp
     DEPS
         mce::mce_editor_layer)

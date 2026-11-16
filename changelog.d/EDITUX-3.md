@@ -1,0 +1,1 @@
+- Editor: the inspector's Add Component menu no longer offers WorldTransform, which the hierarchy recomputes every tick (adding it left the preview world out of step with the document). New inspector sweep test over every offered component (M-EDITUX step 3).

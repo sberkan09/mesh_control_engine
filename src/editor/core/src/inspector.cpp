@@ -1,5 +1,6 @@
 #include "mce/editor/inspector.h"
 #include "mce/asset/handle.h"
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/log.h"
 
@@ -293,7 +294,8 @@ bool draw_fields(DrawCtx& ui, const refl::TypeRecord& type, void* value) {
 void addable_components(const DocEntity& e, Array<const refl::TypeRecord*>& out) {
     out.clear();
     for (const refl::TypeRecord* t : refl::all())  // sorted by name
-        if (t->is_component() && !e.find(*t)) out.push_back(t);
+        if (t->is_component() && !e.find(*t) && t->type_hash != refl::type_of<WorldTransform>().type_hash)
+            out.push_back(t);  // WorldTransform is derived from the hierarchy every tick, never authored
 }
 
 bool draw_inspector(DrawCtx& ui, EditorScene& scene, EntityId id) {
