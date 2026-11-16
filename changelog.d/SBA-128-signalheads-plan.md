@@ -1,0 +1,1 @@
+- M-SIGNALHEADS plan (docs only): traffic light heads that show the signal (`SignalHead`, Luau `signal`, heads in `samples/09_openworld`), steps 56a to 56d.
