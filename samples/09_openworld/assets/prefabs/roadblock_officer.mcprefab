@@ -37,6 +37,9 @@
      "rate": 3,
      "spread_deg": 1.5,
      "magazine": 0
+    },
+    "Locomotion3D": {
+     "animator": "$1"
     }
    }
   },
@@ -66,6 +69,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   }

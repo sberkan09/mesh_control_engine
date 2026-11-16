@@ -70,6 +70,7 @@ G_BLOCK_COP = guid("prefabs/roadblock_officer.mcprefab")
 G_INPUT = guid("input/openworld.mcinput")
 G_SCENE = guid("scenes/city.mcscene")
 G_HUD = guid("ui/hud.mcui")
+G_ANIM = guid("anim/blocky.mcanim")
 G_ITEMS = guid("items/loot.mcitems")
 
 GRID = 5          # junctions per side
@@ -1014,6 +1015,20 @@ def items_catalog():
             {"item": "bandage", "weight": 3, "qty": 1}, {"item": "medkit", "weight": 1, "qty": 1}]}]})
 
 
+def anim_graph():
+    """The Blocky Characters' node clips as one locomotion blend: idle standing, walk at a stroll, sprint at a run (M-OPENWORLD E9).
+    Locomotion3D feeds `speed` from the controller, the nav agent or the crowd walker's motion."""
+    write("anim/blocky.mcanim", {"format": "mce-animgraph", "version": 2, "guid": G_ANIM, "name": "blocky", "params": ["speed"],
+                                  "start": "locomotion", "states": [{"name": "locomotion", "blend": {"param": "speed", "points": [
+                                      {"clip": "idle", "at": 0}, {"clip": "walk", "at": 1.6}, {"clip": "sprint", "at": 6.0}]}}]})
+
+
+def animate(s, root, model, **loco):
+    """The model plays the locomotion graph; the root's Locomotion3D drives it from how the root moves."""
+    s.ents[model]["components"]["Animator"] = {"graph": "guid:" + G_ANIM}
+    s.ents[root]["components"]["Locomotion3D"] = dict({"animator": s.ref(model)}, **loco)
+
+
 def prefabs():
     # Roadblock pieces: a police car that is a static box (the barricade does not roll away), and an officer who holds his ground.
     write("prefabs/roadblock_car.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_BLOCK_CAR, "name": "roadblock_car", "entities": [
@@ -1027,9 +1042,10 @@ def prefabs():
             "Health3D": {"max": 80, "team": 2, "destroy_on_death": 1, "linger": 4},
             "Police3D": {"min_level": 3, "attack_level": 3, "drive_nav": 0, "sight_range": 90, "attack_range": 70, "search_time": 6,
                          "arrest_range": 0},
-            "Weapon3D": {"kind": "Hitscan", "damage": 10, "range": 80, "rate": 3, "spread_deg": 1.5, "magazine": 0}}},
+            "Weapon3D": {"kind": "Hitscan", "damage": 10, "range": 80, "rate": 3, "spread_deg": 1.5, "magazine": 0},
+            "Locomotion3D": {"animator": "$1"}}},
         {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                                         "MeshRef": model_mesh("character-d")}}]})
+                                         "MeshRef": model_mesh("character-d"), "Animator": {"graph": "guid:" + G_ANIM}}}]})
     write("prefabs/traffic_car.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_CAR, "name": "traffic_car",
                                            "entities": car_entities("sedan", True)})
     walker = [{"name": "Pedestrian", "components": {
@@ -1040,9 +1056,10 @@ def prefabs():
         "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2},
         # A killed walker may drop a bandage or a medkit (about every other kill), a small green box at his feet.
         "LootDrop": {"catalog": "guid:" + G_ITEMS, "table": "pedestrian", "radius": 1.5, "scatter": 0.5, "lift": -0.7,
-                     "mesh": "guid:" + G_BOX, "tint": [0.3, 1.0, 0.4, 1], "mesh_scale": 0.35}}},
+                     "mesh": "guid:" + G_BOX, "tint": [0.3, 1.0, 0.4, 1], "mesh_scale": 0.35},
+        "Locomotion3D": {"animator": "$1"}}},
         {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                                         "MeshRef": model_mesh("character-b")}}]
+                                         "MeshRef": model_mesh("character-b"), "Animator": {"graph": "guid:" + G_ANIM}}}]
     write("prefabs/pedestrian.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_WALKER, "name": "pedestrian",
                                           "entities": walker})
 
@@ -1311,9 +1328,10 @@ def scene():
         "UiScreen": {"document": "guid:" + G_HUD},
     })
     # The model turns to face where the player walks (M-FACEMOVE); the Kenney character faces +Z, hence the pi offset.
-    s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                           "MeshRef": model_mesh("character-a"),
-                           "FaceVelocity3D": {"source": s.ref(player), "turn_rate_deg": 540, "yaw_offset": math.pi}})
+    player_model = s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                          "MeshRef": model_mesh("character-a"),
+                                          "FaceVelocity3D": {"source": s.ref(player), "turn_rate_deg": 540, "yaw_offset": math.pi}})
+    animate(s, player, player_model)  # the model plays idle, walk or sprint by how fast the player moves
     # Five goals (M-PROGRESS): each pays cash once when its counter on the player's Progress3D reaches the target.
     for gname, stat, target, reward in [("First blood", "Kills", 1, 50), ("Street fighter", "Kills", 10, 250), ("Odd job", "Missions", 1, 200),
                                         ("Joyride", "Rides", 1, 100), ("Knuckle sandwich", "MeleeHits", 5, 150)]:
@@ -1377,8 +1395,9 @@ def scene():
             "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.7, "gain_db": -6},
             "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -4, "hit_gain_db": -8},
         })
-        s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                                            "MeshRef": model_mesh("character-d")})
+        cop_model = s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                                        "MeshRef": model_mesh("character-d")})
+        animate(s, cop, cop_model)
     # The police navigate where the navmesh is baked: the middle blocks around the plaza.
     s.add("Navmesh", {"LocalTransform": tf((0, 0, 0)),
                       "NavMeshSurface3D": {"bounds_half": [260, 30, 260], "cell_size": 0.5, "cell_height": 0.25, "agent_radius": 0.4,
@@ -1610,6 +1629,7 @@ menus()
 items_catalog()
 input_map()
 write("roads/city.mcroads", roads_doc())
+anim_graph()
 prefabs()
 entities, nb = scene()
 print("09_openworld: %d scene entities, %d buildings" % (entities, nb))
