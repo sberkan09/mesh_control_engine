@@ -104,6 +104,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `FaceVelocity3D` | `mce/kit/face_velocity.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `FallDeath3D` | `mce/kit/fall_death.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Firefly` | `mce/kit/firefly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Floater` | `mce/kit/floater.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: Luau and the 13_water sample arrive with M-FLOAT 55c; remove this line then |
 | `Flock` | `mce/kit/flock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `GiVisibility3D` | `mce/kit/gi_visibility.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Grenade3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
