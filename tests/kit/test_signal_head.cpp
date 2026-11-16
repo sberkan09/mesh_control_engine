@@ -82,6 +82,9 @@ struct Rig {
     const MeshRef& mesh(Entity e) { return *w.try_get<MeshRef>(e); }
 };
 
+bool same(const math::vec3& a, const math::vec3& b) { return a.x == b.x && a.y == b.y && a.z == b.z; }
+bool same(const math::vec4& a, const math::vec4& b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
+
 bool lit(const MeshRef& m) { return m.emissive_tint.x > 1.0f || m.emissive_tint.y > 1.0f; }
 
 // Traffic arriving from the east heads -x on the east arm; from the south it heads -z on the south arm.
@@ -116,7 +119,8 @@ TEST_CASE("signal head: the lit lamp follows the light of its approach") {
 TEST_CASE("signal head: the look is a pure function and the lit lamp has its own colour") {
     const SignalLampLook a = signal_lamp_look(RoadLight::Red, RoadLight::Red);
     const SignalLampLook b = signal_lamp_look(RoadLight::Red, RoadLight::Red);
-    CHECK(std::memcmp(&a, &b, sizeof(a)) == 0);
+    CHECK(same(a.tint, b.tint));
+    CHECK(same(a.emissive_tint, b.emissive_tint));
     CHECK(a.tint.x > a.tint.y);
     CHECK(signal_lamp_look(RoadLight::Green, RoadLight::Green).tint.y > signal_lamp_look(RoadLight::Green, RoadLight::Green).tint.x);
     CHECK(signal_lamp_look(RoadLight::Amber, RoadLight::Amber).emissive_tint.x > 1.0f);
@@ -134,7 +138,12 @@ TEST_CASE("signal head: only the head's own tint and emissive tint change") {
     const LocalTransform before = *r.w.try_get<LocalTransform>(e);
     r.run(5);
     const LocalTransform after = *r.w.try_get<LocalTransform>(e);
-    CHECK(std::memcmp(&before, &after, sizeof(before)) == 0);
+    CHECK(same(before.position, after.position));
+    CHECK(before.rotation.x == after.rotation.x);
+    CHECK(before.rotation.y == after.rotation.y);
+    CHECK(before.rotation.z == after.rotation.z);
+    CHECK(before.rotation.w == after.rotation.w);
+    CHECK(same(before.scale, after.scale));
     CHECK(r.mesh(e).cast_shadows == 0);
     CHECK(lit(r.mesh(e)));
 }
@@ -148,8 +157,8 @@ TEST_CASE("signal head: a head with no lane, no network or enabled 0 is left as 
     const Entity gone = r.lamp(kEastAt, kEastDir, RoadLight::Green, 1, r.w.spawn_with(LocalTransform{}));  // no RoadNetwork3D
     r.run(3);
     for (const Entity e : {far, flat, off, gone}) {
-        CHECK(std::memcmp(&r.mesh(e).tint, &plain.tint, sizeof(plain.tint)) == 0);
-        CHECK(std::memcmp(&r.mesh(e).emissive_tint, &plain.emissive_tint, sizeof(plain.emissive_tint)) == 0);
+        CHECK(same(r.mesh(e).tint, plain.tint));
+        CHECK(same(r.mesh(e).emissive_tint, plain.emissive_tint));
     }
 }
 
