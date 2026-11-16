@@ -46,6 +46,7 @@ mce_add_library(mce_gameplay_kit
         src/weather.cpp
         src/cirrus.cpp
         src/halo.cpp
+        src/floater.cpp
         src/water_flow.cpp
         src/gi_visibility.cpp
         src/weather_audio.cpp
