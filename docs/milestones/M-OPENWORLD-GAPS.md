@@ -105,8 +105,8 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
    node clips on `speed` (0, 1.6, 6 m/s); the player model, the plaza police and the `roadblock_officer` and `pedestrian` prefabs carry
    an `Animator` on the model and a `Locomotion3D` on the root, which feeds `speed` from the controller, the nav agent or the crowd's
    motion. `FaceVelocity3D` (M-FACEMOVE) still turns the player. `test_mcp_openworld` checks every `Locomotion3D` finds the graph's
-   `speed` and that at least 15 walkers feed a walking speed. Still open: wheel spin, door and seat transitions, and the mission
-   target men (static, no `Locomotion3D`).
+   `speed` and that at least 15 walkers feed a walking speed. The mission target men carry the `Animator` too (they stand, so
+   they play `idle`). Still open: wheel spin (the Kenney car is one mesh), door and seat transitions.
 7. **E10 gates**: screenshot gate, budget counters, scripted playthrough test, Mac soak.
 8. **E11 scale**: HLOD skyline, scene streaming, floating origin when the map outgrows 1 km² (A13, A14).
 
