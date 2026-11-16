@@ -1072,7 +1072,7 @@ Scripts read and tune the water of 9.19k through the `water` table (section 27.3
 `water.normal_at(x, z)` (three numbers) and `water.submerged(x, y, z)` evaluate the same wave sum the renderer draws, at
 the scene time `mce.tick() * mce.dt` and with the main direction the renderer uses (the `WindDirection` heading when
 `wind_follow` is above 0 and the scene has one, else `wind_dir`), so a float or a boat that follows `height_at` bobs on
-exactly what is on screen; the engine applies no buoyancy force, the script moves the object. `submerged` is true when `y`
+exactly what is on screen; the engine applies no buoyancy force: either the script moves the object, or the kit's `Floater` component (section 9.19m, M-FLOAT) puts it on the surface for you (`floater.set` tunes it from Luau, 27.3). `submerged` is true when `y`
 is below the surface there. `water.set{...}` and the getters (`water.level()`, `water.shallow_color()` and so on, named
 like the set keys) act on the first `Water`; every set key is optional and clamped to the component's range, an unknown
 key, a value that is not a number or a scene without the component raises an error that names the call, and nothing is
