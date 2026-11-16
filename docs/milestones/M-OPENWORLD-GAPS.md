@@ -41,8 +41,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 - **Washed-out colours.** The grass tint (0.20, 0.34, 0.14) shows as a pastel green (about 186, 214, 164) and the kerb or
   sidewalk strip reads near white. Suspect the fixed sun (intensity 3.0, exposure 1.0) and no grading; cause not confirmed.
   Check it on Metal as well (same shaders translated to MSL) before tuning.
-- **Characters and cars are blocky/toy Kenney models with no animation.** Characters slide: the node clips of the blocky
-  rig are not played; wheels do not spin; no door, steering or lights animation.
+- **Characters and cars are blocky/toy Kenney models.** Characters now walk and run (E9, step 6 below); the car part is still open: wheels do not spin; no door, steering or lights animation.
 - **No sky**: no HDRI, no clouds, no stars; no night look; traffic lights do not change colour with the signal state.
 - **No third-person feel**: ~~the player does not face its movement direction~~ **done ([M-FACEMOVE](M-FACEMOVE.md): `FaceVelocity3D` on the player model)**; the camera stays behind a fixed orbit (the gun is the player's since step 2a and aims along the camera).
 - **Visible feedback on shooting**: ~~no muzzle flash~~ **muzzle flash and a small view kick done ([M-SHOTFX](M-SHOTFX.md))**; **hit marker done ([M-HITMARKER](M-HITMARKER.md))**; **impact sparks done ([M-IMPACTFX](M-IMPACTFX.md))**; **bullet holes done ([M-SHOTMARKS](M-SHOTMARKS.md))**; ~~still no tracer line~~ **tracer line done ([M-TRACERS](M-TRACERS.md))**.
@@ -102,12 +101,12 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 3. **E4 busted and wasted + police cars + arrest** (A7-A9; respawn, cars and roadblocks done, see [M-OPENWORLD-POLICE](M-OPENWORLD-POLICE.md)): data only, uses M-WASTED and M-ARREST components.
 4. **E5 look pass**: roads with markings and crossings (done, E7: [M-OPENWORLD-LOOK](M-OPENWORLD-LOOK.md)), a sky HDRI, tint/exposure check on GL and Metal, shot effects.
 5. **E6 day/night + weather** (A4, A5), **E7 missions + minimap** (A2, A3), **E8 shops, carjack, wrecks** (A10, A11).
-6. **E9 animation**: play the node clips, wheel spin, door and seat transitions.
-   Open since PR #873 was closed (2026-11-16): the character clips are still not played. The reusable part of #873 is the
-   `assets/anim/blocky.mcanim` graph (idle 0 m/s, walk 1.6, sprint 6, blended on `speed`) plus an `Animator` on each model and a
-   `Locomotion3D` on each root (player, police, walkers; roadblock officers now come from the `Roadblock3D` prefab). Redo it on
-   the current `gen_assets.py` without its `Locomotion3D.turn_rate`: `FaceVelocity3D` (M-FACEMOVE) turns the player now.
-   Branch `claude/project-thread-8kzlmq` keeps the old work for reference.
+6. **E9 animation**: characters done (2026-11-16): `assets/anim/blocky.mcanim` blends the Blocky Characters' `idle`, `walk` and `sprint`
+   node clips on `speed` (0, 1.6, 6 m/s); the player model, the plaza police and the `roadblock_officer` and `pedestrian` prefabs carry
+   an `Animator` on the model and a `Locomotion3D` on the root, which feeds `speed` from the controller, the nav agent or the crowd's
+   motion. `FaceVelocity3D` (M-FACEMOVE) still turns the player. `test_mcp_openworld` checks every `Locomotion3D` finds the graph's
+   `speed` and that at least 15 walkers feed a walking speed. Still open: wheel spin, door and seat transitions, and the mission
+   target men (static, no `Locomotion3D`).
 7. **E10 gates**: screenshot gate, budget counters, scripted playthrough test, Mac soak.
 8. **E11 scale**: HLOD skyline, scene streaming, floating origin when the map outgrows 1 km² (A13, A14).
 

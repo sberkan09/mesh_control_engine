@@ -1,0 +1,1 @@
+- 09_openworld: the player, the police and the walkers play the Blocky Characters' idle, walk and sprint clips (M-OPENWORLD E9): a locomotion blend graph `assets/anim/blocky.mcanim`, an `Animator` on each model and a `Locomotion3D` on each root. `test_mcp_openworld` checks the graph is found and the walkers feed a walking speed.

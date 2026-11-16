@@ -39871,6 +39871,9 @@
     },
     "UiScreen": {
      "document": "guid:ecad21b6-7694-5060-85fb-dd1becae38f0"
+    },
+    "Locomotion3D": {
+     "animator": "$1651"
     }
    }
   },
@@ -39906,6 +39909,9 @@
      "source": "$1650",
      "turn_rate_deg": 540,
      "yaw_offset": 3.141592653589793
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -40865,6 +40871,9 @@
      "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
      "gain_db": -4,
      "hit_gain_db": -8
+    },
+    "Locomotion3D": {
+     "animator": "$1666"
     }
    }
   },
@@ -40895,6 +40904,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -40962,6 +40974,9 @@
      "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
      "gain_db": -4,
      "hit_gain_db": -8
+    },
+    "Locomotion3D": {
+     "animator": "$1668"
     }
    }
   },
@@ -40992,6 +41007,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -41059,6 +41077,9 @@
      "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
      "gain_db": -4,
      "hit_gain_db": -8
+    },
+    "Locomotion3D": {
+     "animator": "$1670"
     }
    }
   },
@@ -41089,6 +41110,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -41156,6 +41180,9 @@
      "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
      "gain_db": -4,
      "hit_gain_db": -8
+    },
+    "Locomotion3D": {
+     "animator": "$1672"
     }
    }
   },
@@ -41186,6 +41213,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
