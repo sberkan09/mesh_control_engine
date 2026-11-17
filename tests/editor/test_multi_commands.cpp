@@ -101,13 +101,48 @@ struct Run {
         for (const EntityId id : before)
             if (!s.doc().find(id)) dead.push_back(id);
     }
+
+    // The M-EDITUX3 mix: structural edits (create, delete, reparent, paste) between the selection commands.
+    void mixed_command() {
+        if (rng() % 2) {
+            command();
+            return;
+        }
+        std::vector<EntityId> before;
+        for (const DocEntity& e : s.doc().entities()) before.push_back(e.id);
+        const auto any = [&]() { return s.doc().at(rng() % s.doc().size()).id; };
+        switch (s.doc().size() == 0 ? 0u : rng() % 5) {
+            case 0:
+                s.create_entity("N" + std::to_string(rng() % 100));
+                break;
+            case 1:
+                s.destroy_entity(any());
+                break;
+            case 2:
+                s.set_parent(any(),
+                             rng() % 3 ? any() : kNoEntity);  // may refuse a cycle; a refusal must leave no entry
+                break;
+            case 3: {
+                const Array<EntityId> ids = pick();
+                cook::String text;
+                s.copy_entities(Span<const EntityId>(ids.data(), ids.size()), text);
+                cook::DiagList diags;
+                s.paste_entities(text.view(), -1, diags);
+                break;
+            }
+            default:
+                command();
+                break;
+        }
+        for (const EntityId id : before)
+            if (!s.doc().find(id)) dead.push_back(id);
+    }
 };
 
 }  // namespace
 
-TEST_CASE(
-    "multi-entity commands fuzz: every command is one undo entry or none; undo all is byte-identical, redo all the "
-    "edit") {
+namespace {
+void fuzz(bool mixed) {
     for (u32 seed = 1; seed <= 30; ++seed) {
         CAPTURE(seed);
         Run r(seed);
@@ -117,7 +152,10 @@ TEST_CASE(
             CAPTURE(i);
             const usize before = r.s.undo_count();
             r.s.seal_undo();
-            r.command();
+            if (mixed)
+                r.mixed_command();
+            else
+                r.command();
             if (r.s.undo_count() != before)
                 states.push_back(text_of(r.s));
             else
@@ -141,3 +179,12 @@ TEST_CASE(
         CHECK(r.s.verify_world());
     }
 }
+}  // namespace
+
+TEST_CASE(
+    "multi-entity commands fuzz: every command is one undo entry or none; undo all is byte-identical, redo all the "
+    "edit") {
+    fuzz(false);
+}
+
+TEST_CASE("multi-entity commands fuzz, mixed with create, delete, reparent and paste") { fuzz(true); }
