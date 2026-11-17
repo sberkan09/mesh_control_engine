@@ -54,9 +54,7 @@ and overestimate the cone's top.
 
 ## Open
 
-- **Step 3 (roadblocks).** Read `roadblock.cpp`: the sample has exactly two markers (x = -210 and x = 210, the avenue ends, the
-  officers on the side away from the plaza) and a marker stands whenever an offender at its wanted level is 45..300 m away.
-  So a block is on the player's way only when they leave the plaza along the avenue; side streets have none. Making blocks
-  follow the offender's heading means choosing a road position ahead of them at runtime (road graph, not a fixed marker), which
-  is a design change, not polish. Proposal for whoever picks it up: spawn markers on the `roads.h` graph ahead of the offender's
-  velocity, reuse `Roadblock3D` for the pieces. Needs the gameplay video or a Mac eyeball pass to judge.
+- **Step 3 (roadblocks), done in part.** `Roadblock3D.ahead_cos` (> 0) makes a marker count an offender only while the
+  marker lies within that cosine of the offender's smoothed heading, so the two cross-avenue markers added to the sample
+  stand where the player is driving, not behind or beside. Still open: runtime placement on the `roads.h` graph (needs the
+  gameplay video or a Mac eyeball pass to judge).

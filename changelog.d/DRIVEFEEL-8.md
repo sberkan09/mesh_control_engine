@@ -1,0 +1,1 @@
+- kit: `Roadblock3D.ahead_cos` makes a roadblock marker spawn only for offenders heading towards it (heading smoothed over fixed ticks, deterministic); samples/09_openworld gains two cross-avenue roadblock markers using it.

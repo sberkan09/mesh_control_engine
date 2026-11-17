@@ -1,17 +1,24 @@
 #pragma once
-// Police roadblocks that appear with the wanted level (M-OPENWORLD-POLICE 3). A `Roadblock3D` marker entity sits where the
-// block goes: its local X runs across the road (the line of cars), its local +Z is the side the officers stand on (behind the cars,
-// seen from the oncoming offender). When an offender's wanted level reaches `min_level` and the offender is between `spawn_min`
-// and `spawn_max` metres away, the marker spawns `cars` cars (the `car` prefab, a static body that blocks the road) side by side
-// `car_spacing` apart and `officers` officers (the `officer` prefab: Police3D, Health3D, a weapon) `officer_back` behind the line,
-// each tagged with a `RoadblockPiece3D` naming the marker. When no offender is at `min_level` any more for `hold` seconds, and
-// the nearest offender is at least `spawn_min` away (nothing pops out of existence in sight), the pieces are destroyed (their
-// children with them). Without a prefab the game's `RoadblockSpawnHook` makes the pieces (kind 0: car, 1: officer).
+// Police roadblocks that appear with the wanted level (M-OPENWORLD-POLICE 3). A `Roadblock3D` marker entity sits where
+// the block goes: its local X runs across the road (the line of cars), its local +Z is the side the officers stand on
+// (behind the cars, seen from the oncoming offender). When an offender's wanted level reaches `min_level` and the
+// offender is between `spawn_min` and `spawn_max` metres away, the marker spawns `cars` cars (the `car` prefab, a
+// static body that blocks the road) side by side `car_spacing` apart and `officers` officers (the `officer` prefab:
+// Police3D, Health3D, a weapon) `officer_back` behind the line, each tagged with a `RoadblockPiece3D` naming the
+// marker. When no offender is at `min_level` any more for `hold` seconds, and the nearest offender is at least
+// `spawn_min` away (nothing pops out of existence in sight), the pieces are destroyed (their children with them).
+// Without a prefab the game's `RoadblockSpawnHook` makes the pieces (kind 0: car, 1: officer).
 //
-// A block only goes up when every piece has clear ground: a living thing (anything with Health3D) or a vehicle within 3 m of a
-// piece's place holds it back until that moves. When nothing could be spawned (no prefab, no hook, a prefab that does not load)
-// the marker waits 5 s before trying again. Whether it is up is read from the pieces that exist (`up` only mirrors that), so a
-// loaded game, whose runtime-spawned pieces are not saved, puts the block up again from the wanted level.
+// With `ahead_cos` above 0 the block only goes up when an offender at `min_level` is moving towards it (its heading,
+// smoothed over about a second of fixed ticks, within the cone), so a ring of markers around the plaza puts blocks
+// where the player drives, not everywhere. An offender who stands still keeps the heading it last had; one that never
+// moved has none and sees no such block.
+//
+// A block only goes up when every piece has clear ground: a living thing (anything with Health3D) or a vehicle within 3
+// m of a piece's place holds it back until that moves. When nothing could be spawned (no prefab, no hook, a prefab that
+// does not load) the marker waits 5 s before trying again. Whether it is up is read from the pieces that exist (`up`
+// only mirrors that), so a loaded game, whose runtime-spawned pieces are not saved, puts the block up again from the
+// wanted level.
 //
 // "kit3d_roadblocks" (FixedUpdate_Pre, after "kit3d_wanted"). Nothing here is saved.
 
@@ -46,15 +53,23 @@ struct Roadblock3D {
     f32 hold = 10.0f;                        // s below min_level before it is taken down
     f32 low_time = 0.0f;                     // engine-written: s the wanted level has been below min_level
     f32 retry = 0.0f;                        // engine-written: s before it tries to spawn again after a failure
+    f32 ahead_cos =
+        0.0f;  // 0: off. Else it only appears when an offender is heading at it (cosine of the cone, 0.5 = 60 degrees)
+    u32 pad_ = 0;
 };
-MCE_COMPONENT(Roadblock3D, (car, Help{"a barricade car; its root should be a static body. None: the game's RoadblockSpawnHook (kind 0)"}),
-              (officer, Help{"an officer; its root should carry Police3D. None: the hook (kind 1)"}),
-              (min_level, Range{1, 10}, Help{"the block stands while an offender is at this wanted level or above"}),
-              (cars, Range{0, 8}), (officers, Range{0, 8}), (up, ReadOnly, Transient),
-              (car_spacing, Range{0.5f, 20}, Help{"m between cars across the road (marker local X)"}),
-              (officer_back, Range{0, 50}, Help{"m behind the line of cars (marker local +Z)"}),
-              (spawn_min, Range{0, 2000}, Help{"m: it does not appear or vanish closer to the offender"}), (spawn_max, Range{0, 5000}, Help{"m"}),
-              (hold, Range{0, 600}, Help{"s below min_level before it goes"}), (low_time, ReadOnly, Transient), (retry, ReadOnly, Transient))
+MCE_COMPONENT(
+    Roadblock3D,
+    (car, Help{"a barricade car; its root should be a static body. None: the game's RoadblockSpawnHook (kind 0)"}),
+    (officer, Help{"an officer; its root should carry Police3D. None: the hook (kind 1)"}),
+    (min_level, Range{1, 10}, Help{"the block stands while an offender is at this wanted level or above"}),
+    (cars, Range{0, 8}), (officers, Range{0, 8}), (up, ReadOnly, Transient),
+    (car_spacing, Range{0.5f, 20}, Help{"m between cars across the road (marker local X)"}),
+    (officer_back, Range{0, 50}, Help{"m behind the line of cars (marker local +Z)"}),
+    (spawn_min, Range{0, 2000}, Help{"m: it does not appear or vanish closer to the offender"}),
+    (spawn_max, Range{0, 5000}, Help{"m"}), (hold, Range{0, 600}, Help{"s below min_level before it goes"}),
+    (low_time, ReadOnly, Transient), (retry, ReadOnly, Transient),
+    (ahead_cos, Range{0, 1},
+     Help{"0: always. Else it appears only when an offender moves towards it within this cosine (0.5 = 60 degrees)"}))
 
 // On every entity a Roadblock3D spawned.
 struct RoadblockPiece3D {

@@ -1525,11 +1525,13 @@ def scene():
     # Roadblocks across the avenue at both ends of the middle stretch. Each marker spawns two police cars (static bodies, side by side
     # across the road) and two officers behind them when the player reaches wanted level 3 from at least 45 m away, and takes them
     # down 10 s after the level drops (Roadblock3D). The marker's local X runs along world Z; its +Z points away from the plaza, so the officers (officer_back -2.5) stand in front of the cars, in line of fire.
-    for n, (x, yaw) in enumerate(((-210.0, -math.pi / 2), (210.0, math.pi / 2))):
+    # Four of them, one at each end of the two avenues (M-DRIVEFEEL 3), and each only appears when the player is driving at it
+    # (ahead_cos 0.5: within 60 degrees of the player's heading), so the block is on the player's way, not on the far side of the city.
+    for n, (x, z, yaw) in enumerate(((-210.0, 0.0, -math.pi / 2), (210.0, 0.0, math.pi / 2), (0.0, -210.0, math.pi), (0.0, 210.0, 0.0))):
         s.add("Roadblock %d" % (n + 1), {
-            "LocalTransform": tf((x, 0.95, 0.0), None, yaw),
+            "LocalTransform": tf((x, 0.95, z), None, yaw),
             "Roadblock3D": {"car": "guid:" + G_BLOCK_CAR, "officer": "guid:" + G_BLOCK_COP, "min_level": 3, "cars": 2, "officers": 2,
-                            "car_spacing": 3.6, "officer_back": -2.5, "spawn_min": 45, "spawn_max": 300, "hold": 10}})
+                            "car_spacing": 3.6, "officer_back": -2.5, "spawn_min": 45, "spawn_max": 300, "hold": 10, "ahead_cos": 0.5}})
     # Where a dead player wakes up (hospital, west avenue) and an arrested one (station, by the plaza), each marked by a flat pad.
     for name, kind, pos, tint in (("Hospital", "Hospital", (-150.0, 9.0), (0.9, 0.9, 0.95)), ("Police station", "Station", (40.0, -9.0), (0.15, 0.25, 0.7))):
         s.add(name, {"LocalTransform": tf((pos[0], 1.0, pos[1])), "RespawnPoint3D": {"kind": kind}})

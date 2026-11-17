@@ -1,6 +1,7 @@
 #include "mce/kit/roadblock.h"
 
 #include <cmath>
+#include <utility>
 
 #include "mce/asset/asset_system.h"
 #include "mce/ecs/prefab.h"
@@ -12,7 +13,7 @@
 
 namespace mce::kit {
 
-static_assert(sizeof(Roadblock3D) == 80);
+static_assert(sizeof(Roadblock3D) == 88);
 static_assert(sizeof(RoadblockPiece3D) == sizeof(Entity));
 
 namespace {
@@ -20,6 +21,18 @@ namespace {
 struct RoadblockAssets {
     asset::AssetSystem* assets = nullptr;
 };
+
+// Where each wanted entity has been heading, smoothed over the fixed ticks (Roadblock3D.ahead_cos).
+struct Heading {
+    Entity entity;
+    math::vec3 last;
+    math::vec3 dir;  // flat unit vector, zero until it has moved
+};
+struct Headings {
+    Array<Heading> list;
+};
+
+constexpr f32 kMinHeadingSpeed = 2.0f;  // m/s: slower than this keeps the old heading
 
 f32 flat_distance(math::vec3 a, math::vec3 b) {
     const f32 dx = a.x - b.x, dz = a.z - b.z;
@@ -80,16 +93,52 @@ void kit3d_roadblocks(Frame& f) {
             if (e == m) return true;
         return false;
     };
+    Headings& headings = w.resource<Headings>();
+    {
+        Array<Heading> next;
+        f.query<const Wanted3D, const LocalTransform>().each([&](Entity e, const Wanted3D&, const LocalTransform& ot) {
+            Heading h{e, ot.position, math::vec3{0.0f, 0.0f, 0.0f}};
+            for (const Heading& old : headings.list)
+                if (old.entity == e) {
+                    h = old;
+                    const f32 dx = ot.position.x - old.last.x, dz = ot.position.z - old.last.z;
+                    const f32 len = std::sqrt(dx * dx + dz * dz);
+                    if (f.dt > 0.0f && len / f.dt >= kMinHeadingSpeed) {
+                        const math::vec3 step{dx / len, 0.0f, dz / len};
+                        const f32 k = 0.05f;
+                        math::vec3 d = old.dir * (1.0f - k) + step * k;
+                        if (old.dir.x == 0.0f && old.dir.z == 0.0f) d = step;
+                        const f32 dl = std::sqrt(d.x * d.x + d.z * d.z);
+                        h.dir = dl > 1e-4f ? math::vec3{d.x / dl, 0.0f, d.z / dl} : step;
+                    }
+                    h.last = ot.position;
+                    break;
+                }
+            next.push_back(h);
+        });
+        headings.list = std::move(next);
+    }
     Array<Entity> down;  // markers taken down this tick
     Array<Request> requests;  // pieces to make once the walk over the markers is done
     f.query<Roadblock3D, const LocalTransform>().each([&](Entity me, Roadblock3D& b, const LocalTransform& t) {
         // The nearest offender at or above min_level, and the nearest of any wanted one.
         f32 near_high = 1.0e30f;
         f32 near_any = 1.0e30f;
-        f.query<const Wanted3D, const LocalTransform>().each([&](Entity, const Wanted3D& wd, const LocalTransform& ot) {
+        f32 near_ahead = 1.0e30f;  // the nearest offender at min_level that is heading at the marker (ahead_cos)
+        f.query<const Wanted3D, const LocalTransform>().each([&](Entity oe, const Wanted3D& wd,
+                                                                 const LocalTransform& ot) {
             const f32 d = flat_distance(ot.position, t.position);
             near_any = math::min(near_any, d);
-            if (wd.level >= b.min_level) near_high = math::min(near_high, d);
+            if (wd.level < b.min_level) return;
+            near_high = math::min(near_high, d);
+            if (b.ahead_cos > 0.0f && d > 1e-3f) {
+                for (const Heading& h : headings.list)
+                    if (h.entity == oe) {
+                        const f32 along =
+                            ((t.position.x - ot.position.x) * h.dir.x + (t.position.z - ot.position.z) * h.dir.z) / d;
+                        if (along >= b.ahead_cos) near_ahead = math::min(near_ahead, d);
+                    }
+            }
         });
         const bool wanted = near_high < 1.0e29f;
         b.up = has_pieces(me) ? 1 : 0;
@@ -100,6 +149,7 @@ void kit3d_roadblocks(Frame& f) {
                 return;
             }
             if (!wanted || near_high < b.spawn_min || near_high > b.spawn_max) return;
+            if (b.ahead_cos > 0.0f && (near_ahead < b.spawn_min || near_ahead > b.spawn_max)) return;
             const math::vec3 right = math::rotate(t.rotation, math::vec3{1.0f, 0.0f, 0.0f});
             const math::vec3 back = math::rotate(t.rotation, math::vec3{0.0f, 0.0f, 1.0f});
             const usize first = requests.size();
@@ -165,6 +215,7 @@ void install_roadblocks(World& world, asset::AssetSystem* assets) {
     }
     install_wanted3d(world);
     world.set_resource(RoadblockAssets{assets});
+    world.set_resource(Headings{});
     world.register_components<Roadblock3D, RoadblockPiece3D>();
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_roadblocks", &kit3d_roadblocks, "kit3d_wanted");
 }
