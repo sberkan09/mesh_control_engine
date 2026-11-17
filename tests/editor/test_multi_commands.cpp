@@ -6,6 +6,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cstdio>
 #include <random>
 #include <string>
 #include <vector>
@@ -16,7 +17,9 @@
 #include "mce/editor/duplicate_offset.h"
 #include "mce/editor/editor_scene.h"
 #include "mce/editor/flip_entities.h"
+#include "mce/editor/gizmo.h"
 #include "mce/editor/group_entities.h"
+#include "mce/editor/inspector.h"
 #include "mce/editor/match_transform.h"
 #include "mce/editor/reset_transform.h"
 #include "mce/editor/snap_entities.h"
@@ -32,12 +35,77 @@ std::string text_of(const EditorScene& s) {
     return std::string(t.view().data(), t.view().size());
 }
 
+// Nudges every field it is shown, to a value inside the field's bounds, and records the menu.
+class NudgeCtx final : public DrawCtx {
+public:
+    std::vector<const refl::TypeRecord*> addable;
+    u32 nudged = 0;
+
+    bool begin_component(const char*, bool*) override { return true; }
+    void end_component() override {}
+    bool begin_group(const char*, bool) override { return true; }
+    void end_group() override {}
+    bool text_field(const char*, char* buf, usize cap) override {
+        std::snprintf(buf, cap, "%s", "nudged");
+        return ++nudged, true;
+    }
+    bool checkbox(const char*, bool* v) override {
+        *v = !*v;
+        return ++nudged, true;
+    }
+    bool int_field(const char*, i64* v, i64 lo, i64 hi) override {
+        const i64 next = *v + 1;
+        *v = (lo < hi && next > hi) ? lo : next;
+        return ++nudged, true;
+    }
+    bool float_field(const char*, f64* v, f64 lo, f64 hi) override {
+        const f64 next = *v + 0.5;
+        *v = (lo < hi && next > hi) ? lo : next;
+        return ++nudged, true;
+    }
+    bool float_n(const char*, f32* v, u32 n, f32 lo, f32 hi) override {
+        for (u32 i = 0; i < n; ++i) {
+            const f32 next = v[i] + 0.5f;
+            v[i] = (lo < hi && next > hi) ? lo : next;
+        }
+        return ++nudged, true;
+    }
+    bool color_field(const char*, f32* rgba) override {
+        rgba[0] = rgba[0] > 0.5f ? 0.25f : 0.75f;
+        return ++nudged, true;
+    }
+    bool enum_field(const char*, i64* v, const refl::EnumRecord& e) override {
+        for (const refl::EnumValue& ev : e.values)
+            if (ev.value != *v) {
+                *v = ev.value;
+                return ++nudged, true;
+            }
+        return false;
+    }
+    bool asset_field(const char*, asset::Guid*, StringView) override { return false; }
+    bool entity_field(const char*, EntityId*) override { return false; }
+    void read_only(const char*, StringView) override {}
+    void help(const char*) override {}
+    const refl::TypeRecord* add_component_menu(Span<const refl::TypeRecord* const> list) override {
+        addable.assign(list.begin(), list.end());
+        return nullptr;
+    }
+};
+
 struct Run {
     EditorScene s;
     std::mt19937 rng;
     std::vector<EntityId> dead;  // ids that once existed
 
+    std::vector<const refl::TypeRecord*> addable;
+
     explicit Run(u32 seed) : rng(seed) {
+        {
+            EditorScene probe;
+            NudgeCtx menu;
+            draw_inspector(menu, probe, probe.create_entity("Bare", false));
+            addable = menu.addable;
+        }
         for (u32 i = 0; i < 8; ++i) {
             const EntityId e = s.create_entity("E" + std::to_string(i));
             LocalTransform t = *s.get<LocalTransform>(e);
@@ -102,6 +170,58 @@ struct Run {
             if (!s.doc().find(id)) dead.push_back(id);
     }
 
+    // The M-EDITUX4 mix: component add/remove, an inspector nudge, a gizmo drag (committed or cancelled), reordering,
+    // between the commands above.
+    void ux_command() {
+        if (rng() % 2 || s.doc().size() == 0) {
+            mixed_command();
+            return;
+        }
+        std::vector<EntityId> before;
+        for (const DocEntity& e : s.doc().entities()) before.push_back(e.id);
+        const EntityId id = s.doc().at(rng() % s.doc().size()).id;
+        switch (rng() % 6) {
+            case 0:
+                s.add_component(id, *addable[rng() % addable.size()]);
+                break;
+            case 1:
+                s.remove_component(id, *addable[rng() % addable.size()]);
+                break;
+            case 2: {
+                NudgeCtx ui;
+                s.begin_edit("Nudge");  // one entry for the whole panel pass, as a frame's edits are in the editor
+                draw_inspector(ui, s, id);
+                s.end_edit();
+                break;
+            }
+            case 3:
+                s.move_entity(id, rng() % s.doc().size());
+                break;
+            default: {  // a drag over a random selection
+                s.selection().clear();
+                const u32 n = 1 + static_cast<u32>(rng() % 3);
+                for (u32 i = 0; i < n; ++i) s.selection().toggle(s.doc().at(rng() % s.doc().size()).id);
+                TransformGizmo g;
+                g.set_mode(static_cast<GizmoMode>(rng() % 3));
+                const GizmoPart parts[] = {GizmoPart::XY, GizmoPart::X, GizmoPart::Y, GizmoPart::Ring};
+                const math::vec2 from{static_cast<f32>(rng() % 20) - 10.0f, static_cast<f32>(rng() % 20) - 10.0f};
+                const math::vec2 to{static_cast<f32>(rng() % 20) - 10.0f, static_cast<f32>(rng() % 20) - 10.0f};
+                s.begin_edit("Drag");
+                if (g.begin(s, parts[rng() % 4], from)) {
+                    g.update(s, to, rng() % 2 ? 0.0f : 1.0f);
+                    if (rng() % 4 == 0)
+                        g.cancel(s);
+                    else
+                        g.end();
+                }
+                s.end_edit();
+                break;
+            }
+        }
+        for (const EntityId e : before)
+            if (!s.doc().find(e)) dead.push_back(e);
+    }
+
     // The M-EDITUX3 mix: structural edits (create, delete, reparent, paste) between the selection commands.
     void mixed_command() {
         if (rng() % 2) {
@@ -142,7 +262,7 @@ struct Run {
 }  // namespace
 
 namespace {
-void fuzz(bool mixed) {
+void fuzz(int mode) {
     for (u32 seed = 1; seed <= 30; ++seed) {
         CAPTURE(seed);
         Run r(seed);
@@ -152,7 +272,9 @@ void fuzz(bool mixed) {
             CAPTURE(i);
             const usize before = r.s.undo_count();
             r.s.seal_undo();
-            if (mixed)
+            if (mode == 2)
+                r.ux_command();
+            else if (mode == 1)
                 r.mixed_command();
             else
                 r.command();
@@ -184,7 +306,9 @@ void fuzz(bool mixed) {
 TEST_CASE(
     "multi-entity commands fuzz: every command is one undo entry or none; undo all is byte-identical, redo all the "
     "edit") {
-    fuzz(false);
+    fuzz(0);
 }
 
-TEST_CASE("multi-entity commands fuzz, mixed with create, delete, reparent and paste") { fuzz(true); }
+TEST_CASE("multi-entity commands fuzz, mixed with create, delete, reparent and paste") { fuzz(1); }
+
+TEST_CASE("multi-entity commands fuzz, with component add/remove, inspector edits and gizmo drags") { fuzz(2); }
