@@ -60,6 +60,28 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
         CHECK(walking >= 15);
     }
 
+    // Traffic lights you can see (M-SIGNALHEADS 56d): 9 signalised junctions x 4 approaches x 3 lamps (red, amber, green in scene order).
+    // Every approach found its lane, so exactly one lamp of each trio is lit (a head that found none keeps the authored white at emissive
+    // 1), and the lights are not all the same colour. An inspect lists at most 64 entities: the first 21 trios.
+    {
+        auto lamps = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"inspect":{"component":"SignalHead","show":["SignalHead","MeshRef"]}})");
+        REQUIRE(count(lamps) >= 63);
+        u32 red = 0, green = 0;
+        for (u32 t = 0; t < 21; ++t) {
+            u32 lit = 0;
+            for (u32 k = 0; k < 3; ++k) {
+                const cook::JsonValue e = comps(lamps, t * 3 + k).get("MeshRef").get("emissive_tint");
+                const bool on = e.at(0).as_number() > 1.0 || e.at(1).as_number() > 1.0;
+                lit += on ? 1u : 0u;
+                red += on && k == 0 ? 1u : 0u;
+                green += on && k == 2 ? 1u : 0u;
+            }
+            CHECK(lit == 1);
+        }
+        CHECK(red >= 3);
+        CHECK(green >= 3);
+    }
+
     // The drive script: walk to the parked car, get in (seated at tick 300), drive west, brake, get out.
     const std::string in = drive_input();
     auto seated = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + in + R"(","inspect":{"component":"Rider3D","show":["Rider3D"]}})");
