@@ -949,7 +949,7 @@ def car_entities(model, traffic):
     root = {
         "LocalTransform": {},
         "RigidBody3D": {"half": [0.9, 0.4, 1.5], "density": 300},
-        "Vehicle3D": {"engine_torque": 900, "self_right": 1, "anti_roll": 8000},
+        "Vehicle3D": {"engine_torque": 900, "self_right": 1, "anti_roll": 8000, "steer_assist": 180},
         "VehicleSeat3D": {"seat": [0, 0.2, 0.1], "exit": [-1.7, 0, 0]},
     }
     root.update(engine_audio(traffic))

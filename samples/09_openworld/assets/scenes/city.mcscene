@@ -40163,7 +40163,8 @@
     "Vehicle3D": {
      "engine_torque": 900,
      "self_right": 1,
-     "anti_roll": 8000
+     "anti_roll": 8000,
+     "steer_assist": 180
     },
     "VehicleSeat3D": {
      "seat": [
@@ -40385,7 +40386,8 @@
     "Vehicle3D": {
      "engine_torque": 900,
      "self_right": 1,
-     "anti_roll": 8000
+     "anti_roll": 8000,
+     "steer_assist": 180
     },
     "VehicleSeat3D": {
      "seat": [
@@ -40611,7 +40613,8 @@
     "Vehicle3D": {
      "engine_torque": 900,
      "self_right": 1,
-     "anti_roll": 8000
+     "anti_roll": 8000,
+     "steer_assist": 180
     },
     "VehicleSeat3D": {
      "seat": [
