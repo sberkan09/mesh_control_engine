@@ -820,6 +820,14 @@ def city_surface(scene):
     return node_half
 
 
+def canopy(scene, name, model, x, y0, z, sc):
+    """A camera-only collider over a tree's crown (layer 15, mask 0: nothing collides with it, default queries skip it), so the follow
+    camera's spring arm stops at the leaves. y0 is where the tree's foot stands, sc its scale."""
+    cy, half = ((5.4, (2.2, 1.8, 2.2)) if model == "tree_oak" else (2.9, (1.4, 2.4, 1.4)))
+    scene.add(name + " canopy", {"LocalTransform": tf((x, y0 + cy * sc, z)),
+                                 "BoxCollider3D": {"half": [h * sc for h in half], "layer": 15, "mask": 0}})
+
+
 def street_furniture(scene, rng, node_half):
     """Street trees along the outer edge of the sidewalks (no collider: the crowd walks there), a bench or two per road, a hydrant and a
     bin at the two free corners of every junction."""
@@ -841,6 +849,7 @@ def street_furniture(scene, rng, node_half):
                 sc = rng.uniform(0.7, 0.95)
                 scene.add("Street tree %s %+d %d" % (road_name(r), side, count),
                           {"LocalTransform": tf((x, SIDEWALK_TOP, z), (sc, sc, sc), rng.uniform(0, 2 * math.pi)), "MeshRef": model_mesh(model)})
+                canopy(scene, "Street tree %s %+d %d" % (road_name(r), side, count), model, x, SIDEWALK_TOP, z, sc)
                 count += 1
                 lx += rng.uniform(26, 34)
             # a bench in the middle of the road's pavement, its back to the buildings, facing the road
@@ -915,6 +924,7 @@ def buildings(scene, rng):
                             scene.add(name + " tree %d mesh" % t, {"ChildOf": {"parent": scene.ref(e)},
                                                                    "LocalTransform": tf((0, -1.5, 0), (sc, sc, sc), rng.uniform(0, 6.28)),
                                                                    "MeshRef": model_mesh(model)})
+                            canopy(scene, name + " tree %d" % t, model, tx, 0.0, tz, sc)
                         for t in range(2):
                             scene.add(name + " bush %d" % t, {"LocalTransform": tf((cx + rng.uniform(-lw / 3, lw / 3), 0.1, cz + rng.uniform(-ld / 3, ld / 3)),
                                                                                     (1.2, 1.2, 1.2), rng.uniform(0, 6.28)),
@@ -944,8 +954,11 @@ def buildings(scene, rng):
                     sx, sz = rng.choice((-1, 1)), rng.choice((-1, 1))
                     tx, tz = cx + sx * (lw / 2 - 2.2), cz + sz * (ld / 2 - 2.2)
                     sc = rng.uniform(0.9, 1.2)
-                    scene.add(name + " tree", {"LocalTransform": tf((tx, 0.0, tz), (sc, sc, sc), rng.uniform(0, 6.28)),
-                                               "MeshRef": model_mesh("tree_oak" if rng.random() < 0.6 else "tree_pine")})
+                    lot_yaw = rng.uniform(0, 6.28)  # drawn before the model, as the dict literal did
+                    lot_tree = "tree_oak" if rng.random() < 0.6 else "tree_pine"
+                    scene.add(name + " tree", {"LocalTransform": tf((tx, 0.0, tz), (sc, sc, sc), lot_yaw),
+                                               "MeshRef": model_mesh(lot_tree)})
+                    canopy(scene, name + " tree", lot_tree, tx, 0.0, tz, sc)
                     count += 1
     return count
 
@@ -1495,7 +1508,7 @@ def scene():
     # The police navigate where the navmesh is baked: the middle blocks around the plaza.
     s.add("Navmesh", {"LocalTransform": tf((0, 0, 0)),
                       "NavMeshSurface3D": {"bounds_half": [260, 30, 260], "cell_size": 0.5, "cell_height": 0.25, "agent_radius": 0.4,
-                                           "agent_height": 1.8, "tile_size": 64, "layer_mask": 65535}})
+                                           "agent_height": 1.8, "tile_size": 64, "layer_mask": 32767}})
 
     # Traffic and crowd gather around the player.
     s.add("Traffic", {"LocalTransform": {}, "TrafficSpawner3D": {
