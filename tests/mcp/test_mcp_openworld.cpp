@@ -86,6 +86,26 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     const std::string in = drive_input();
     auto seated = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + in + R"(","inspect":{"component":"Rider3D","show":["Rider3D"]}})");
     CHECK(comps(seated, 0).get("Rider3D").get("seated").as_number() == 1);
+    // Wheels that turn (M-WHEELSPIN 57d): the engine moves each wheel hub onto its wheel (they start parked far below), and a
+    // wheel of the player's car rotates while it drives (a few ticks of the drive apart, the rotation differs).
+    {
+        const auto wheel = [&](u32 ticks, double (&rot)[4]) {
+            auto r = c.ok("run_headless", R"({"ticks":)" + std::to_string(ticks) + R"(,"log_lines":0,"input":")" + in +
+                                              R"(","inspect":{"entities":["Parked car 1 Wheel fl"],"show":["LocalTransform"]}})");
+            REQUIRE(count(r) == 1);
+            const cook::JsonValue t = comps(r, 0).get("LocalTransform");
+            for (u32 k = 0; k < 4; ++k) rot[k] = t.get("rotation").at(k).as_number();
+            return t.get("position").at(1).as_number();
+        };
+        double ra[4], rb[4];
+        const double y = wheel(420, ra);
+        wheel(428, rb);
+        CHECK(y > -5.0);
+        CHECK(y < 5.0);
+        double diff = 0;
+        for (u32 k = 0; k < 4; ++k) diff += std::fabs(ra[k] - rb[k]);
+        CHECK(diff > 0.01);
+    }
     // Horn and headlights (M-OWHORN): the player's car has both; G honks once while seated, L turns the headlights on.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"VehicleHorn3D","show":["VehicleHorn3D"]}})")) >= 1);
     {

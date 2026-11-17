@@ -154,6 +154,18 @@ def car_part_rel(name, part):
     return "models/cars/%s_%s.glb" % (name, part)
 
 
+_LAYOUTS = {}
+
+
+def car_layout(name):
+    """Wheel layout of a Kenney car in model space (tools/car_split.py), cached."""
+    if name not in _LAYOUTS:
+        sys.path.insert(0, os.path.join(HERE, "tools"))
+        import car_split
+        _LAYOUTS[name] = car_split.split(os.path.join(HERE, "assets", model_rel(name)), "")[2]
+    return _LAYOUTS[name]
+
+
 def car_parts():
     """Splits each Kenney car into a body without wheels and one wheel centred on its origin (tools/car_split.py); returns
     {car: wheel layout in model space} for the sample's wheel entities."""
@@ -967,6 +979,59 @@ def wreck_effects():
     }
 
 
+# Where the car's body centre rests above the road (the suspension's sag included): the visual model stands on the road at that
+# height, so the wheels the physics places touch it.
+CAR_REST_HEIGHT = 0.79
+SUSPENSION_REST = 0.24   # m from the suspension point to the wheel centre at rest: suspension_max minus the 1.5 Hz sag
+
+
+def car_visuals(model):
+    """The visual entities of a car and the Vehicle3D fields that match them (M-WHEELSPIN 57d), as prefab-local indices with the
+    car root at 0: [1] the body model (no wheels), then a hub entity (a root entity the engine places on its wheel every tick,
+    parked far below until the first one) and the wheel model as the hub's child, for fl, fr, rl, rr."""
+    lay = car_layout(model)
+    s = CAR_SCALE
+    ents = [{"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -CAR_REST_HEIGHT, 0), (s,) * 3, math.pi),
+                                              "MeshRef": {"mesh": "guid:" + guid(car_part_rel(model, "body"))}}}]
+    names = ("fl", "fr", "rl", "rr")
+    fields = {}
+    for i, n in enumerate(names):
+        hub = 2 + 2 * i
+        ents.append({"name": "Wheel " + n, "components": {"LocalTransform": tf((0, -1000, 0))}})
+        # The wheel model's outer side faces +x; the left wheels of the car (-x) turn it round.
+        ents.append({"name": "Wheel " + n + " model", "components": {
+            "ChildOf": {"parent": "$%d" % hub}, "LocalTransform": tf((0, 0, 0), (s,) * 3, math.pi if i % 2 == 0 else 0.0),
+            "MeshRef": {"mesh": "guid:" + guid(car_part_rel(model, "wheel"))}}})
+        fields["wheel_" + n] = "$%d" % hub
+    radius = lay["radius"] * s
+    fields.update(track=round((lay["front"][0] + lay["cx"]) * s, 3), front_axle=round(-lay["front"][2] * s, 3),
+                  rear_axle=round(-lay["back"][2] * s, 3), wheel_radius=round(radius, 3), wheel_width=round(lay["width"] * s, 3),
+                  wheel_y=round(-CAR_REST_HEIGHT + radius + SUSPENSION_REST, 3))
+    return ents, fields
+
+
+def remap_refs(value, index_of):
+    """Replaces the prefab-local entity references ("$k") of a component by the scene's indices."""
+    if isinstance(value, str):
+        m = re.fullmatch(r"\$(\d+)", value)
+        return "$%d" % index_of[int(m.group(1))] if m else value
+    if isinstance(value, dict):
+        return {k: remap_refs(v, index_of) for k, v in value.items()}
+    if isinstance(value, list):
+        return [remap_refs(v, index_of) for v in value]
+    return value
+
+
+def add_car_visuals(s, car, name, model):
+    """Adds a car's visual entities to a scene under the car at index `car` and fixes the car's Vehicle3D to match them."""
+    ents, fields = car_visuals(model)
+    index_of = {0: car}
+    for k, part in enumerate(ents, start=1):
+        index_of[k] = len(s.ents)  # the entity about to be added gets the next index (Scene.add appends)
+        s.add("%s %s" % (name, part["name"]), remap_refs(part["components"], index_of))
+    s.ents[car]["components"]["Vehicle3D"].update(remap_refs(fields, index_of))
+
+
 def car_entities(model, traffic):
     """A car: a RigidBody3D/Vehicle3D root and the Kenney model as its child."""
     root = {
@@ -995,11 +1060,10 @@ def car_entities(model, traffic):
         # The driver's horn (G, stick press) and headlights (L, D-pad right): kit_vehicle_extras.
         root["VehicleHorn3D"] = {"clip": "guid:" + audio_guid("horn"), "gain_db": -4, "attenuation_id": 1}
         root["VehicleLights3D"] = {}
-    ents = [{"name": "Car", "components": root}]
-    # One Kenney car (body and wheels in one model, wheels do not spin); the model's front faces +z, the car drives toward -z.
-    ents.append({"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.4, 0), (CAR_SCALE,) * 3, math.pi),
-                                                  "MeshRef": model_mesh(model)}})
-    return ents
+    # The model's front faces +z, the car drives toward -z; the body and the four wheels are separate models (M-WHEELSPIN).
+    visuals, fields = car_visuals(model)
+    root["Vehicle3D"].update(fields)
+    return [{"name": "Car", "components": root}] + visuals
 
 
 def police_car(scene, name, pos, yaw, min_level, dispatch):
@@ -1025,8 +1089,7 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
                                   "gain_db": -60, "priority": 170},
                   "AudioSpatial": {"attenuation_id": 1}, "SirenAudio": {"min_level": min_level, "active_db": -8}})
     car = scene.add(name, comps)
-    scene.add(name + " model", {"ChildOf": {"parent": scene.ref(car)}, "LocalTransform": tf((0, -0.4, 0), (CAR_SCALE,) * 3, math.pi),
-                                "MeshRef": model_mesh("police")})
+    add_car_visuals(scene, car, name, "police")
     return car
 
 
@@ -1407,10 +1470,8 @@ def scene():
             comps["CarOwner3D"] = {"heat": 12, "needs_witness": 1}
         comps["MapMarker"] = {"color": [0.3, 0.6, 1.0, 1], "label": "Car"}
         car = s.add("Parked car %d" % (n + 1), comps)
-        for part in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[1:]:
-            p = dict(part["components"])
-            p["ChildOf"] = {"parent": s.ref(car)}
-            s.add("Parked car %d %s" % (n + 1, part["name"]), p)
+        # The comps above carry prefab-local wheel references; this adds the scene's own entities and points the car at them.
+        add_car_visuals(s, car, "Parked car %d" % (n + 1), CAR_MODELS[n % len(CAR_MODELS)])
 
     # Police: a squad on the plaza at the middle junction. They idle until the player has a wanted level.
     for n in range(4):

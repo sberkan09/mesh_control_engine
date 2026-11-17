@@ -103,5 +103,5 @@ def split(path, tex_prefix):
     radius = (acc["max"][1] - acc["min"][1]) / 2
     wheel = _build(j, bin_, [names.index("wheel-front-left")], tex_prefix, translate=(-cx, 0.0, 0.0))
     info = {"front": [round(c, 4) for c in fl["translation"]], "back": [round(c, 4) for c in bl["translation"]],
-            "cx": round(cx, 4), "radius": round(radius, 4)}
+            "cx": round(cx, 4), "radius": round(radius, 4), "width": round(acc["max"][0] - acc["min"][0], 4)}
     return _build(j, bin_, body, tex_prefix), wheel, info
