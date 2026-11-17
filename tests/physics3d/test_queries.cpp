@@ -89,6 +89,34 @@ TEST_CASE("camera_sweep: the boom stops in front of walls, ignores props and cha
     CHECK(down->position.y == doctest::Approx(0.2f).epsilon(1e-2));
 }
 
+TEST_CASE("camera layer: a layer-15 body stops the camera boom but no default query sees it") {
+    World3D w;
+    add_floor(w);
+    BodyDesc3D d;
+    d.type = BodyType3D::Static;
+    d.shape = Shape3D::box({1, 1, 1});
+    d.position = {0, 2, -4};
+    d.layer = kCameraLayer;
+    d.mask = 0;
+    REQUIRE(w.create_body(ent(7), d));
+
+    const vec3 pivot{0, 2, 0};
+    const auto cam = w.camera_sweep(pivot, {0, 2, -8}, 0.2f);
+    REQUIRE(cam);
+    CHECK(cam->entity == ent(7));
+    CHECK_FALSE(w.shape_cast(0.2f, pivot, {0, 2, -8}));
+    CHECK_FALSE(w.raycast(pivot, {0, 0, -1}, 8.0f));
+    Entity seen[4];
+    CHECK(w.overlap_sphere({0, 2, -4}, 1.5f, seen) == 0);  // the default overlap skips it too
+    // Nothing collides with it: a dynamic box dropped from above falls straight through to the floor.
+    REQUIRE(add_box(w, ent(8), BodyType3D::Dynamic, {0, 6, -4}, {0.4f, 0.4f, 0.4f}));
+    for (int i = 0; i < 120; ++i) w.step(1.0f / 60.0f);
+    CHECK(position_of(w, ent(8)).y < 1.0f);
+    QueryFilter3D named;
+    named.layer_mask = 0x8000;
+    CHECK(w.raycast(pivot, {0, 0, -1}, 8.0f, named));
+}
+
 TEST_CASE("queries: sphere and box overlaps list every touching body in creation order") {
     World3D w;
     add_floor(w);

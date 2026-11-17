@@ -124,3 +124,13 @@ From ADR-0003 §9 and the M5b "Open" table:
 - `QueryFilter3D` and the 2D `QueryFilter` are separate types; unifying them is left for the ECS
   bridge work (ADR-0003 §4).
 - Jolt has not been built with MSVC yet (ADR-0003 §2, ADR-0018).
+
+## Camera-only layer (M-DRIVEFEEL)
+
+Layer 15 (`kCameraLayer`) is the camera-only layer. Give a body there `mask = 0` and nothing collides with it; only
+`World3D::camera_sweep` and a filter that names the layer see it. `QueryFilter3D::layer_mask` defaults to
+`kDefaultQueryMask` (`0x7FFF`), and the kit (weapons, projectiles, sensors, line of sight, sound occlusion, the nav bake)
+ANDs its own masks with it, so a canopy collider stops the camera boom but not shots, sight, noise or the navmesh. A
+`BoxCollider3D` takes `layer: 15, mask: 0`.
+
+The editor's orbit camera also uses `camera_sweep`, so it stops on camera-only colliders too.

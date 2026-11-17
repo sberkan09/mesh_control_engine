@@ -333,7 +333,7 @@ void gather_nav_geometry(World& w, Entity surface, asset::AssetSystem* assets, p
         const math::vec3 h{std::fabs(s->bounds_half.x), std::fabs(s->bounds_half.y), std::fabs(s->bounds_half.z)};
         settings.bounds = {pos - h, pos + h};
     }
-    const u32 mask = s->layer_mask;
+    const u32 mask = s->layer_mask & physics::kDefaultQueryMask;  // camera-only colliders are not obstacles
 
     w.query<const BoxCollider3D, const LocalTransform>().each([&](Entity e, const BoxCollider3D& c, const LocalTransform& t) {
         if (!in_layers(mask, c.layer)) return;

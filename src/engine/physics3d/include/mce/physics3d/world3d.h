@@ -295,8 +295,14 @@ struct VehicleState3D {
     u32 wheels_on_ground = 0;
 };
 
+// Layer 15 is camera-only: a body there (give it mask 0 so nothing collides with it) is seen by camera_sweep and by a
+// filter that names the layer. A default QueryFilter3D skips it, and so do the kit's weapons, projectiles, sensors,
+// line-of-sight and sound checks and the nav bake, which AND their own `mask` with kDefaultQueryMask.
+inline constexpr u8 kCameraLayer = 15;
+inline constexpr u16 kDefaultQueryMask = 0x7FFF;
+
 struct QueryFilter3D {
-    u16 layer_mask = 0xFFFF;
+    u16 layer_mask = kDefaultQueryMask;
     Span<const Entity> exclude;  // e.g. self
     bool include_dynamic = true;
     bool include_characters = false;  // raycast and the overlaps also test characters' capsules (M-GAMEPLAY3D 6)

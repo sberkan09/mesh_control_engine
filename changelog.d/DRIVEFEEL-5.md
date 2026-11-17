@@ -1,0 +1,1 @@
+- physics3d/kit: the kit's weapon, projectile, sensor, sight, sound and nav-bake masks skip layer 15; docs for the camera-only layer.
