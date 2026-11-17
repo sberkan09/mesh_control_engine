@@ -49,6 +49,11 @@ to scenes except new component fields with defaults that keep today's behaviour.
 - **Step 1 (camera).** Not built. A camera-only canopy collider would also be hit by shots, line-of-sight checks and the nav
   bake (all query layers default to every bit), so it needs a layer convention (a layer the default queries and nav skip) as
   its own small seam PR first. `camera_sweep` ignores dynamic props on purpose (`test_queries.cpp`), so parked cars stay out.
+  Concrete chain (2026-11-17, read in `world3d.h/.cpp`, `kit3d.h`): (a) seam, physics3d only: `kCameraLayer = 15`,
+  `QueryFilter3D::layer_mask` defaults to `0x7FFF`, `camera_sweep` passes `0xFFFF`; (b) seam, `kit3d.h` (wide header, its own PR):
+  `BoxCollider3D` gets a `mask` field (today only `layer`, so a layer-15 box would still stop cars and the crowd); (c) the
+  nav bake and `sensors3d` keep their explicit masks (check they skip bit 15); (d) sample: a layer-15, mask-0 canopy box per
+  tree in `gen_assets.py`. Physics and core PRs wait for coordinator review.
 - **Step 3 (roadblocks).** Read `roadblock.cpp`: the sample has exactly two markers (x = -210 and x = 210, the avenue ends, the
   officers on the side away from the plaza) and a marker stands whenever an offender at its wanted level is 45..300 m away.
   So a block is on the player's way only when they leave the plaza along the avenue; side streets have none. Making blocks
