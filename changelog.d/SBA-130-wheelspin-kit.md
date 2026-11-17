@@ -1,0 +1,1 @@
+- Car wheel models, M-WHEELSPIN step 57b (SBA-130): destroying an entity with `Vehicle3D` now also destroys the wheel entities it names (`wheel_fl` .. `wheel_rr`) and their children, so a removed car no longer leaves wheels behind; removing only the component keeps them. User guide 9 (physics).
