@@ -12,7 +12,11 @@ otherwise `idle`; `idle` 0 switches the lamp off, so a car that never brakes cos
 **Sample.** `car_visuals` in `samples/09_openworld/gen_assets.py` appends a "Tail lamp" child (red `PointLight3D`, radius 4.5 m,
 `braking` 7) to every car: the car to take, parked cars, police and traffic. Idle is off, so only braking cars add a light.
 
-**Tests.** `tests/kit/test_vehicle_extras.cpp`: lit while `brake` is set, back to `idle`, off at idle 0.
+**Tests.** (reverse: `test_vehicle_extras` white-in-reverse case) `tests/kit/test_vehicle_extras.cpp`: lit while `brake` is set, back to `idle`, off at idle 0.
 `tests/mcp/test_mcp_openworld.cpp`: at least five `BrakeLight3D` in the city.
 
-**Not done.** White reverse lamps and a glowing lens mesh (the lamp lights the road, the body stays unlit); a door that swings.
+**Reverse lamp (same day).** `BrakeLight3D` grew to 48 bytes: `reverse` (intensity, 0 = not used), `brake_color` and
+`reverse_color`. In reverse (`Vehicle3D.gear` < 0) and not braking the same lamp shows `reverse` in white (`lit` 2). The sample
+sets `reverse` 3.
+
+**Not done.** A glowing lens mesh (the lamp lights the road, the body stays unlit); a door that swings.

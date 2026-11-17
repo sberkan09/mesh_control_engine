@@ -149,3 +149,25 @@ TEST_CASE("vehicle extras: a tail lamp lights while its car brakes and shows `id
     s.run(1);
     CHECK(light().enabled == 0);
 }
+
+TEST_CASE("vehicle extras: a tail lamp shows white in reverse unless the car brakes") {
+    Scene s;
+    PointLight3D lamp;
+    BrakeLight3D b;
+    b.braking = 5.0f;
+    b.reverse = 2.0f;
+    const Entity tail = s.w.spawn_with(at(0, 0.6f, 1.9f), ChildOf{s.car}, lamp, b);
+    s.w.try_get_mut<Vehicle3D>(s.car)->gear = -1;
+    s.run(1);
+    CHECK(s.w.try_get<BrakeLight3D>(tail)->lit == 2);
+    CHECK(s.w.try_get<PointLight3D>(tail)->intensity == doctest::Approx(2.0f));
+    CHECK(s.w.try_get<PointLight3D>(tail)->color.g > 0.5f);  // white, not red
+    s.w.try_get_mut<Vehicle3D>(s.car)->brake = 1.0f;
+    s.run(1);
+    CHECK(s.w.try_get<BrakeLight3D>(tail)->lit == 1);
+    CHECK(s.w.try_get<PointLight3D>(tail)->color.g < 0.2f);
+    s.w.try_get_mut<Vehicle3D>(s.car)->brake = 0.0f;
+    s.w.try_get_mut<Vehicle3D>(s.car)->gear = 1;
+    s.run(1);
+    CHECK(s.w.try_get<BrakeLight3D>(tail)->lit == 0);
+}

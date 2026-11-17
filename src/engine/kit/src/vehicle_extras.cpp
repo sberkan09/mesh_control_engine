@@ -18,7 +18,7 @@ namespace mce::kit {
 
 static_assert(sizeof(VehicleHorn3D) == 48);
 static_assert(sizeof(VehicleLights3D) == 4);
-static_assert(sizeof(BrakeLight3D) == 12);
+static_assert(sizeof(BrakeLight3D) == 48);
 
 namespace {
 
@@ -74,8 +74,11 @@ void kit_vehicle_extras(Frame& f) {
     f.query<BrakeLight3D, PointLight3D>().each([&](Entity e, BrakeLight3D& b, PointLight3D& pl) {
         const ChildOf* c = w.try_get<ChildOf>(e);
         const Vehicle3D* v = c ? w.try_get<Vehicle3D>(c->parent) : nullptr;
-        b.lit = v && car_braking(*v, in) ? 1 : 0;
-        const f32 level = b.lit ? b.braking : b.idle;
+        const bool braking = v && car_braking(*v, in);
+        const bool reversing = v && !braking && b.reverse > 0.0f && v->gear < 0;
+        b.lit = braking ? 1 : reversing ? 2 : 0;
+        const f32 level = braking ? b.braking : reversing ? b.reverse : b.idle;
+        pl.color = reversing ? b.reverse_color : b.brake_color;
         pl.intensity = level;
         pl.enabled = level > 0.0f ? 1u : 0u;
     });

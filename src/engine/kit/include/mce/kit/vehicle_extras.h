@@ -11,7 +11,8 @@
 //
 //   BrakeLight3D     on a child lamp entity of a car (a ChildOf the car, with a PointLight3D): while the car brakes (its
 //                    `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle against the way it
-//                    rolls) the lamp is lit at `braking`; otherwise it shows `idle` (0: off). `lit` is 1 while braking.
+//                    rolls) the lamp is lit at `braking` in `brake_color`; in reverse (gear < 0) and not braking it shows `reverse` in
+//                    `reverse_color` (0: not used); otherwise `idle` (0: off). `lit` is 1 while braking, 2 while reversing.
 //
 // A car with no driver, or one driven by traffic or the police, reads no input. System: "kit_vehicle_extras"
 // (FixedUpdate_Pre, after "kit_timed_light").
@@ -58,11 +59,16 @@ MCE_COMPONENT(VehicleLights3D, (mode, Save, Help{"Auto: the day cycle decides; O
 struct BrakeLight3D {
     f32 braking = 4.0f;
     f32 idle = 0.0f;
-    u8 lit = 0;  // engine-written
+    f32 reverse = 0.0f;  // intensity while the car is in reverse and not braking; 0: the lamp stays at `idle`
+    u8 lit = 0;          // engine-written: 1 braking, 2 reversing
     u8 pad_[3] = {};
+    math::Color brake_color{1.0f, 0.04f, 0.02f, 1.0f};
+    math::Color reverse_color{1.0f, 0.95f, 0.85f, 1.0f};
 };
 MCE_COMPONENT(BrakeLight3D, (braking, Range{0, 100}, Help{"PointLight3D intensity while the parent car brakes"}),
-              (idle, Range{0, 100}, Help{"intensity otherwise; 0 switches the lamp off"}), (lit, ReadOnly, Transient))
+              (idle, Range{0, 100}, Help{"intensity otherwise; 0 switches the lamp off"}),
+              (reverse, Range{0, 100}, Help{"intensity while the parent car is in reverse and not braking; 0: not used"}),
+              (lit, ReadOnly, Transient), brake_color, reverse_color)
 
 // Registers the components and adds the system. Idempotent.
 void install_vehicle_extras(World& world, asset::AssetSystem* assets);

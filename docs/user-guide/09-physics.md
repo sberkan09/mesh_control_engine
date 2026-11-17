@@ -398,8 +398,9 @@ binds Horn to G (stick press) and Lights to L (D-pad right).
 
 `BrakeLight3D` makes a tail lamp: put it with a `PointLight3D` on an entity that is a `ChildOf` the car (the lamp sits behind
 the car). While the car brakes (its own `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle
-against the way it rolls) the lamp shows `braking` as its intensity; otherwise `idle` (0 switches it off). `lit` is 1 while
-braking. Every car of `samples/09_openworld` has one.
+against the way it rolls) the lamp shows `braking` as its intensity in `brake_color`; in reverse (`Vehicle3D.gear` below 0) and
+not braking it shows `reverse` in `reverse_color` (0: not used); otherwise `idle` (0 switches it off). `lit` is 1 while
+braking, 2 while reversing. Every car of `samples/09_openworld` has one.
 
 ### Hit marker
 

@@ -383,7 +383,8 @@
      "enabled": 0
     },
     "BrakeLight3D": {
-     "braking": 7.0
+     "braking": 7.0,
+     "reverse": 3.0
     }
    }
   }
