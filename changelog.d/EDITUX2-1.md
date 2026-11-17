@@ -1,0 +1,1 @@
+- Editor: new fuzz over the multi-entity commands (group, ungroup, align, distribute, flip, snap, match, reset, duplicate-offset) and undo/redo; it found no defect (M-EDITUX2 step 1).
