@@ -40187,7 +40187,8 @@
       0,
       0
      ],
-     "enter_radius": 4.0
+     "enter_radius": 4.0,
+     "transition": 0.35
     },
     "AudioSource": {
      "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
@@ -40580,7 +40581,8 @@
       0,
       0
      ],
-     "enter_radius": 4.0
+     "enter_radius": 4.0,
+     "transition": 0.35
     },
     "AudioSource": {
      "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
@@ -40977,7 +40979,8 @@
       0,
       0
      ],
-     "enter_radius": 4.0
+     "enter_radius": 4.0,
+     "transition": 0.35
     },
     "AudioSource": {
      "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",

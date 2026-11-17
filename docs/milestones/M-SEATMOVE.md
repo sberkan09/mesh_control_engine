@@ -1,6 +1,6 @@
 # M-SEATMOVE — Getting into and out of cars with a glide (milestone record)
 
-**Status:** step 58a done in this PR (kit), 58b open (sample). **Owner: routine 2 thread (the M-VISUAL line).**
+**Status:** done (2026-11-17), steps 58a (kit, #1289) and 58b (sample, this record's last PR). **Owner: routine 2 thread (the M-VISUAL line).**
 Follow-up of M-OPENWORLD-GAPS section E9 ("door and seat transitions"). No Linear issues (free limit); this record is the tracker.
 No step writes a shader or touches `render::`.
 
@@ -24,8 +24,8 @@ on the same tick), any change to who can board or when.
 
 | Step | What | Module | Status |
 |---|---|---|---|
-| 58a | The kit: `transition`, the phases and the glide; `tests/kit/test_seats3d.cpp` (halfway pose, Interact ignored mid-glide, seat taken while leaving, controller back after, 0 = instant is the existing cases); user guide chapter 9 | kit | done |
-| 58b | `09_openworld`: `transition` 0.35 on the player's and parked cars; `test_mcp_openworld` checks a rider is gliding (phase 1) a few ticks after boarding and seated and settled after; M-OPENWORLD-GAPS and M-OPENWORLD-LOOK | samples/09_openworld, tests/mcp | open |
+| 58a | The kit: `transition`, the phases and the glide; `tests/kit/test_seats3d.cpp` (halfway pose, Interact ignored mid-glide, seat taken while leaving, controller back after, 0 = instant is the existing cases); user guide chapter 9 | kit | done (#1289) |
+| 58b | `09_openworld`: `transition` 0.35 on the player's and parked cars; `test_mcp_openworld` checks a rider is gliding (phase 1) a few ticks after boarding and seated and settled after; M-OPENWORLD-GAPS and M-OPENWORLD-LOOK | samples/09_openworld, tests/mcp | done |
 
 ## Acceptance
 
