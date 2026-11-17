@@ -1,6 +1,6 @@
 # M-DRIVEFEEL — camera, driving and roadblock polish in the open-world sample (2026-11-16)
 
-Status: planned. Owner: the routine 3 thread. No Linear issue (the Backlog holds only device-bound work).
+Status: steps 1 and 2 done (2026-11-17), step 3 and the camera part measured and left open, see "Built" and "Open". Owner: the routine 3 thread. No Linear issue (the Backlog holds only device-bound work).
 Source: defects seen in the `09_openworld` gameplay video of 2026-11-16. Each one is checked against the code below
 before a step is built; a defect the code does not support is dropped from the plan, not patched blind.
 
@@ -36,3 +36,22 @@ milestone does not touch those files.
 
 Each step is its own PR with a test that fails before the change. Limits: no new art, no new Luau API, nothing saved
 to scenes except new component fields with defaults that keep today's behaviour.
+
+## Built
+
+- **Step 2 (steering), done 2026-11-17.** `Vehicle3D.steer_assist` (0..255, default 0 = unchanged): the player's stick is eased
+  with speed, to a quarter of full lock at 30 m/s at 255 (PR #1273, test in `tests/kit/test_vehicles3d.cpp`: the peak sideways
+  slip of a full-stick turn at speed is lower with the assist, and the assist changes nothing near standstill). The
+  open-world cars carry 180 (PR #1276). Older plan numbering: this was written as step 2 and shipped first.
+
+## Open
+
+- **Step 1 (camera).** Not built. A camera-only canopy collider would also be hit by shots, line-of-sight checks and the nav
+  bake (all query layers default to every bit), so it needs a layer convention (a layer the default queries and nav skip) as
+  its own small seam PR first. `camera_sweep` ignores dynamic props on purpose (`test_queries.cpp`), so parked cars stay out.
+- **Step 3 (roadblocks).** Read `roadblock.cpp`: the sample has exactly two markers (x = -210 and x = 210, the avenue ends, the
+  officers on the side away from the plaza) and a marker stands whenever an offender at its wanted level is 45..300 m away.
+  So a block is on the player's way only when they leave the plaza along the avenue; side streets have none. Making blocks
+  follow the offender's heading means choosing a road position ahead of them at runtime (road graph, not a fixed marker), which
+  is a design change, not polish. Proposal for whoever picks it up: spawn markers on the `roads.h` graph ahead of the offender's
+  velocity, reuse `Roadblock3D` for the pieces. Needs the gameplay video or a Mac eyeball pass to judge.
