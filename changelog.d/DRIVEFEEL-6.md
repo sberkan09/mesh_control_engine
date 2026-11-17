@@ -1,0 +1,1 @@
+- kit: `BoxCollider3D.mask` (default every layer); layer 15 with mask 0 is a camera-only collider. Scenes baked before this change read it as 0: re-bake old packs.

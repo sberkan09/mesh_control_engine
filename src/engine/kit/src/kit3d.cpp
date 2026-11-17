@@ -73,6 +73,7 @@ bool create_box_collider(World& w, Physics3D& phys, Entity e, const BoxCollider3
     d.position = pos + math::rotate(rot, {c.offset.x * scale.x, c.offset.y * scale.y, c.offset.z * scale.z});
     d.friction = c.friction;
     d.layer = static_cast<u8>(c.layer & 15u);
+    d.mask = c.mask;
     if (phys.world.create_body(e, d)) return true;
     MCE_LOG_WARN("kit3d: box collider on entity {} not created", e.index);
     return false;
