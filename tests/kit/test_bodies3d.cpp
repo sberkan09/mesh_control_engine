@@ -171,12 +171,20 @@ TEST_CASE(
     canopy.half = {2.0f, 0.25f, 2.0f};
     canopy.layer = physics::kCameraLayer;
     canopy.mask = 0;
-    s.w.spawn_with(at(0, 3, 0), canopy);
+    const Entity canopy_e = s.w.spawn_with(at(0, 3, 0), canopy);
     RigidBody3D box;
     box.half = {0.5f, 0.5f, 0.5f};
     const Entity e = s.w.spawn_with(at(0, 6, 0), box);
     s.run(120);
     CHECK(s.pose(e).position.y < 1.0f);                                 // fell past the canopy and landed on the floor
-    CHECK_FALSE(s.phys().world.raycast({0, 8, 0}, {0, -1, 0}, 4.0f));   // default ray passes through (to y = 4)
-    CHECK(s.phys().world.camera_sweep({0, 8, 0}, {0, 1.5f, 0}, 0.2f));  // the camera boom stops on it
+    CHECK_FALSE(s.phys().world.raycast({0, 8, 0}, {0, -1, 0},
+                                       5.5f));  // a default ray passes through (ends at y = 2.5, the top is 3.25)
+    physics::QueryFilter3D named;
+    named.layer_mask = 0x8000;
+    const auto ray = s.phys().world.raycast({0, 8, 0}, {0, -1, 0}, 5.5f, named);
+    REQUIRE(ray);
+    CHECK(ray->entity == canopy_e);                                               // a filter naming the layer sees it
+    const auto cam = s.phys().world.camera_sweep({0, 8, 0}, {0, 1.5f, 0}, 0.2f);  // the camera boom stops on it
+    REQUIRE(cam);
+    CHECK(cam->entity == canopy_e);
 }
