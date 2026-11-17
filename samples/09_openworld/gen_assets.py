@@ -315,6 +315,7 @@ G_FOOTSTEPS = guid("audio/footsteps.mcsound")
 G_SHOTS = guid("audio/shots.mcsound")
 G_HITS = guid("audio/hits.mcsound")
 G_LAMP = guid("materials/lamp.mcmat")
+G_SIGNAL = guid("materials/signal.mcmat")
 G_TRACER = guid("materials/tracer.mcmat")
 G_GRADE = guid("textures/city_grade.png")
 G_BULLET_HOLE = guid("textures/bullet_hole.png")
@@ -1077,6 +1078,13 @@ def lamp_material():
                                    "double_sided": False, "unlit": False, "textures": {}})
 
 
+def signal_material():
+    # White emissive: the SignalHead system sets each lamp's tint and emissive_tint (lit or dark), so the colour comes from them.
+    write("materials/signal.mcmat", {"format": "mce-material", "version": 1, "guid": G_SIGNAL, "name": "signal", "base_color": [1, 1, 1, 1],
+                                     "metallic": 0.0, "roughness": 0.4, "emissive": [1.0, 1.0, 1.0], "alpha_mode": "opaque", "alpha_cutoff": 0.5,
+                                     "double_sided": False, "unlit": False, "textures": {}})
+
+
 def tracer_material():
     """materials/tracer.mcmat (M-TRACERS): a hot, bright line; the emissive above 1 feeds bloom."""
     write("materials/tracer.mcmat", {"format": "mce-material", "version": 1, "guid": G_TRACER, "name": "tracer", "base_color": [1.0, 0.85, 0.5, 1],
@@ -1449,8 +1457,33 @@ def scene():
                         "GiVolume3D": {"half_extents": [GI_HALF[0], GI_HALF[1], GI_HALF[2]], "probes_x": GI_PROBES[0], "probes_y": GI_PROBES[1],
                                        "probes_z": GI_PROBES[2], "probes_per_frame": 32, "intensity": 1.0},
                         "GiVisibility3D": {"relocate": 1, "follow_camera": 1}})
+    signal_heads(s, node_half)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
+
+
+def signal_heads(s, node_half):
+    """Traffic lights you can see (M-SIGNALHEADS 56d): at every approach of the 9 signalised junctions a pole on the right-hand kerb carries a
+    housing and three lamps. Each lamp has a SignalHead (its colour and the direction the governed traffic travels); kit_signal_heads lights
+    the one that matches the lane's light, the same light the cars obey. Added last so the older entities keep their order."""
+    for j in range(1, GRID - 1):
+        for i in range(1, GRID - 1):
+            x, z = node_pos(i, j)
+            c = node_half[(i, j)] + 2.3
+            # (corner offset, the direction the governed traffic travels): traffic keeps right, so +x traffic is on the +z side, and so on.
+            # The pole stands 1 m before the corner so it does not share a spot with a street lamp.
+            for k, (dx, dz, ax, az) in enumerate(((-c - 1.0, c, 1, 0), (c + 1.0, -c, -1, 0), (-c, -c - 1.0, 0, 1), (c, c + 1.0, 0, -1))):
+                name = "Signal %d_%d_%d" % (i, j, k)
+                px, pz = x + dx, z + dz
+                s.add(name + " pole", {"LocalTransform": tf((px, 2.2, pz), (0.14, 4.4, 0.14)), "MeshRef": mesh((0.35, 0.35, 0.38), 0)})
+                # Housing and lamps on the face turned to the oncoming traffic (towards -a).
+                fx, fz = -0.2 * ax, -0.2 * az
+                s.add(name + " housing", {"LocalTransform": tf((px, 4.55, pz), (0.42 if ax == 0 else 0.34, 1.2, 0.42 if az == 0 else 0.34)),
+                                          "MeshRef": mesh((0.08, 0.08, 0.09), 0)})
+                for colour, y in (("Red", 4.95), ("Amber", 4.55), ("Green", 4.15)):
+                    s.add(name + " " + colour, {"LocalTransform": tf((px + fx, y, pz + fz), (0.3 if ax == 0 else 0.1, 0.3, 0.3 if az == 0 else 0.1)),
+                                                "MeshRef": {"mesh": "guid:" + G_BOX, "material": "guid:" + G_SIGNAL, "cast_shadows": 0},
+                                                "SignalHead": {"lamp": colour, "approach": [ax, 0, az]}})
 
 
 def radio(s):
@@ -1623,6 +1656,7 @@ surface_assets()
 color_grade_lut()
 bullet_hole_texture()
 lamp_material()
+signal_material()
 tracer_material()
 audio_assets()
 hud()

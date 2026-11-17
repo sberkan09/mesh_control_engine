@@ -47555,6 +47555,5370 @@
      "follow_camera": 1
     }
    }
+  },
+  {
+   "id": 1863,
+   "name": "Signal 1_1_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.8,
+      2.2,
+      -244.2
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1864,
+   "name": "Signal 1_1_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.8,
+      4.55,
+      -244.2
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1865,
+   "name": "Signal 1_1_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -257.0,
+      4.95,
+      -244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1866,
+   "name": "Signal 1_1_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -257.0,
+      4.55,
+      -244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1867,
+   "name": "Signal 1_1_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -257.0,
+      4.15,
+      -244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1868,
+   "name": "Signal 1_1_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.2,
+      2.2,
+      -255.8
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1869,
+   "name": "Signal 1_1_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.2,
+      4.55,
+      -255.8
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1870,
+   "name": "Signal 1_1_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.0,
+      4.95,
+      -255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1871,
+   "name": "Signal 1_1_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.0,
+      4.55,
+      -255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1872,
+   "name": "Signal 1_1_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.0,
+      4.15,
+      -255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1873,
+   "name": "Signal 1_1_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      2.2,
+      -256.8
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1874,
+   "name": "Signal 1_1_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      4.55,
+      -256.8
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1875,
+   "name": "Signal 1_1_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      4.95,
+      -257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1876,
+   "name": "Signal 1_1_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      4.55,
+      -257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1877,
+   "name": "Signal 1_1_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      4.15,
+      -257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1878,
+   "name": "Signal 1_1_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      2.2,
+      -243.2
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1879,
+   "name": "Signal 1_1_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      4.55,
+      -243.2
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1880,
+   "name": "Signal 1_1_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      4.95,
+      -243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1881,
+   "name": "Signal 1_1_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      4.55,
+      -243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1882,
+   "name": "Signal 1_1_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      4.15,
+      -243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1883,
+   "name": "Signal 2_1_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.3,
+      2.2,
+      -240.7
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1884,
+   "name": "Signal 2_1_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.3,
+      4.55,
+      -240.7
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1885,
+   "name": "Signal 2_1_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.95,
+      -240.7
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1886,
+   "name": "Signal 2_1_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.55,
+      -240.7
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1887,
+   "name": "Signal 2_1_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.15,
+      -240.7
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1888,
+   "name": "Signal 2_1_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.3,
+      2.2,
+      -259.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1889,
+   "name": "Signal 2_1_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.3,
+      4.55,
+      -259.3
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1890,
+   "name": "Signal 2_1_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.95,
+      -259.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1891,
+   "name": "Signal 2_1_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.55,
+      -259.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1892,
+   "name": "Signal 2_1_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.15,
+      -259.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1893,
+   "name": "Signal 2_1_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      2.2,
+      -260.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1894,
+   "name": "Signal 2_1_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.55,
+      -260.3
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1895,
+   "name": "Signal 2_1_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.95,
+      -260.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1896,
+   "name": "Signal 2_1_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.55,
+      -260.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1897,
+   "name": "Signal 2_1_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.15,
+      -260.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1898,
+   "name": "Signal 2_1_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      2.2,
+      -239.7
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1899,
+   "name": "Signal 2_1_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.55,
+      -239.7
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1900,
+   "name": "Signal 2_1_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.95,
+      -239.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1901,
+   "name": "Signal 2_1_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.55,
+      -239.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1902,
+   "name": "Signal 2_1_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.15,
+      -239.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1903,
+   "name": "Signal 3_1_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.2,
+      2.2,
+      -244.2
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1904,
+   "name": "Signal 3_1_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.2,
+      4.55,
+      -244.2
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1905,
+   "name": "Signal 3_1_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.0,
+      4.95,
+      -244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1906,
+   "name": "Signal 3_1_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.0,
+      4.55,
+      -244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1907,
+   "name": "Signal 3_1_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.0,
+      4.15,
+      -244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1908,
+   "name": "Signal 3_1_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.8,
+      2.2,
+      -255.8
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1909,
+   "name": "Signal 3_1_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.8,
+      4.55,
+      -255.8
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1910,
+   "name": "Signal 3_1_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      257.0,
+      4.95,
+      -255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1911,
+   "name": "Signal 3_1_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      257.0,
+      4.55,
+      -255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1912,
+   "name": "Signal 3_1_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      257.0,
+      4.15,
+      -255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1913,
+   "name": "Signal 3_1_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      2.2,
+      -256.8
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1914,
+   "name": "Signal 3_1_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      4.55,
+      -256.8
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1915,
+   "name": "Signal 3_1_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      4.95,
+      -257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1916,
+   "name": "Signal 3_1_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      4.55,
+      -257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1917,
+   "name": "Signal 3_1_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      4.15,
+      -257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1918,
+   "name": "Signal 3_1_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      2.2,
+      -243.2
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1919,
+   "name": "Signal 3_1_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      4.55,
+      -243.2
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1920,
+   "name": "Signal 3_1_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      4.95,
+      -243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1921,
+   "name": "Signal 3_1_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      4.55,
+      -243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1922,
+   "name": "Signal 3_1_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      4.15,
+      -243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1923,
+   "name": "Signal 1_2_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -260.3,
+      2.2,
+      9.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1924,
+   "name": "Signal 1_2_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -260.3,
+      4.55,
+      9.3
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1925,
+   "name": "Signal 1_2_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -260.5,
+      4.95,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1926,
+   "name": "Signal 1_2_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -260.5,
+      4.55,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1927,
+   "name": "Signal 1_2_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -260.5,
+      4.15,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1928,
+   "name": "Signal 1_2_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -239.7,
+      2.2,
+      -9.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1929,
+   "name": "Signal 1_2_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -239.7,
+      4.55,
+      -9.3
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1930,
+   "name": "Signal 1_2_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -239.5,
+      4.95,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1931,
+   "name": "Signal 1_2_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -239.5,
+      4.55,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1932,
+   "name": "Signal 1_2_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -239.5,
+      4.15,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1933,
+   "name": "Signal 1_2_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -259.3,
+      2.2,
+      -10.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1934,
+   "name": "Signal 1_2_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -259.3,
+      4.55,
+      -10.3
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1935,
+   "name": "Signal 1_2_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -259.3,
+      4.95,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1936,
+   "name": "Signal 1_2_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -259.3,
+      4.55,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1937,
+   "name": "Signal 1_2_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -259.3,
+      4.15,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1938,
+   "name": "Signal 1_2_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -240.7,
+      2.2,
+      10.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1939,
+   "name": "Signal 1_2_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -240.7,
+      4.55,
+      10.3
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1940,
+   "name": "Signal 1_2_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -240.7,
+      4.95,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1941,
+   "name": "Signal 1_2_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -240.7,
+      4.55,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1942,
+   "name": "Signal 1_2_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -240.7,
+      4.15,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1943,
+   "name": "Signal 2_2_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.3,
+      2.2,
+      9.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1944,
+   "name": "Signal 2_2_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.3,
+      4.55,
+      9.3
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1945,
+   "name": "Signal 2_2_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.95,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1946,
+   "name": "Signal 2_2_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.55,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1947,
+   "name": "Signal 2_2_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.15,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1948,
+   "name": "Signal 2_2_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.3,
+      2.2,
+      -9.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1949,
+   "name": "Signal 2_2_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.3,
+      4.55,
+      -9.3
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1950,
+   "name": "Signal 2_2_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.95,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1951,
+   "name": "Signal 2_2_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.55,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1952,
+   "name": "Signal 2_2_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.15,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1953,
+   "name": "Signal 2_2_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      2.2,
+      -10.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1954,
+   "name": "Signal 2_2_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.55,
+      -10.3
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1955,
+   "name": "Signal 2_2_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.95,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1956,
+   "name": "Signal 2_2_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.55,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1957,
+   "name": "Signal 2_2_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.15,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1958,
+   "name": "Signal 2_2_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      2.2,
+      10.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1959,
+   "name": "Signal 2_2_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.55,
+      10.3
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1960,
+   "name": "Signal 2_2_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.95,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1961,
+   "name": "Signal 2_2_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.55,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1962,
+   "name": "Signal 2_2_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.15,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1963,
+   "name": "Signal 3_2_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      239.7,
+      2.2,
+      9.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1964,
+   "name": "Signal 3_2_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      239.7,
+      4.55,
+      9.3
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1965,
+   "name": "Signal 3_2_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      239.5,
+      4.95,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1966,
+   "name": "Signal 3_2_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      239.5,
+      4.55,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1967,
+   "name": "Signal 3_2_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      239.5,
+      4.15,
+      9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1968,
+   "name": "Signal 3_2_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      260.3,
+      2.2,
+      -9.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1969,
+   "name": "Signal 3_2_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      260.3,
+      4.55,
+      -9.3
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1970,
+   "name": "Signal 3_2_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      260.5,
+      4.95,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1971,
+   "name": "Signal 3_2_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      260.5,
+      4.55,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1972,
+   "name": "Signal 3_2_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      260.5,
+      4.15,
+      -9.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1973,
+   "name": "Signal 3_2_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      240.7,
+      2.2,
+      -10.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1974,
+   "name": "Signal 3_2_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      240.7,
+      4.55,
+      -10.3
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1975,
+   "name": "Signal 3_2_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      240.7,
+      4.95,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1976,
+   "name": "Signal 3_2_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      240.7,
+      4.55,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1977,
+   "name": "Signal 3_2_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      240.7,
+      4.15,
+      -10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1978,
+   "name": "Signal 3_2_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      259.3,
+      2.2,
+      10.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1979,
+   "name": "Signal 3_2_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      259.3,
+      4.55,
+      10.3
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1980,
+   "name": "Signal 3_2_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      259.3,
+      4.95,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1981,
+   "name": "Signal 3_2_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      259.3,
+      4.55,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1982,
+   "name": "Signal 3_2_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      259.3,
+      4.15,
+      10.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1983,
+   "name": "Signal 1_3_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.8,
+      2.2,
+      255.8
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1984,
+   "name": "Signal 1_3_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.8,
+      4.55,
+      255.8
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1985,
+   "name": "Signal 1_3_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -257.0,
+      4.95,
+      255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1986,
+   "name": "Signal 1_3_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -257.0,
+      4.55,
+      255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1987,
+   "name": "Signal 1_3_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -257.0,
+      4.15,
+      255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1988,
+   "name": "Signal 1_3_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.2,
+      2.2,
+      244.2
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1989,
+   "name": "Signal 1_3_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.2,
+      4.55,
+      244.2
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1990,
+   "name": "Signal 1_3_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.0,
+      4.95,
+      244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1991,
+   "name": "Signal 1_3_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.0,
+      4.55,
+      244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1992,
+   "name": "Signal 1_3_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.0,
+      4.15,
+      244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 1993,
+   "name": "Signal 1_3_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      2.2,
+      243.2
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1994,
+   "name": "Signal 1_3_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      4.55,
+      243.2
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1995,
+   "name": "Signal 1_3_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      4.95,
+      243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1996,
+   "name": "Signal 1_3_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      4.55,
+      243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1997,
+   "name": "Signal 1_3_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -255.8,
+      4.15,
+      243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 1998,
+   "name": "Signal 1_3_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      2.2,
+      256.8
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1999,
+   "name": "Signal 1_3_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      4.55,
+      256.8
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2000,
+   "name": "Signal 1_3_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      4.95,
+      257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2001,
+   "name": "Signal 1_3_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      4.55,
+      257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2002,
+   "name": "Signal 1_3_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -244.2,
+      4.15,
+      257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2003,
+   "name": "Signal 2_3_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.3,
+      2.2,
+      259.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2004,
+   "name": "Signal 2_3_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.3,
+      4.55,
+      259.3
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2005,
+   "name": "Signal 2_3_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.95,
+      259.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2006,
+   "name": "Signal 2_3_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.55,
+      259.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2007,
+   "name": "Signal 2_3_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.5,
+      4.15,
+      259.3
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2008,
+   "name": "Signal 2_3_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.3,
+      2.2,
+      240.7
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2009,
+   "name": "Signal 2_3_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.3,
+      4.55,
+      240.7
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2010,
+   "name": "Signal 2_3_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.95,
+      240.7
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2011,
+   "name": "Signal 2_3_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.55,
+      240.7
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2012,
+   "name": "Signal 2_3_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10.5,
+      4.15,
+      240.7
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2013,
+   "name": "Signal 2_3_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      2.2,
+      239.7
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2014,
+   "name": "Signal 2_3_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.55,
+      239.7
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2015,
+   "name": "Signal 2_3_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.95,
+      239.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2016,
+   "name": "Signal 2_3_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.55,
+      239.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2017,
+   "name": "Signal 2_3_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -9.3,
+      4.15,
+      239.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2018,
+   "name": "Signal 2_3_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      2.2,
+      260.3
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2019,
+   "name": "Signal 2_3_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.55,
+      260.3
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2020,
+   "name": "Signal 2_3_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.95,
+      260.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2021,
+   "name": "Signal 2_3_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.55,
+      260.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2022,
+   "name": "Signal 2_3_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.3,
+      4.15,
+      260.5
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2023,
+   "name": "Signal 3_3_0 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.2,
+      2.2,
+      255.8
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2024,
+   "name": "Signal 3_3_0 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.2,
+      4.55,
+      255.8
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2025,
+   "name": "Signal 3_3_0 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.0,
+      4.95,
+      255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2026,
+   "name": "Signal 3_3_0 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.0,
+      4.55,
+      255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2027,
+   "name": "Signal 3_3_0 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.0,
+      4.15,
+      255.8
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2028,
+   "name": "Signal 3_3_1 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.8,
+      2.2,
+      244.2
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2029,
+   "name": "Signal 3_3_1 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.8,
+      4.55,
+      244.2
+     ],
+     "scale": [
+      0.34,
+      1.2,
+      0.42
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2030,
+   "name": "Signal 3_3_1 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      257.0,
+      4.95,
+      244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2031,
+   "name": "Signal 3_3_1 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      257.0,
+      4.55,
+      244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2032,
+   "name": "Signal 3_3_1 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      257.0,
+      4.15,
+      244.2
+     ],
+     "scale": [
+      0.1,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      -1,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2033,
+   "name": "Signal 3_3_2 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      2.2,
+      243.2
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2034,
+   "name": "Signal 3_3_2 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      4.55,
+      243.2
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2035,
+   "name": "Signal 3_3_2 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      4.95,
+      243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2036,
+   "name": "Signal 3_3_2 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      4.55,
+      243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2037,
+   "name": "Signal 3_3_2 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      244.2,
+      4.15,
+      243.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2038,
+   "name": "Signal 3_3_3 pole",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      2.2,
+      256.8
+     ],
+     "scale": [
+      0.14,
+      4.4,
+      0.14
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.35,
+      0.38,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2039,
+   "name": "Signal 3_3_3 housing",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      4.55,
+      256.8
+     ],
+     "scale": [
+      0.42,
+      1.2,
+      0.34
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.08,
+      0.08,
+      0.09,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 2040,
+   "name": "Signal 3_3_3 Red",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      4.95,
+      257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Red",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2041,
+   "name": "Signal 3_3_3 Amber",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      4.55,
+      257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Amber",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  },
+  {
+   "id": 2042,
+   "name": "Signal 3_3_3 Green",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      255.8,
+      4.15,
+      257.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:76dfa8bd-9dce-5b27-84f4-dd937e32761a",
+     "cast_shadows": 0
+    },
+    "SignalHead": {
+     "lamp": "Green",
+     "approach": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
   }
  ]
 }
