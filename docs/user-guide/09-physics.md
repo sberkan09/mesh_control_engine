@@ -396,6 +396,11 @@ counts them) and the `Lights` action cycles `VehicleLights3D.mode`: `Auto` (the 
 input (scripts, tests). Traffic and police cars have no rider with `use_input`, so they never respond. `samples/09_openworld`
 binds Horn to G (stick press) and Lights to L (D-pad right).
 
+`BrakeLight3D` makes a tail lamp: put it with a `PointLight3D` on an entity that is a `ChildOf` the car (the lamp sits behind
+the car). While the car brakes (its own `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle
+against the way it rolls) the lamp shows `braking` as its intensity; otherwise `idle` (0 switches it off). `lit` is 1 while
+braking. Every car of `samples/09_openworld` has one.
+
 ### Hit marker
 
 `mce/kit/hit_marker.h`: put `HitMarker3D` on the shooter (the player). A shot of its weapon that lands on another living

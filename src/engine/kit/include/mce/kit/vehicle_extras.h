@@ -9,6 +9,10 @@
 //                    Auto -> On -> Off. Auto leaves kit_timed_light in charge; On lights the spot at its authored
 //                    intensity (TimedLight3D.spot_scale, else the light's own); Off switches it off.
 //
+//   BrakeLight3D     on a child lamp entity of a car (a ChildOf the car, with a PointLight3D): while the car brakes (its
+//                    `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle against the way it
+//                    rolls) the lamp is lit at `braking`; otherwise it shows `idle` (0: off). `lit` is 1 while braking.
+//
 // A car with no driver, or one driven by traffic or the police, reads no input. System: "kit_vehicle_extras"
 // (FixedUpdate_Pre, after "kit_timed_light").
 
@@ -50,6 +54,15 @@ struct VehicleLights3D {
     u8 pad_[3] = {};
 };
 MCE_COMPONENT(VehicleLights3D, (mode, Save, Help{"Auto: the day cycle decides; On / Off: the driver's choice (Lights cycles)"}))
+
+struct BrakeLight3D {
+    f32 braking = 4.0f;
+    f32 idle = 0.0f;
+    u8 lit = 0;  // engine-written
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(BrakeLight3D, (braking, Range{0, 100}, Help{"PointLight3D intensity while the parent car brakes"}),
+              (idle, Range{0, 100}, Help{"intensity otherwise; 0 switches the lamp off"}), (lit, ReadOnly, Transient))
 
 // Registers the components and adds the system. Idempotent.
 void install_vehicle_extras(World& world, asset::AssetSystem* assets);
