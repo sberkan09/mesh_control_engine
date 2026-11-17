@@ -356,6 +356,22 @@ TEST_CASE("move3d: the spring arm stops at a camera-only canopy that does not st
     CHECK(pos(s, cam).z == doctest::Approx(2.8f).epsilon(0.01));
 }
 
+TEST_CASE("move3d: a pivot inside a camera-only canopy does not collapse the boom") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(0, 1, 0));
+    BoxCollider3D leaves;
+    leaves.half = {2, 2, 2};  // the pivot (0, 1, 0) stands inside it
+    leaves.layer = physics::kCameraLayer;
+    leaves.mask = 0;
+    s.w.spawn_with(at(0, 1, 0), leaves);
+    CameraFollow3D c;
+    c.collide = true;
+    c.collision_radius = 0.2f;
+    const Entity cam = follow_cam(s, target, c);
+    s.run(2);
+    CHECK(pos(s, cam).z > 1.0f);  // not pulled to the pivot
+}
+
 TEST_CASE("move3d: look-ahead leads the pivot by the target's ground velocity") {
     Scene s;
     const Entity target = s.w.spawn_with(at(0, 1, 0));

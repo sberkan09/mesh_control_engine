@@ -362,9 +362,18 @@ void kit_camera_follow(Frame& f) {
         // The spring arm: a wall pulls the camera in at once; it eases back out at return_speed.
         f32 reach = c.distance;
         const math::vec3 back = math::rotate(q, math::vec3{0.0f, 0.0f, 1.0f});
-        if (c.collide && phys)
-            if (const auto hit = phys->world.camera_sweep(c.pivot, c.pivot + back * c.distance, c.collision_radius))
-                reach = math::clamp(math::dot(hit->position - c.pivot, back), 0.0f, c.distance);
+        if (c.collide && phys) {
+            const math::vec3 goal_pos = c.pivot + back * c.distance;
+            auto hit = phys->world.camera_sweep(c.pivot, goal_pos, c.collision_radius);
+            if (hit && hit->t <= 1e-4f) {
+                // The sweep starts inside something. A camera-only collider (a tree crown the pivot stands in) must not
+                // pull the boom to zero: sweep again without that layer; a real wall the pivot touches still stops it.
+                physics::QueryFilter3D sweep_filter;
+                sweep_filter.include_dynamic = false;
+                hit = phys->world.shape_cast(c.collision_radius, c.pivot, goal_pos, sweep_filter);
+            }
+            if (hit) reach = math::clamp(math::dot(hit->position - c.pivot, back), 0.0f, c.distance);
+        }
         if (fresh || !c.collide || reach <= c.arm || c.return_speed <= 0.0f) c.arm = reach;
         else c.arm = math::min(reach, c.arm + c.return_speed * f.dt);
         t.position = c.pivot + back * c.arm;

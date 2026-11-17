@@ -823,7 +823,7 @@ def city_surface(scene):
 def canopy(scene, name, model, x, y0, z, sc):
     """A camera-only collider over a tree's crown (layer 15, mask 0: nothing collides with it, default queries skip it), so the follow
     camera's spring arm stops at the leaves. y0 is where the tree's foot stands, sc its scale."""
-    cy, half = ((5.4, (2.2, 1.8, 2.2)) if model == "tree_oak" else (4.1, (1.4, 2.3, 1.4)))
+    cy, half = ((5.4, (2.2, 1.8, 2.2)) if model == "tree_oak" else (2.9, (1.4, 2.4, 1.4)))
     scene.add(name + " canopy", {"LocalTransform": tf((x, y0 + cy * sc, z)),
                                  "BoxCollider3D": {"half": [h * sc for h in half], "layer": 15, "mask": 0}})
 

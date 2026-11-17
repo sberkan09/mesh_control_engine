@@ -1,6 +1,6 @@
 # M-DRIVEFEEL — camera, driving and roadblock polish in the open-world sample (2026-11-16)
 
-Status: steps 1 and 2 done (2026-11-17), step 3 and the camera part measured and left open, see "Built" and "Open". Owner: the routine 3 thread. No Linear issue (the Backlog holds only device-bound work).
+Status: steps 1 (camera) and 2 done (2026-11-17), step 3 measured and left open, see "Built" and "Open". Owner: the routine 3 thread. No Linear issue (the Backlog holds only device-bound work).
 Source: defects seen in the `09_openworld` gameplay video of 2026-11-16. Each one is checked against the code below
 before a step is built; a defect the code does not support is dropped from the plan, not patched blind.
 
@@ -44,16 +44,16 @@ to scenes except new component fields with defaults that keep today's behaviour.
   slip of a full-stick turn at speed is lower with the assist, and the assist changes nothing near standstill). The
   open-world cars carry 180 (PR #1276). Older plan numbering: this was written as step 2 and shipped first.
 
+## Camera (built, 2026-11-17)
+
+Camera-only canopy colliders: layer 15 is the camera-only layer (`kCameraLayer`, default queries and the kit's weapon, sensor,
+sight, sound and nav-bake masks skip it, PR #1286); `BoxCollider3D.mask` lets a collider take layer 15 with mask 0 (#1287);
+every tree in `09_openworld` carries one (#1288). If the sweep starts inside a camera-only crown the arm sweeps again without
+that layer, so a pivot under a pine crown does not collapse the boom (`tests/kit/test_move3d.cpp`). Pine crowns are boxes
+and overestimate the cone's top.
+
 ## Open
 
-- **Step 1 (camera).** Not built. A camera-only canopy collider would also be hit by shots, line-of-sight checks and the nav
-  bake (all query layers default to every bit), so it needs a layer convention (a layer the default queries and nav skip) as
-  its own small seam PR first. `camera_sweep` ignores dynamic props on purpose (`test_queries.cpp`), so parked cars stay out.
-  Concrete chain (2026-11-17, read in `world3d.h/.cpp`, `kit3d.h`): (a) seam, physics3d only: `kCameraLayer = 15`,
-  `QueryFilter3D::layer_mask` defaults to `0x7FFF`, `camera_sweep` passes `0xFFFF`; (b) seam, `kit3d.h` (wide header, its own PR):
-  `BoxCollider3D` gets a `mask` field (today only `layer`, so a layer-15 box would still stop cars and the crowd); (c) the
-  nav bake and `sensors3d` keep their explicit masks (check they skip bit 15); (d) sample: a layer-15, mask-0 canopy box per
-  tree in `gen_assets.py`. Physics and core PRs wait for coordinator review.
 - **Step 3 (roadblocks).** Read `roadblock.cpp`: the sample has exactly two markers (x = -210 and x = 210, the avenue ends, the
   officers on the side away from the plaza) and a marker stands whenever an offender at its wanted level is 45..300 m away.
   So a block is on the player's way only when they leave the plaza along the avenue; side streets have none. Making blocks
