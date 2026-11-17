@@ -4,6 +4,7 @@
 #include <doctest/doctest.h>
 
 #include "mce/audio/components.h"
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
@@ -121,4 +122,30 @@ TEST_CASE("vehicle extras: Lights cycles Auto, On, Off over the spot light") {
     CHECK(spot().enabled == 0);
     s.run(1, "Lights");
     CHECK(mode() == HeadlightMode::Auto);
+}
+
+TEST_CASE("vehicle extras: a tail lamp lights while its car brakes and shows `idle` otherwise") {
+    Scene s;
+    PointLight3D lamp;
+    lamp.intensity = 1.0f;
+    BrakeLight3D b;
+    b.braking = 5.0f;
+    b.idle = 0.5f;
+    const Entity tail = s.w.spawn_with(at(0, 0.6f, 1.9f), ChildOf{s.car}, lamp, b);
+    const auto light = [&]() { return *s.w.try_get<PointLight3D>(tail); };
+    s.run(1);
+    CHECK(s.w.try_get<BrakeLight3D>(tail)->lit == 0);
+    CHECK(light().enabled == 1);
+    CHECK(light().intensity == doctest::Approx(0.5f));
+    s.w.try_get_mut<Vehicle3D>(s.car)->brake = 0.8f;
+    s.run(1);
+    CHECK(s.w.try_get<BrakeLight3D>(tail)->lit == 1);
+    CHECK(light().intensity == doctest::Approx(5.0f));
+    s.w.try_get_mut<Vehicle3D>(s.car)->brake = 0.0f;
+    s.run(1);
+    CHECK(s.w.try_get<BrakeLight3D>(tail)->lit == 0);
+    CHECK(light().intensity == doctest::Approx(0.5f));
+    s.w.try_get_mut<BrakeLight3D>(tail)->idle = 0.0f;  // idle 0: the lamp is off
+    s.run(1);
+    CHECK(light().enabled == 0);
 }

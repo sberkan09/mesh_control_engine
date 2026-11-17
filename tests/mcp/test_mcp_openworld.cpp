@@ -325,6 +325,8 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ImpactDamage3D","show":["ImpactDamage3D"]}})")) >= 5);
     CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ParticleBurst","show":["ParticleBurst"]}})")) >= 3);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"RepairShop3D","show":["RepairShop3D"]}})")) == 2);
+    // Every car has a tail lamp that lights while the car brakes (BrakeLight3D); at tick 1 none is lit yet.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"BrakeLight3D","show":["BrakeLight3D"]}})")) >= 5);
     // The pause menu (Esc): two hidden screens, one rule set (SAVE, LOAD); Pause shows the menu and holds the player, Resume walks again.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"UiFlow","show":["UiFlow"]}})")) == 2);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"UiFlowRules","show":["UiFlowRules"]}})")) == 1);

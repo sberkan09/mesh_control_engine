@@ -357,6 +357,35 @@
      "mesh": "guid:ae12b2df-df9f-5ac0-8d3a-d3c58772b64b"
     }
    }
+  },
+  {
+   "name": "Tail lamp",
+   "components": {
+    "ChildOf": {
+     "parent": "$0"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.2,
+      2.0
+     ]
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.04,
+      0.02,
+      1
+     ],
+     "intensity": 0,
+     "radius": 4.5,
+     "enabled": 0
+    },
+    "BrakeLight3D": {
+     "braking": 7.0
+    }
+   }
   }
  ]
 }

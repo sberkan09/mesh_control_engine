@@ -1,18 +1,24 @@
 #include "mce/kit/vehicle_extras.h"
 
 #include "mce/audio/components.h"
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/timed_light.h"
+#include "mce/kit/vehicles3d.h"
+#include "mce/math/math.h"
 #include "mce/string_id.h"
+
+#include <cmath>
 
 namespace mce::kit {
 
 static_assert(sizeof(VehicleHorn3D) == 48);
 static_assert(sizeof(VehicleLights3D) == 4);
+static_assert(sizeof(BrakeLight3D) == 12);
 
 namespace {
 
@@ -27,6 +33,19 @@ bool player_drives(World& w, Entity car) {
     if (!seat || seat->driver.is_null() || !w.alive(seat->driver)) return false;
     const Rider3D* r = w.try_get<Rider3D>(seat->driver);
     return r && r->use_input == 1 && r->seated == 1 && r->vehicle == car;
+}
+
+// True while the car brakes: the same inputs kit3d_vehicles feeds the wheels (its own brake and handbrake, the player's brake
+// trigger and handbrake key, the throttle against the way it rolls).
+bool car_braking(const Vehicle3D& v, const input::InputState* in) {
+    f32 throttle = v.throttle, brake = v.brake, handbrake = v.handbrake;
+    if (v.use_input && in) {
+        throttle = in->move.y;
+        brake = math::max(brake, in->trigger_l);
+        if (in->jump_held) handbrake = 1.0f;
+    }
+    if (throttle * v.speed < 0.0f && std::fabs(v.speed) > 1.0f) return true;
+    return brake > 0.05f || handbrake > 0.05f;
 }
 
 void kit_vehicle_extras(Frame& f) {
@@ -50,6 +69,15 @@ void kit_vehicle_extras(Frame& f) {
         const TimedLight3D* t = w.try_get<TimedLight3D>(e);
         if (t && t->captured) sl->intensity = t->spot_scale;
         sl->enabled = 1;
+    });
+
+    f.query<BrakeLight3D, PointLight3D>().each([&](Entity e, BrakeLight3D& b, PointLight3D& pl) {
+        const ChildOf* c = w.try_get<ChildOf>(e);
+        const Vehicle3D* v = c ? w.try_get<Vehicle3D>(c->parent) : nullptr;
+        b.lit = v && car_braking(*v, in) ? 1 : 0;
+        const f32 level = b.lit ? b.braking : b.idle;
+        pl.intensity = level;
+        pl.enabled = level > 0.0f ? 1u : 0u;
     });
 
     f.query<VehicleHorn3D>().each([&](Entity e, VehicleHorn3D& h) {
@@ -76,7 +104,7 @@ void install_vehicle_extras(World& world, asset::AssetSystem* assets) {
     install_timed_light(world, assets);  // the light write this system overrides
     if (world.try_resource<VehicleExtrasInstalled>()) return;
     world.set_resource(VehicleExtrasInstalled{});
-    world.register_components<VehicleHorn3D, VehicleLights3D>();
+    world.register_components<VehicleHorn3D, VehicleLights3D, BrakeLight3D>();
     world.add_system(Phase::FixedUpdate_Pre, "kit_vehicle_extras", &kit_vehicle_extras, "kit_timed_light");
 }
 

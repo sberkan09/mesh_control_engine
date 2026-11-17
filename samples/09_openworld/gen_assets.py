@@ -1016,6 +1016,11 @@ def car_visuals(model):
             "ChildOf": {"parent": "$%d" % hub}, "LocalTransform": tf((0, 0, 0), (s,) * 3, math.pi if i % 2 == 0 else 0.0),
             "MeshRef": {"mesh": "guid:" + guid(car_part_rel(model, "wheel"))}}})
         fields["wheel_" + n] = "$%d" % hub
+    # The tail lamp: a red point light behind the car, lit by BrakeLight3D while the car brakes (kit_vehicle_extras, M-TAILLIGHT).
+    ents.append({"name": "Tail lamp", "components": {
+        "ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.2, 2.0)),
+        "PointLight3D": {"color": [1.0, 0.04, 0.02, 1], "intensity": 0, "radius": 4.5, "enabled": 0},
+        "BrakeLight3D": {"braking": 7.0}}})
     radius = lay["radius"] * s
     fields.update(track=round((lay["front"][0] + lay["cx"]) * s, 3), front_axle=round(-lay["front"][2] * s, 3),
                   rear_axle=round(-lay["back"][2] * s, 3), wheel_radius=round(radius, 3), wheel_width=round(lay["width"] * s, 3),
