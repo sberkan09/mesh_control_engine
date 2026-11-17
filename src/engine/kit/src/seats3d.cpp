@@ -18,8 +18,8 @@
 
 namespace mce::kit {
 
-static_assert(sizeof(VehicleSeat3D) == 44);
-static_assert(sizeof(Rider3D) == 20);
+static_assert(sizeof(VehicleSeat3D) == 48);
+static_assert(sizeof(Rider3D) == 80);
 
 namespace {
 
@@ -87,6 +87,7 @@ void step_out(Frame& f, Entity rider, Rider3D& r, LocalTransform& t, math::vec3 
     follow(w, r.camera, rider);
     f.events().push(VehicleExited3D{rider, car});
     r.seated = 0;
+    r.phase = 0;
     r.vehicle = Entity{};
 }
 
@@ -143,6 +144,17 @@ void kit3d_seats(Frame& f) {
                 return;
             }
         }
+        // A glide in progress (M-SEATMOVE): it runs its time out, ignoring Interact; leaving ends by stepping out.
+        if (r.seated && r.phase != 0) {
+            const VehicleSeat3D* seat = w.try_get<VehicleSeat3D>(r.vehicle);
+            r.phase_time += f.dt;
+            if (!seat || r.phase_time >= seat->transition) {
+                if (r.phase == 2) step_out(f, e, r, t, r.to_pos, r.to_rot);
+                else r.phase = 0;
+            }
+            r.enter = 0;
+            return;
+        }
         const bool pressed = r.use_input && in && in->has_action(kInteract) && in->pressed(kInteract);
         if (!r.enter && !pressed) return;
         r.enter = 0;
@@ -154,7 +166,17 @@ void kit3d_seats(Frame& f) {
             math::quat vr;
             if (!pose_of(w, r.vehicle, vp, vr)) return;
             const CharacterController3D* kept = st.stash.find(e);
-            step_out(f, e, r, t, exit_point(w, r.vehicle, *seat, kept ? kept->radius : 0.3f, vp, vr), vr);
+            const math::vec3 out = exit_point(w, r.vehicle, *seat, kept ? kept->radius : 0.3f, vp, vr);
+            if (seat->transition > 0.0f) {
+                r.phase = 2;
+                r.phase_time = 0.0f;
+                r.from_pos = t.position;
+                r.from_rot = t.rotation;
+                r.to_pos = out;
+                r.to_rot = vr;
+                return;
+            }
+            step_out(f, e, r, t, out, vr);
             return;
         }
         // Board the nearest free seat in reach.
@@ -191,6 +213,12 @@ void kit3d_seats(Frame& f) {
         }
         r.seated = 1;
         r.vehicle = best;
+        if (seat.transition > 0.0f) {
+            r.phase = 1;
+            r.phase_time = 0.0f;
+            r.from_pos = t.position;
+            r.from_rot = t.rotation;
+        }
         follow(w, r.camera, best);
         f.events().push(VehicleEntered3D{e, best});
         if (CarOwner3D* own = w.try_get_mut<CarOwner3D>(best); own && !own->stolen) {  // M-CARJACK
@@ -211,8 +239,18 @@ void kit3d_seat_pose(Frame& f) {
         math::vec3 vp;
         math::quat vr;
         if (!seat || !pose_of(w, r.vehicle, vp, vr)) return;
-        t.position = vp + math::rotate(vr, seat->seat);
-        t.rotation = vr;
+        const math::vec3 at = vp + math::rotate(vr, seat->seat);
+        if (r.phase == 0 || seat->transition <= 0.0f) {
+            t.position = at;
+            t.rotation = vr;
+            return;
+        }
+        // M-SEATMOVE: gliding from where it stood to the seat (boarding) or from the seat to the exit point (leaving).
+        const f32 x = math::clamp(r.phase_time / seat->transition, 0.0f, 1.0f);
+        const f32 k = x * x * (3.0f - 2.0f * x);
+        const math::vec3 goal = r.phase == 1 ? at : r.to_pos;
+        t.position = r.from_pos + (goal - r.from_pos) * k;
+        t.rotation = math::normalize(math::slerp(r.from_rot, r.phase == 1 ? vr : r.to_rot, k));
     });
 }
 

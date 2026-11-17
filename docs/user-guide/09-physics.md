@@ -369,6 +369,9 @@ module, a sequence or MCP (the engine clears it), and while seated it leaves aga
 - **Leaving.** Only slower than `max_exit_speed`. The rider steps out at `exit`, else the mirrored side,
   else above the roof, whichever has room; the car gets its handbrake, its input mode and its AI driver
   back. If the car or the rider is destroyed, the seat is freed.
+- **Transition.** `transition` (seconds, default 0 = instant) makes boarding and leaving glide: the rider eases from where it
+  stood to the seat while the input already drives the car, and leaving eases from the seat to the exit point before the
+  controller comes back (`Rider3D::phase` shows 1 boarding, 2 leaving; Interact is ignored meanwhile).
 - **Camera.** Name a `CameraFollow3D` entity in `camera` and it follows the car while seated and the
   rider afterwards.
 - **Events.** `VehicleEntered3D` and `VehicleExited3D` (rider, vehicle).
