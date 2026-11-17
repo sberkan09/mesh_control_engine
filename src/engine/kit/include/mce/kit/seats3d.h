@@ -21,6 +21,11 @@
 // car excluded). The car gets its handbrake on, its input mode and AI driver back. If the car is
 // destroyed while seated, or the rider is, the seat is freed (the rider is put back where it sits).
 //
+// Transitions (M-SEATMOVE): with `VehicleSeat3D::transition` above 0 (seconds) boarding does not snap the rider into the
+// seat: the rider glides (smoothstep) from where it stood to the seat while the input already drives the car, and leaving
+// glides from the seat to the exit point before the controller comes back (the exit point is chosen when Interact is
+// pressed; the seat stays taken meanwhile, and Interact is ignored). 0 keeps the instant behaviour.
+//
 // A rider is not saved mid-ride: its controller settings are held by the engine, and a reloaded rider
 // that was seated gets a default CharacterController3D when it steps out.
 //
@@ -51,25 +56,34 @@ struct VehicleSeat3D {
     u8 locked = 0;                          // 1: nobody can board
     u8 saved = 0;                           // engine-written: what boarding switched off (bit 0 use_input, bit 1 AI driver)
     u16 pad_ = 0;
+    f32 transition = 0.0f;                  // s: how long boarding and leaving take (0: instant)
     Entity driver;                          // engine-written: who sits there (null: free)
 };
 MCE_COMPONENT(VehicleSeat3D, (seat, Help{"body space: where the driver sits"}),
               (exit, Help{"body space: where the driver steps out; the mirrored x is tried next, then above"}),
               (enter_radius, Range{0.1f, 50}, Help{"metres from the seat or the exit point"}),
               (max_exit_speed, Range{0, 200}, Help{"m/s: faster and the rider stays in"}), (locked, Help{"1: nobody can board"}),
+              (transition, Range{0, 5}, Help{"seconds boarding and leaving take; 0 = instant"}),
               (saved, ReadOnly, Transient), (driver, ReadOnly, Transient))
 
 struct Rider3D {
     u8 use_input = 0;       // 1: the Interact action boards and leaves
     u8 enter = 0;           // set to 1 to board the nearest seat or leave the one it sits in (the engine clears it)
     u8 seated = 0;          // engine-written
-    u8 pad_ = 0;
+    u8 phase = 0;           // engine-written: 0 none, 1 boarding (gliding to the seat), 2 leaving (gliding to the exit point)
     Entity vehicle;         // engine-written: the car it sits in
     Entity camera;          // optional: a CameraFollow3D entity that follows the car while seated
+    f32 phase_time = 0.0f;  // engine-written: seconds into the phase
+    math::vec3 from_pos{};  // engine-written: where the glide started
+    math::vec3 to_pos{};    // engine-written: where leaving ends
+    math::quat from_rot = math::quat::identity();
+    math::quat to_rot = math::quat::identity();
 };
 MCE_COMPONENT(Rider3D, (use_input, Help{"1: the Interact action boards and leaves"}),
               (enter, Help{"set to 1 to board or leave (the engine clears it)"}), (seated, ReadOnly, Transient),
-              (vehicle, ReadOnly, Transient), (camera, Help{"a CameraFollow3D entity: follows the car while seated"}))
+              (vehicle, ReadOnly, Transient), (camera, Help{"a CameraFollow3D entity: follows the car while seated"}),
+              (phase, ReadOnly, Transient), (phase_time, ReadOnly, Transient), (from_pos, ReadOnly, Transient),
+              (to_pos, ReadOnly, Transient), (from_rot, ReadOnly, Transient), (to_rot, ReadOnly, Transient))
 
 // Events (producer FixedUpdate_Pre).
 struct VehicleEntered3D {

@@ -124,6 +124,50 @@ TEST_CASE("seats3d: a rider boards with Interact, drives the car, and steps out"
     CHECK(s.w.try_get<CharacterController3D>(me)->speed == doctest::Approx(7.0f));  // the settings came back
 }
 
+TEST_CASE("seats3d: a transition glides the rider into the seat and out to the exit point (M-SEATMOVE)") {
+    Scene s;
+    const Entity car = s.car();
+    s.seat(car).transition = 0.5f;
+    const Entity me = s.rider(-2.0f);
+    s.run(60);  // settle
+    const vec3 start = s.pos(me);
+
+    s.run(1, true);
+    CHECK(s.rid(me).seated);
+    CHECK(s.rid(me).phase == 1);
+    CHECK(s.veh(car).use_input == 1);  // the input drives the car at once
+    s.run(14);                         // about 0.25 s: halfway there
+    const vec3 seat_at = s.pos(car) + math::rotate(s.w.try_get<LocalTransform>(car)->rotation, s.seat(car).seat);
+    const f32 total = math::length(seat_at - start), left = math::length(seat_at - s.pos(me));
+    CHECK(left > 0.2f * total);
+    CHECK(left < 0.8f * total);
+    s.run(1, true);  // Interact in the middle of the glide does nothing
+    CHECK(s.rid(me).seated);
+    CHECK(s.rid(me).phase == 1);
+    s.run(30);
+    CHECK(s.rid(me).phase == 0);
+    CHECK(math::length(s.pos(me) - seat_at) < 0.15f);
+
+    // Leaving: the seat stays taken while the rider glides out, then the controller comes back.
+    s.veh(car).brake = 1.0f;
+    s.run(60);
+    const vec3 seated_at = s.pos(me);
+    s.run(1, true);
+    CHECK(s.rid(me).phase == 2);
+    s.run(14);
+    CHECK(s.rid(me).seated);
+    CHECK_FALSE(s.w.has<CharacterController3D>(me));
+    CHECK(s.seat(car).driver == me);
+    CHECK(math::length(s.pos(me) - seated_at) > 0.1f);
+    s.run(30);
+    CHECK_FALSE(s.rid(me).seated);
+    CHECK(s.rid(me).phase == 0);
+    CHECK(s.seat(car).driver.is_null());
+    s.run(2);
+    CHECK(s.w.has<CharacterController3D>(me));
+    CHECK(math::length(s.pos(me) - s.pos(car)) > 1.0f);
+}
+
 TEST_CASE("seats3d: refusals - too far, locked, taken") {
     Scene s;
     const Entity car = s.car();
