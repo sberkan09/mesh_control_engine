@@ -41,7 +41,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 - **Washed-out colours.** The grass tint (0.20, 0.34, 0.14) shows as a pastel green (about 186, 214, 164) and the kerb or
   sidewalk strip reads near white. Suspect the fixed sun (intensity 3.0, exposure 1.0) and no grading; cause not confirmed.
   Check it on Metal as well (same shaders translated to MSL) before tuning.
-- **Characters and cars are blocky/toy Kenney models.** Characters now walk and run (E9, step 6 below); the car part is still open: wheels do not spin; no door, steering or lights animation.
+- **Characters and cars are blocky/toy Kenney models.** Characters now walk and run (E9, step 6 below); the cars' wheels now turn, steer and bounce ([M-WHEELSPIN](M-WHEELSPIN.md)); still open: door and seat transitions, lights animation.
 - **No sky**: no HDRI, no clouds, no stars; no night look; ~~traffic lights do not change colour with the signal state~~ **done ([M-SIGNALHEADS](M-SIGNALHEADS.md): poles with red, amber and green lamps at every signalised approach, lit by the lane's real light)**.
 - **No third-person feel**: ~~the player does not face its movement direction~~ **done ([M-FACEMOVE](M-FACEMOVE.md): `FaceVelocity3D` on the player model)**; the camera stays behind a fixed orbit (the gun is the player's since step 2a and aims along the camera).
 - **Visible feedback on shooting**: ~~no muzzle flash~~ **muzzle flash and a small view kick done ([M-SHOTFX](M-SHOTFX.md))**; **hit marker done ([M-HITMARKER](M-HITMARKER.md))**; **impact sparks done ([M-IMPACTFX](M-IMPACTFX.md))**; **bullet holes done ([M-SHOTMARKS](M-SHOTMARKS.md))**; ~~still no tracer line~~ **tracer line done ([M-TRACERS](M-TRACERS.md))**.
@@ -106,7 +106,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
    an `Animator` on the model and a `Locomotion3D` on the root, which feeds `speed` from the controller, the nav agent or the crowd's
    motion. `FaceVelocity3D` (M-FACEMOVE) still turns the player. `test_mcp_openworld` checks every `Locomotion3D` finds the graph's
    `speed` and that at least 15 walkers feed a walking speed. The mission target men carry the `Animator` too (they stand, so
-   they play `idle`). Still open: wheel spin (the Kenney car is one mesh), door and seat transitions.
+   they play `idle`). Wheel spin done ([M-WHEELSPIN](M-WHEELSPIN.md): each car is a body model plus four wheel models); still open: door and seat transitions.
 7. **E10 gates**: screenshot gate, budget counters, scripted playthrough test, Mac soak.
 8. **E11 scale**: HLOD skyline, scene streaming, floating origin when the map outgrows 1 km² (A13, A14).
 

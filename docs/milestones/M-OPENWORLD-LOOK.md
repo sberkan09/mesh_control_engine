@@ -24,7 +24,7 @@ Buildings, cars and characters stay the Kenney models.
   Real PBR sets (`mce content add ambientcg-asphalt031` and friends) can replace the files without touching the scene.
 - **Paint layout** assumes the roads' `drive: right`: local +x traffic on the +z side; z-roads are the same mesh turned -90 degrees.
 - **Colour.** The grass is deliberately darker and less saturated than the old tint (it read as pastel in the captures); the sidewalk is a warm grey, not near white.
-- **Not done:** kerb stones as their own mesh (the sidewalk is one slab with the paving on its sides too), ~~traffic light heads that change colour~~ (done, [M-SIGNALHEADS](M-SIGNALHEADS.md)), moving wheels,
+- **Not done:** kerb stones as their own mesh (the sidewalk is one slab with the paving on its sides too), ~~traffic light heads that change colour~~ (done, [M-SIGNALHEADS](M-SIGNALHEADS.md)), ~~moving wheels~~ (done, [M-WHEELSPIN](M-WHEELSPIN.md)),
   a sky HDRI (the DayCycle/atmosphere preset needs a render-path change and stays an open item of E6).
 - **Not measured:** frame time on a real GPU. The city has about 1.7k scene entities, roughly 190k triangles in view on the start corner, and one spot light per car.
 

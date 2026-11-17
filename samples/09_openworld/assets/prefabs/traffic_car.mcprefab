@@ -22,7 +22,17 @@
      "engine_torque": 900,
      "self_right": 1,
      "anti_roll": 8000,
-     "steer_assist": 180
+     "steer_assist": 180,
+     "wheel_fl": "$2",
+     "wheel_fr": "$4",
+     "wheel_rl": "$6",
+     "wheel_rr": "$8",
+     "track": 0.404,
+     "front_axle": -0.627,
+     "rear_axle": 0.627,
+     "wheel_radius": 0.285,
+     "wheel_width": 0.332,
+     "wheel_y": -0.265
     },
     "VehicleSeat3D": {
      "seat": [
@@ -176,7 +186,7 @@
     "LocalTransform": {
      "position": [
       0,
-      -0.4,
+      -0.79,
       0
      ],
      "rotation": [
@@ -192,7 +202,159 @@
      ]
     },
     "MeshRef": {
-     "mesh": "guid:7f9b6343-3f98-5541-9c3f-b66d4cf49cc9"
+     "mesh": "guid:7a46d2a1-316b-595f-8197-5181e4e4b428"
+    }
+   }
+  },
+  {
+   "name": "Wheel fl",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -1000,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "name": "Wheel fl model",
+   "components": {
+    "ChildOf": {
+     "parent": "$2"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:ae12b2df-df9f-5ac0-8d3a-d3c58772b64b"
+    }
+   }
+  },
+  {
+   "name": "Wheel fr",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -1000,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "name": "Wheel fr model",
+   "components": {
+    "ChildOf": {
+     "parent": "$4"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:ae12b2df-df9f-5ac0-8d3a-d3c58772b64b"
+    }
+   }
+  },
+  {
+   "name": "Wheel rl",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -1000,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "name": "Wheel rl model",
+   "components": {
+    "ChildOf": {
+     "parent": "$6"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:ae12b2df-df9f-5ac0-8d3a-d3c58772b64b"
+    }
+   }
+  },
+  {
+   "name": "Wheel rr",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -1000,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "name": "Wheel rr model",
+   "components": {
+    "ChildOf": {
+     "parent": "$8"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:ae12b2df-df9f-5ac0-8d3a-d3c58772b64b"
     }
    }
   }
