@@ -1,0 +1,1 @@
+- editor tests: the multi-entity command fuzz also runs mixed with create, delete, reparent and paste (M-EDITUX3); no defect found.
