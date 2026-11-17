@@ -90,6 +90,7 @@ mce_add_test(test_kit UMBRELLA
         test_season.cpp
         test_water_ice.cpp
         test_floater.cpp
+        test_signal_head.cpp
         test_leaf_fall.cpp
         test_firefly.cpp
         test_pollen.cpp

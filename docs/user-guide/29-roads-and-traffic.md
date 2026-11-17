@@ -77,6 +77,16 @@ everywhere for `all_red` seconds before the next phase. A `green` entry is a roa
 turn written `"from>to"` (a protected left, say). `offset` shifts the cycle so neighbouring lights make a green
 wave. Every turn at a signalled junction must be green in some phase, or the cook stops.
 
+**Lamps that show the light.** A `SignalHead` (`mce/kit/signal_head.h`, M-SIGNALHEADS 56b) next to a `LocalTransform` and a
+`MeshRef` makes that mesh one lamp of a traffic light: `lamp` is its colour (`Red`, `Amber` or `Green`), `approach` the world
+direction of the traffic the light governs and `network` the `RoadNetwork3D` entity (null: the first one). The system
+`kit_signal_heads` (FixedUpdate_Pre, after `roads_clock`) finds the road lane running to a junction nearest the lamp (within
+16 m, within 90 degrees of `approach`) and lights the lamp whose colour is that approach's light: green when any turn out of
+the lane is green, else amber when any is amber, else red. It writes only the entity's own `MeshRef` `tint` and
+`emissive_tint` (the lit lamp gets a bright tint and an emissive tint above 1 so bloom picks it up, the others go dark), so the
+material needs a non-black emissive colour. A head with no lane, no network or `enabled` 0 is left as authored.
+`signal_approach_light` and `signal_lamp_look` are the pure helpers behind it.
+
 ## 29.4 Placing a network and asking it questions
 
 Put a `RoadNetwork3D` component on an entity and set its `roads` to the `.mcroads` asset. The network sits at

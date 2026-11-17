@@ -1,6 +1,6 @@
 # M-SIGNALHEADS — Traffic light heads that show the signal (milestone record)
 
-**Status:** planned (2026-11-16), steps 56a to 56d. 56a is this plan. **Owner: routine 2 thread (the M-VISUAL line).**
+**Status:** in progress (2026-11-16), steps 56a to 56d. 56a (plan, #1271) and 56b (component and system) are done. **Owner: routine 2 thread (the M-VISUAL line).**
 Follow-up of M-ROADS (`RoadNetwork3D`, `road_light`), M-OPENWORLD-GAPS section B ("traffic lights do not change colour with
 the signal state", open since the first play review) and M-OPENWORLD-LOOK ("traffic light heads that change colour" listed
 under Not done). No Linear issues (free limit); this record is the tracker. No step writes a shader or touches `render::`,
@@ -16,20 +16,21 @@ cones or volumetric glow, a point light per head (bloom from `emissive_tint` is 
 
 ## Design
 
-- **Component.** `kit::SignalHead {network, lane, enabled, pad_}` in a new header `mce/kit/signal_head.h`, included only by
-  its system, the install and the cook/editor registries. `network` is the `RoadNetwork3D` entity (null: the first one),
-  `lane` the connector lane whose light the head shows. Defaults and clamps as every component (NaN to the default),
-  explicit zeroed padding and a `test_padding` entry.
-- **Pure helper.** `signal_head_look(RoadLight, f32 seconds_left) -> {tint, emissive_tint}`: three fixed looks (green, amber,
-  red, each a dark body colour and an emissive tint above 1 so bloom picks it up), no blending. Same inputs, same bits.
+- **Component.** `kit::SignalHead {network, approach, lamp, enabled, pad_}` in a new header `mce/kit/signal_head.h`,
+  included only by its system, the install and the cook/editor registries. `network` is the `RoadNetwork3D` entity (null:
+  the first one), `approach` the world direction of the traffic the light governs, `lamp` which colour this mesh is (one
+  entity per lamp). Explicit zeroed padding and a `test_padding` entry.
+- **Pure helpers.** `signal_approach_light(net, position, approach, out)` reads the nearest road lane running to a junction
+  (within 16 m, within 90 degrees of `approach`) and answers green when any connector leaving it is green, else amber, else
+  red; `signal_lamp_look(lamp, state)` gives a lit lamp a bright tint and an emissive tint above 1 (so bloom picks it up)
+  and an unlit one a dark tint with no emission. Same inputs, same bits.
 - **System.** `kit_signal_heads` (FixedUpdate_Pre, after `roads_clock`) reads `road_light(net, lane)` and writes only the
   `MeshRef::tint` and `emissive_tint` of its own entity. No state, no allocation per tick; a head whose lane or network is
   missing, or `enabled` 0, is left as authored. A scene without the component is bit-identical.
-- **Which lane (decided in 56b).** The sample needs one head per approach of a signalised junction. 56b checks how a
-  generator can name a connector lane stably (lane indices come from the cooked network); if it cannot, the component
-  takes the node name and the approach heading and the system resolves the lane once, caching nothing in the World, and the
-  plan records the change.
-- **Luau (56c).** `signal.set{...}` and getters on a head, plus `signal.state(entity)` returning "green", "amber" or "red",
+- **Which lane (decided in 56b).** Connector lane indices come from the cooked network, so a generator cannot name them
+  stably. The head therefore carries a direction instead and the system resolves the approach lane by position each tick
+  (`road_nearest` with a heading), caching nothing in the World.
+- **Luau (56c).** `signal.set(e, {...})` and getters on a head, plus `signal.state(e)` returning "green", "amber" or "red",
   typed in `definitions.cpp`; bad input raises a named error and writes nothing.
 - **Sample.** `samples/09_openworld/gen_assets.py` puts three small lamp boxes (red over amber over green, only the lit one
   glows) on a pole at every approach of the 9 signalised junctions, on the corner pad next to the street lamps; the lit lamp
@@ -39,8 +40,8 @@ cones or volumetric glow, a point light per head (bloom from `emissive_tint` is 
 
 | Step | What | Module | Status |
 |---|---|---|---|
-| 56a | This plan | docs | this PR |
-| 56b | `SignalHead`, `signal_head_look`, `kit_signal_heads`, registered by `install_roads`; `tests/kit/test_signal_head.cpp` (looks per state, a lane that turns red at the exact tick `road_light` says, missing network untouched, `enabled` 0 untouched, padding, determinism hash with and without the system); the three registry includes the walls stage checks, user guide paragraph, allow line | kit | open |
+| 56a | This plan | docs | done (#1271) |
+| 56b | `SignalHead`, `signal_head_look`, `kit_signal_heads`, registered by `install_roads`; `tests/kit/test_signal_head.cpp` (looks per state, a lane that turns red at the exact tick `road_light` says, missing network untouched, `enabled` 0 untouched, padding, determinism hash with and without the system); the three registry includes the walls stage checks, user guide 29.3 paragraph, allow line | kit | done |
 | 56c | Luau `signal` table and `definitions.cpp`; `tests/script/test_script_signal.cpp` | script | open |
 | 56d | `09_openworld` heads on every signalised approach (generator, regenerated scene), `test_mcp_openworld` checks the heads exist and that a head's colour matches `road_light` at two ticks, M-OPENWORLD-GAPS section B and M-OPENWORLD-LOOK updated, user guide 18-samples | samples/09_openworld, tests/mcp | open |
 
@@ -56,7 +57,7 @@ cones or volumetric glow, a point light per head (bloom from `emissive_tint` is 
 
 ## Risks
 
-- **Lane naming.** Connector lane indices may not be stable across regenerated scenes; 56b measures this first (see
-  "Which lane").
+- **Lane by position.** A lamp placed far from its approach lane, or facing a lane in the wrong direction, shows nothing; the
+  generator in 56d places each lamp on its own approach and the sample test checks every head resolved a lane.
 - **Bloom on llvmpipe.** An emissive tint above 1 depends on the bloom pass; if a head is not readable without it, the
   looks get a brighter base `tint` instead of a higher `emissive_tint`.

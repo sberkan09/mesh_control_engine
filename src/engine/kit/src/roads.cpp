@@ -7,6 +7,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/hash.h"
+#include "mce/kit/signal_head.h"
 #include "mce/log.h"
 #include "mce/string_id.h"
 
@@ -439,6 +440,7 @@ void install_roads(World& world, asset::AssetSystem* assets) {
     world.register_components<RoadNetwork3D>();
     world.set_resource(RoadRegistry(assets));
     world.add_system(Phase::FixedUpdate_Pre, "roads_clock", &roads_clock);
+    install_signal_head(world);  // M-SIGNALHEADS 56b: lamps that show the lights (after roads_clock)
 }
 
 }  // namespace mce::kit
