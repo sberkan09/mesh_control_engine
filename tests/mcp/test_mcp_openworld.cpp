@@ -8,6 +8,7 @@
 #include <cmath>
 #include <filesystem>
 #include <string>
+#include <utility>
 
 #include "mcp_client.h"
 
@@ -86,6 +87,23 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     const std::string in = drive_input();
     auto seated = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + in + R"(","inspect":{"component":"Rider3D","show":["Rider3D"]}})");
     CHECK(comps(seated, 0).get("Rider3D").get("seated").as_number() == 1);
+    CHECK(comps(seated, 0).get("Rider3D").get("phase").as_number() == 0);  // the glide into the seat (M-SEATMOVE) is over
+    {
+        // Interact at tick 110 boards; 5 ticks later the rider is still gliding in, and 5 ticks after the exit press it is gliding out.
+        const auto phase = [&](u32 ticks) {
+            auto r = c.ok("run_headless", R"({"ticks":)" + std::to_string(ticks) + R"(,"log_lines":0,"input":")" + in +
+                                              R"(","inspect":{"component":"Rider3D","show":["Rider3D"]}})");
+            REQUIRE(count(r) >= 1);
+            return std::pair<double, double>(comps(r, 0).get("Rider3D").get("seated").as_number(),
+                                             comps(r, 0).get("Rider3D").get("phase").as_number());
+        };
+        const auto boarding = phase(116);
+        CHECK(boarding.first == 1);
+        CHECK(boarding.second == 1);
+        const auto leaving = phase(485);
+        CHECK(leaving.first == 1);
+        CHECK(leaving.second == 2);
+    }
     // Wheels that turn (M-WHEELSPIN 57d): the engine moves each wheel hub onto its wheel (they start parked far below), and a
     // wheel of the player's car rotates while it drives (a few ticks of the drive apart, the rotation differs).
     {

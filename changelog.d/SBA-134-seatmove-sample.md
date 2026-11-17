@@ -1,0 +1,1 @@
+- Seat transitions in the city, M-SEATMOVE step 58b (SBA-134): the player's car and the parked cars of `09_openworld` have `VehicleSeat3D.transition` 0.35, so the rider glides into and out of the seat; `test_mcp_openworld` checks the boarding and leaving phases. User guide 18, M-OPENWORLD-GAPS.
