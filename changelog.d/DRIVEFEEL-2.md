@@ -1,0 +1,1 @@
+- Open-world sample: the cars the player can take now steer with `steer_assist` 180, so full stick at speed no longer swings the wheels to full lock (M-DRIVEFEEL step 2).
