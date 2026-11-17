@@ -1,0 +1,1 @@
+- physics3d: layer 15 is camera-only (`kCameraLayer`); queries default to layers 0..14, `camera_sweep` sees all 16.

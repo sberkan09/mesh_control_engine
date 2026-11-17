@@ -1521,6 +1521,7 @@ bool World3D::vehicle_state(u32 vehicle, VehicleState3D& out, Span<WheelState3D>
 std::optional<ShapeHit3D> World3D::camera_sweep(vec3 from, vec3 to, f32 sphere_radius) const {
     QueryFilter3D f;
     f.include_dynamic = false;
+    f.layer_mask = 0xFFFF;  // every layer, the camera-only one too
     return shape_cast(sphere_radius, from, to, f);
 }
 
