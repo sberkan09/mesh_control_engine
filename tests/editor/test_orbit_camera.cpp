@@ -224,3 +224,38 @@ TEST_CASE("orbit camera: kit3d boxes collide and a 3D scene frames through its c
     CHECK(close(framed.eye().y, 2.0f, 1e-2f));
     CHECK(close(framed.eye().z, 9.0f, 1e-2f));
 }
+
+TEST_CASE(
+    "orbit camera: a camera-only crown the pivot sits in does not glue the camera to it, a building box still does") {
+    EditorScene s;
+    auto box = [](EditorScene& sc, const char* name, f32 half, u32 layer) {
+        const EntityId e = sc.create_entity(name);
+        sc.set(e, LocalTransform{});
+        sc.add_component(e, refl::type_of<kit::BoxCollider3D>());
+        kit::BoxCollider3D b = *sc.get<kit::BoxCollider3D>(e);
+        b.half = {half, half, half};
+        b.layer = layer;
+        sc.set(e, b);
+    };
+    box(s, "Crown", 2.0f, 15);
+    OrbitCamera cam;
+    cam.yaw = kPi;
+    cam.pitch = 0.0f;
+    cam.distance = 10.0f;
+    OrbitColliders colliders;
+    colliders.sync(s);
+    CHECK(colliders.body_count() == 1);
+    cam.resolve(colliders.world());
+    CHECK(cam.effective == doctest::Approx(10.0f));  // the crown is ignored: the boom is free
+
+    EditorScene s2;
+    box(s2, "Building", 2.0f, 0);
+    OrbitColliders walls;
+    walls.sync(s2);
+    OrbitCamera inside;
+    inside.yaw = kPi;
+    inside.pitch = 0.0f;
+    inside.distance = 10.0f;
+    CHECK(inside.resolve(walls.world()));
+    CHECK(inside.effective < 1.0f);  // a pivot inside an ordinary box keeps the old stuck-at-the-minimum behaviour
+}

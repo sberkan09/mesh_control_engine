@@ -60,6 +60,7 @@ bool collider_footprint(const EditorScene& scene, EntityId id, Footprint& out) {
 struct Box3D {
     vec3 center, half;
     quat rotation;
+    u8 layer = 0;  // the collider's layer: 15 is the camera-only layer
 };
 
 bool box_collider_3d(const EditorScene& scene, EntityId id, Box3D& out) {
@@ -69,6 +70,7 @@ bool box_collider_3d(const EditorScene& scene, EntityId id, Box3D& out) {
     out.half = {std::fabs(c->half.x * t.scale.x), std::fabs(c->half.y * t.scale.y), std::fabs(c->half.z * t.scale.z)};
     out.rotation = normalize(t.rotation * quat_from_axis_angle({1.0f, 0.0f, 0.0f}, radians(c->pitch_deg)));
     out.center = t.position + rotate(t.rotation, {c->offset.x * t.scale.x, c->offset.y * t.scale.y, c->offset.z * t.scale.z});
+    out.layer = static_cast<u8>(c->layer & 15u);
     return out.half.x > 0.0f && out.half.y > 0.0f && out.half.z > 0.0f;
 }
 
@@ -129,7 +131,16 @@ vec3 OrbitCamera::back() const { return -rotate(orbit_orientation(yaw, pitch), {
 render::Camera3D OrbitCamera::camera() const { return render::orbit_camera(target, yaw, pitch, effective, fov_y); }
 
 bool OrbitCamera::resolve(const physics::World3D& world) {
-    const auto hit = world.camera_sweep(target, target + back() * distance, probe_radius);
+    const vec3 goal = target + back() * distance;
+    auto hit = world.camera_sweep(target, goal, probe_radius);
+    if (hit && hit->t <= 1e-4f) {
+        // The pivot starts inside a collider. A camera-only one (a tree crown framed from its centre) must not glue the
+        // camera to the pivot: sweep again without that layer; a wall or building box the pivot is inside still stops
+        // it at the old minimum.
+        physics::QueryFilter3D filter;
+        filter.include_dynamic = false;
+        hit = world.shape_cast(probe_radius, target, goal, filter);
+    }
     effective = hit ? max(0.05f, length(hit->position - target)) : distance;
     return hit.has_value();
 }
@@ -168,6 +179,8 @@ void OrbitColliders::sync(const EditorScene& scene, f32 depth) {
         d.shape = physics::Shape3D::box(b.half);
         d.position = b.center;
         d.rotation = b.rotation;
+        d.layer = b.layer;
+        if (b.layer == physics::kCameraLayer) d.mask = 0;  // the camera-only layer collides with nothing
         if (!world_.create_body(Entity{e.id, 1}, d)) continue;
         ++bodies_;
         const f32 r = length(b.half);
