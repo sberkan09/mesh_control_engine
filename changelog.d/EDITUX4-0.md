@@ -1,0 +1,1 @@
+- editor tests: the multi-entity command fuzz also covers component add/remove, inspector passes, entity moves and gizmo drags (M-EDITUX4); no defect found.
