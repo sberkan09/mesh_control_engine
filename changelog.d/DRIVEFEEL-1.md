@@ -1,0 +1,1 @@
+- Vehicles: `Vehicle3D.steer_assist` (0..255, default 0 = unchanged) eases the player's steering with speed, down to a quarter of full lock at 30 m/s (M-DRIVEFEEL step 1).
