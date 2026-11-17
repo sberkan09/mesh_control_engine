@@ -296,7 +296,8 @@ struct VehicleState3D {
 };
 
 // Layer 15 is camera-only: a body there (give it mask 0 so nothing collides with it) is seen by camera_sweep and by a
-// filter that names the layer, never by a default filter (raycasts, overlaps, shape casts, sensors).
+// filter that names the layer. A default QueryFilter3D skips it, and so do the kit's weapons, projectiles, sensors,
+// line-of-sight and sound checks and the nav bake, which AND their own `mask` with kDefaultQueryMask.
 inline constexpr u8 kCameraLayer = 15;
 inline constexpr u16 kDefaultQueryMask = 0x7FFF;
 

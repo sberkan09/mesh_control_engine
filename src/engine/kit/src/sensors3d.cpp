@@ -97,7 +97,7 @@ void kit3d_sensors(Frame& f) {
         if (r.enabled && r.distance > 0.0f && math::length_sq(dir) > 0.0f) {
             Entity skip[16];
             physics::QueryFilter3D filter;
-            filter.layer_mask = r.mask;
+            filter.layer_mask = static_cast<u16>(r.mask & physics::kDefaultQueryMask);
             filter.include_dynamic = r.dynamic != 0;
             filter.include_characters = r.characters != 0 && !(r.radius > 0.0f);
             filter.exclude = Span<const Entity>(skip, self_and_parents(w, e, skip));
@@ -132,7 +132,7 @@ void kit3d_sensors(Frame& f) {
             world_pose(w, e, t, pos, rot, scale);
             Entity skip[16];
             physics::QueryFilter3D filter;
-            filter.layer_mask = o.mask;
+            filter.layer_mask = static_cast<u16>(o.mask & physics::kDefaultQueryMask);
             filter.include_dynamic = o.dynamic != 0;
             filter.include_characters = o.characters != 0;
             filter.exclude = Span<const Entity>(skip, self_and_parents(w, e, skip));
