@@ -85,7 +85,7 @@ direction of the traffic the light governs and `network` the `RoadNetwork3D` ent
 the lane is green, else amber when any is amber, else red. It writes only the entity's own `MeshRef` `tint` and
 `emissive_tint` (the lit lamp gets a bright tint and an emissive tint above 1 so bloom picks it up, the others go dark), so the
 material needs a non-black emissive colour. A head with no lane, no network or `enabled` 0 is left as authored.
-`signal_approach_light` and `signal_lamp_look` are the pure helpers behind it.
+`signal_approach_light` and `signal_lamp_look` are the pure helpers behind it. Luau reads and tunes a head with the `signal` table (`signal.state(e)` answers the light the approach shows now, [chapter 27](27-scripting.md)).
 
 ## 29.4 Placing a network and asking it questions
 

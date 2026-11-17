@@ -881,6 +881,21 @@ declare floater: {
     -- 1); an unknown key or a non-number raises and nothing is written
     set: (entity: Entity, settings: { enabled: number?, offset: number?, tilt: number?, follow: number? }) -> (),
 }
+
+declare signal: {
+    -- SignalHead (M-SIGNALHEADS), on the given entity: one lamp of a traffic light that kit_signal_heads lights while its
+    -- colour is the light of its approach. Every function raises when the entity has no SignalHead (set never adds one).
+    enabled: (entity: Entity) -> number,
+    -- the lamp's own colour: "red", "amber" or "green"
+    lamp: (entity: Entity) -> string,
+    -- the flat direction (x, z) of the traffic the light governs
+    approach: (entity: Entity) -> (number, number),
+    -- the light the approach shows now ("red", "amber" or "green"), or "none" without a road network or a lane to a junction
+    state: (entity: Entity) -> string,
+    -- every key optional (enabled: any non-zero number is 1; approach_x and approach_z are finite); an unknown key or a
+    -- non-number raises and nothing is written
+    set: (entity: Entity, settings: { enabled: number?, approach_x: number?, approach_z: number? }) -> (),
+}
 )";
 
 const char* luau_type(const refl::FieldRecord& f) {
