@@ -149,8 +149,31 @@ def box_glb():
             + struct.pack("<I4s", len(blob), b"BIN\0") + blob)
 
 
+def car_part_rel(name, part):
+    """Body or wheel model split from a Kenney car (M-WHEELSPIN), path relative to assets/."""
+    return "models/cars/%s_%s.glb" % (name, part)
+
+
+def car_parts():
+    """Splits each Kenney car into a body without wheels and one wheel centred on its origin (tools/car_split.py); returns
+    {car: wheel layout in model space} for the sample's wheel entities."""
+    sys.path.insert(0, os.path.join(HERE, "tools"))
+    import car_split
+    layouts = {}
+    for n in CAR_MODELS:
+        body, wheel, info = car_split.split(os.path.join(HERE, "assets", model_rel(n)),
+                                            "../../" + TP + KIT[n] + "/models/")
+        for part, data in (("body", body), ("wheel", wheel)):
+            rel = car_part_rel(n, part)
+            write_bytes(rel, data)
+            write(rel + ".mceasset", {"guid": guid(rel), "importer": "gltf", "importer_version": 3, "settings": {}})
+        layouts[n] = info
+    return layouts
+
+
 def models():
     write_bytes("models/box.glb", box_glb())
+    car_parts()
     write("models/box.glb.mceasset", {"guid": G_BOX, "importer": "gltf", "importer_version": 3, "settings": {}})
     # The Kenney models come from `mce content add` (CC0, see CREDITS.md); only their sidecars are written here.
     names = set(CAR_MODELS) | set(CHARACTERS) | set(PROPS) | {n for n, _ in DOWNTOWN_MODELS + SUBURB_MODELS + RESIDENTIAL_MODELS}

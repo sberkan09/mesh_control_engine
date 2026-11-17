@@ -1,0 +1,1 @@
+- Car body and wheel models, M-WHEELSPIN step 57c (SBA-131): `samples/09_openworld/tools/car_split.py` splits each Kenney car glb into a body without wheels and one wheel centred on its origin (written to `assets/models/cars/` by `gen_assets.py`, not used by the scene yet; deterministic, triangle counts add up to the original).
