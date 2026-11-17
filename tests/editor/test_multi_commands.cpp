@@ -222,6 +222,41 @@ struct Run {
             if (!s.doc().find(e)) dead.push_back(e);
     }
 
+    // The M-EDITUX5 mix: the scene file changed on disk (another tool, an MCP client) and is reloaded over the history.
+    // The new text is this scene after a few edits made in a second editor, or the text unchanged, or not a scene at
+    // all.
+    void reload_command() {
+        if (rng() % 3 != 0) {
+            ux_command();
+            return;
+        }
+        std::vector<EntityId> before;
+        for (const DocEntity& e : s.doc().entities()) before.push_back(e.id);
+        std::string text = text_of(s);
+        if (rng() % 8 == 0) {
+            text = "not a scene";
+        } else if (rng() % 4 != 0) {
+            EditorScene other;
+            cook::DiagList d;
+            const std::string now = text_of(s);
+            other.reload_text(StringView(now.data(), now.size()), "other", d);
+            for (u32 i = 0, n = 1 + static_cast<u32>(rng() % 4); i < n; ++i) {
+                if (rng() % 3 == 0 && other.doc().size() > 0)
+                    other.destroy_entity(other.doc().at(rng() % other.doc().size()).id);
+                else if (rng() % 2 && other.doc().size() > 0)
+                    other.rename_entity(other.doc().at(rng() % other.doc().size()).id,
+                                        "X" + std::to_string(rng() % 50));
+                else
+                    other.create_entity("D" + std::to_string(rng() % 50));
+            }
+            text = text_of(other);
+        }
+        cook::DiagList diags;
+        s.reload_text(StringView(text.data(), text.size()), "scene.mcscene", diags);
+        for (const EntityId id : before)
+            if (!s.doc().find(id)) dead.push_back(id);
+    }
+
     // The M-EDITUX3 mix: structural edits (create, delete, reparent, paste) between the selection commands.
     void mixed_command() {
         if (rng() % 2) {
@@ -272,7 +307,9 @@ void fuzz(int mode) {
             CAPTURE(i);
             const usize before = r.s.undo_count();
             r.s.seal_undo();
-            if (mode == 2)
+            if (mode == 3)
+                r.reload_command();
+            else if (mode == 2)
                 r.ux_command();
             else if (mode == 1)
                 r.mixed_command();
@@ -312,3 +349,5 @@ TEST_CASE(
 TEST_CASE("multi-entity commands fuzz, mixed with create, delete, reparent and paste") { fuzz(1); }
 
 TEST_CASE("multi-entity commands fuzz, with component add/remove, inspector edits and gizmo drags") { fuzz(2); }
+
+TEST_CASE("multi-entity commands fuzz, with the scene file reloaded over the history") { fuzz(3); }

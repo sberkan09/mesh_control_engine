@@ -1,0 +1,1 @@
+- editor tests: the undo fuzz also reloads the scene file over the history (M-EDITUX5); no defect found.
