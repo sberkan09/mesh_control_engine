@@ -154,7 +154,7 @@ void shoot(Frame& f, Physics3D& phys, Entity e, Weapon3D& wp, math::vec3 pos, ma
             continue;
         }
         physics::QueryFilter3D filter;
-        filter.layer_mask = wp.mask;
+        filter.layer_mask = static_cast<u16>(wp.mask & physics::kDefaultQueryMask);
         filter.include_characters = true;
         filter.exclude = Span<const Entity>(skip, n_skip);
         const std::optional<physics::RayHit3D> h = phys.world.raycast(origin, dir, wp.range, filter);
@@ -250,7 +250,7 @@ void kit3d_projectiles(Frame& f) {
         Entity skip[16];
         const usize n_skip = shooter_skip(w, p.owner, skip, 16);
         physics::QueryFilter3D filter;
-        filter.layer_mask = p.mask;
+        filter.layer_mask = static_cast<u16>(p.mask & physics::kDefaultQueryMask);
         filter.include_characters = true;
         filter.exclude = Span<const Entity>(skip, n_skip);
         const std::optional<physics::RayHit3D> h = phys.world.raycast(t.position, dir, len, filter);

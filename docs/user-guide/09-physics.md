@@ -1371,3 +1371,9 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
 Not in this step: spawning new units, and cars that follow roads.
 
 `ItemHotkey3D` (on an entity with an `Inventory`) lets the `UseItem` input action use the first consumable in the bag; `LootDrop` can draw its pickups with `mesh`, `tint`, `mesh_scale` and `lift` (`samples/09_openworld`: walkers drop bandages and medkits, H uses one).
+
+## A collider only the camera sees
+
+To keep a camera boom out of tree canopies without stopping bullets, sight lines or the crowd, give the canopy box
+`"layer": 15` and `"mask": 0`. Layer 15 is the camera-only layer: the default query filter (`kDefaultQueryMask`, `0x7FFF`)
+and the kit's weapon, sensor, line-of-sight and nav-bake masks skip it; `CameraFollow3D` sees it.

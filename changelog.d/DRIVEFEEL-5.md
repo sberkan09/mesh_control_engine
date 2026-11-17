@@ -1,1 +1,1 @@
-- physics3d: layer 15 is camera-only (`kCameraLayer`); queries default to layers 0..14, `camera_sweep` sees all 16.
+- physics3d/kit: the kit's weapon, projectile, sensor, sight, sound and nav-bake masks skip layer 15; docs for the camera-only layer.

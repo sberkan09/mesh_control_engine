@@ -212,7 +212,7 @@ bool audio_occluded(World& w, Entity source, Entity listener, math::vec3 from, m
     const Entity skip[2] = {source, listener};
     if (const Physics3D* w3 = w.try_resource<Physics3D>()) {
         physics::QueryFilter3D q;
-        q.layer_mask = mask;
+        q.layer_mask = static_cast<u16>(mask & physics::kDefaultQueryMask);  // the camera-only layer never blocks sound
         q.exclude = Span<const Entity>(skip, 2);
         return w3->world.raycast(from, d * (1.0f / dist), dist, q).has_value();
     }

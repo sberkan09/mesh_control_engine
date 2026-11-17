@@ -69,7 +69,7 @@ bool line_of_sight(Frame& f, PerceptionSpace space, math::vec3 from, math::vec3 
     const Physics3D* w3 = f.try_resource<Physics3D>();
     if (!w3) return true;
     physics::QueryFilter3D q;
-    q.layer_mask = mask;
+    q.layer_mask = static_cast<u16>(mask & physics::kDefaultQueryMask);  // the camera-only layer never blocks sight
     if (!ignore.is_null()) q.exclude = Span<const Entity>(&ignore, 1);
     q.include_characters = true;
     const std::optional<physics::RayHit3D> h = w3->world.raycast(from, d * (1.0f / dist), dist, q);
