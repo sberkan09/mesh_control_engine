@@ -1,0 +1,1 @@
+- samples/09_openworld: every tree has a camera-only canopy collider (layer 15, mask 0), so the follow camera stops at the leaves; the navmesh skips layer 15.
