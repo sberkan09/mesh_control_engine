@@ -326,7 +326,8 @@ Front, All).
   (180 lets it).
 - **Wheel models.** Put each wheel's model on its own root entity (a `MeshRef` whose axle is local
   X) and name it in `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`: it is placed on the wheel every
-  tick, steering, spinning and following the suspension.
+  tick, steering, spinning and following the suspension. Destroying the car destroys the models it names
+  (and their children); removing only the `Vehicle3D` component leaves them where they are.
 - **What it reports.** `speed` (m/s forward, negative reversing), `rpm`, `gear` (negative in
   reverse) and `wheels_on_ground`: enough for a speedometer, an engine sound's pitch or "airborne".
 - **Handling (M-MOVE3D).** Each is off by default. `anti_roll` (N/m) puts a bar across each axle

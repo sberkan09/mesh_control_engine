@@ -239,6 +239,16 @@ void on_vehicle_removed(World& w, Entity e) {
     st->failed.erase(e);
 }
 
+// A destroyed car takes its wheel models with it (they are root entities, so nothing else would).
+void on_car_destroyed(World& w, Entity e) {
+    const Vehicle3D* v = w.try_get<Vehicle3D>(e);
+    if (!v) return;
+    const Entity models[4] = {v->wheel_fl, v->wheel_fr, v->wheel_rl, v->wheel_rr};
+    for (const Entity m : models) {
+        if (!m.is_null() && m != e && w.alive(m)) w.destroy(m);
+    }
+}
+
 // FixedUpdate_Pre, after the bodies: build, rebuild on a settings change, the driver.
 void kit3d_vehicles(Frame& f) {
     World& w = f.world();
@@ -367,6 +377,7 @@ void install_vehicles3d(World& world, asset::AssetSystem* assets) {
     world.register_event<Skid3D>(Phase::FixedUpdate_Physics);
     world.register_event<LapCompleted3D>(Phase::FixedUpdate_Pre);
     world.set_hooks<Vehicle3D>(nullptr, &on_vehicle_removed);
+    world.add_destroy_hook(&on_car_destroyed);
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_vehicles", &kit3d_vehicles, "kit3d_bodies");
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_vehicle_state", &kit3d_vehicle_state, "kit3d_writeback");
 }

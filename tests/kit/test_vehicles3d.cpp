@@ -183,6 +183,28 @@ TEST_CASE("vehicles3d: rebuilt on a settings change; a kinematic body is refused
     CHECK(s.phys().world.stats().vehicles == 0);
 }
 
+TEST_CASE("vehicles3d: destroying a car destroys its wheel models; removing the component keeps them") {
+    Scene s;
+    const Entity car = s.car();
+    const Entity fl = s.w.spawn_with(at(0, 0, 0));
+    const Entity rr = s.w.spawn_with(at(0, 0, 0));
+    s.veh(car).wheel_fl = fl;
+    s.veh(car).wheel_rr = rr;
+    s.run(30);
+    s.w.destroy(car);
+    s.run(2);
+    CHECK_FALSE(s.w.alive(fl));
+    CHECK_FALSE(s.w.alive(rr));
+
+    const Entity car2 = s.car(-6.0f);
+    const Entity m = s.w.spawn_with(at(0, 0, 0));
+    s.veh(car2).wheel_fr = m;
+    s.run(5);
+    s.w.remove<Vehicle3D>(car2);
+    s.run(2);
+    CHECK(s.w.alive(m));
+}
+
 TEST_CASE("vehicles3d: the replay hash holds with vehicles") {
     auto run = [] {
         Scene s;
