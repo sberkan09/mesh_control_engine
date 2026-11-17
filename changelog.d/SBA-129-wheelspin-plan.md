@@ -1,0 +1,1 @@
+- M-WHEELSPIN plan, step 57a (SBA-129): `docs/milestones/M-WHEELSPIN.md` scopes car wheels that turn and steer (kit lifetime of wheel entities, glb split in the generator, wheels on every car prefab of `09_openworld`). Docs only.
