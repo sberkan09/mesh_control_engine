@@ -612,15 +612,33 @@
 // Every function raises "floater.<name>: the entity has no Floater" for an entity without one. The system kit_floater
 // does the riding; a script only tunes it.
 //
+// Traffic light lamps (M-SIGNALHEADS step 56c) are the `signal` table over one entity's kit::SignalHead
+// (mce/kit/signal_head.h):
+//
+//   signal.enabled(e) -> number                1 or 0
+//   signal.lamp(e) -> string                   the lamp's own colour: "red", "amber" or "green"
+//   signal.approach(e) -> x, z                 the flat direction of the traffic the light governs
+//   signal.state(e) -> string                  the light its approach shows now: "red", "amber" or "green", or "none"
+//                                              when there is no road network or no lane runs to a junction near the lamp
+//   signal.set(e, {enabled=, approach_x=, approach_z=})   a table, every key optional (enabled: any non-zero number is 1;
+//                                              the approach components are finite numbers, an unknown key or a non-number
+//                                              raises an error that names the call and nothing is written); it never adds
+//                                              a SignalHead
+//
+// Every function raises "signal.<name>: the entity has no SignalHead" for an entity without one. The system
+// kit_signal_heads does the lighting; a script only tunes it and reads the light.
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
 #include <cstring>
 
 #include "api.h"
+#include "mce/ecs/transform.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cirrus.h"
 #include "mce/kit/floater.h"
+#include "mce/kit/signal_head.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/halo.h"
 #include "mce/kit/cloud_shadow.h"
@@ -3434,6 +3452,84 @@ const luaL_Reg kFloaterLib[] = {
     {nullptr, nullptr},
 };
 
+// ---- Traffic light lamps (M-SIGNALHEADS step 56c) ----
+
+// The SignalHead on entity `e` (argument 1), or a Luau error that names the call.
+kit::SignalHead& check_signal(lua_State* L, const char* fn) {
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    kit::SignalHead* h = w.try_get_mut<kit::SignalHead>(e);
+    if (!h) luaL_error(L, "%s: the entity has no SignalHead", fn);
+    return *h;
+}
+
+const char* light_name(kit::RoadLight l) {
+    switch (l) {
+        case kit::RoadLight::Green: return "green";
+        case kit::RoadLight::Amber: return "amber";
+        case kit::RoadLight::Red: break;
+    }
+    return "red";
+}
+
+int l_signal_enabled(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_signal(L, "signal.enabled").enabled));
+    return 1;
+}
+
+int l_signal_lamp(lua_State* L) {
+    lua_pushstring(L, light_name(check_signal(L, "signal.lamp").lamp));
+    return 1;
+}
+
+int l_signal_approach(lua_State* L) {
+    const kit::SignalHead& h = check_signal(L, "signal.approach");
+    lua_pushnumber(L, static_cast<double>(h.approach.x));
+    lua_pushnumber(L, static_cast<double>(h.approach.z));
+    return 2;
+}
+
+int l_signal_state(lua_State* L) {
+    const kit::SignalHead h = check_signal(L, "signal.state");  // copied: nothing below may hold a pointer across luaL_*
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    const LocalTransform* lt = w.try_get<LocalTransform>(e);
+    kit::RoadNet net;
+    const bool have_net = h.network.is_null() ? kit::road_net_first(w, net) : kit::road_net(w, h.network, net);
+    kit::RoadLight state = kit::RoadLight::Green;
+    const bool found = lt && have_net && kit::signal_approach_light(net, lt->position, h.approach, state);
+    lua_pushstring(L, found ? light_name(state) : "none");
+    return 1;
+}
+
+// signal.set(entity, {...}): validated before anything is written; never adds a SignalHead.
+int l_signal_set(lua_State* L) {
+    static const char* const kKeys[3] = {"enabled", "approach_x", "approach_z"};
+    f64 value[3] = {};
+    bool given[3] = {};
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    lua_remove(L, 1);  // the settings table is read at index 1
+    read_settings(L, "signal.set", kKeys, 3, "enabled, approach_x, approach_z", value, given);
+    for (int i = 1; i < 3; ++i)
+        if (given[i] && !std::isfinite(value[i])) luaL_error(L, "signal.set: %s must be a finite number", kKeys[i]);
+    kit::SignalHead* h = w.try_get_mut<kit::SignalHead>(e);
+    if (!h) luaL_error(L, "signal.set: the entity has no SignalHead");
+    if (given[0]) h->enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) h->approach.x = static_cast<f32>(value[1]);
+    if (given[2]) h->approach.z = static_cast<f32>(value[2]);
+    return 0;
+}
+
+const luaL_Reg kSignalLib[] = {
+    {"enabled", l_signal_enabled},
+    {"lamp", l_signal_lamp},
+    {"approach", l_signal_approach},
+    {"state", l_signal_state},
+    {"set", l_signal_set},
+    {nullptr, nullptr},
+};
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -3848,6 +3944,9 @@ void register_weather_api(lua_State* L) {
     lua_newtable(L);
     luaL_register(L, nullptr, kFloaterLib);
     lua_setglobal(L, "floater");
+    lua_newtable(L);
+    luaL_register(L, nullptr, kSignalLib);
+    lua_setglobal(L, "signal");
 }
 
 }  // namespace mce::script::detail

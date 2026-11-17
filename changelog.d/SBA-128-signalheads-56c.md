@@ -1,0 +1,1 @@
+- Luau `signal` table, M-SIGNALHEADS step 56c (SBA-128): `signal.enabled`, `signal.lamp`, `signal.approach`, `signal.state` (the light the lamp's approach shows now, or "none") and `signal.set{enabled=, approach_x=, approach_z=}` over an entity's `SignalHead`, typed in `definitions.cpp`; bad input raises a named error and writes nothing. User guide 27 and 29.3.
