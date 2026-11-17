@@ -208,3 +208,40 @@ TEST_CASE("roadblock: a loaded game puts the block up again from the wanted leve
     CHECK(b.pieces() == 4);
     CHECK(b.w.try_get<Roadblock3D>(b.block)->up == 1);
 }
+
+namespace {
+
+// Walks the offender along X at `speed` m/s for `ticks` fixed ticks.
+void walk(Scene& s, f32 speed, u32 ticks) {
+    for (u32 i = 0; i < ticks; ++i) {
+        s.w.try_get_mut<LocalTransform>(s.offender)->position.x += speed * kDt;
+        s.run(1);
+    }
+}
+
+}  // namespace
+
+TEST_CASE("roadblock: ahead_cos puts the block where the offender is heading, not behind or beside") {
+    Roadblock3D rb;
+    rb.ahead_cos = 0.5f;
+    {
+        Scene toward(70.0f, 150.0f, rb);  // the marker is at the origin, the offender 150 m east of it
+        CHECK(toward.pieces() == 0);      // it has not moved: no heading, no block
+        walk(toward, -10.0f, 60);         // west, at the marker
+        CHECK(toward.pieces() == 4);
+    }
+    {
+        Scene away(70.0f, 150.0f, rb);
+        walk(away, 10.0f, 60);  // east, away from it
+        CHECK(away.pieces() == 0);
+    }
+    {
+        Scene slow(70.0f, 150.0f, rb);
+        walk(slow, -1.0f, 120);  // too slow to count as a heading
+        CHECK(slow.pieces() == 0);
+    }
+    {
+        Scene always(70.0f, 150.0f);  // ahead_cos 0: as before, heading or not
+        CHECK(always.pieces() == 4);
+    }
+}

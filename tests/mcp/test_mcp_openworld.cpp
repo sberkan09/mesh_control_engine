@@ -259,7 +259,19 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     }
     CHECK(cars == 4);
     // The roadblocks are markers: nothing stands there until the wanted level reaches 3.
-    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Roadblock3D","show":["Roadblock3D"]}})")) == 2);
+    CHECK(count(c.ok("run_headless",
+                     R"({"ticks":1,"log_lines":0,"inspect":{"component":"Roadblock3D","show":["Roadblock3D"]}})")) ==
+          4);
+    // The avenue-end markers 1 and 2 stand wherever the player is (the teleports below have no heading); 3 and 4, the
+    // cross-avenue ones, only appear when the player drives at them (ahead_cos, tested in test_roadblock), so they are
+    // switched off for these runs.
+    for (const char* name : {"Roadblock 1", "Roadblock 2"})
+        c.ok("component_set",
+             std::string(R"({"entity":")") + name + R"(","component":"Roadblock3D","path":"ahead_cos","value":0})");
+    for (const char* name : {"Roadblock 3", "Roadblock 4"})
+        c.ok("component_set",
+             std::string(R"({"entity":")") + name + R"(","component":"Roadblock3D","path":"min_level","value":10})");
+    c.ok("scene_save");
     CHECK(count(c.ok("run_headless", R"({"ticks":30,"log_lines":0,"inspect":{"component":"RoadblockPiece3D","show":["RoadblockPiece3D"]}})")) == 0);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"RespawnPoint3D","show":["RespawnPoint3D"]}})")) == 2);
 
