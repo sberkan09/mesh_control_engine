@@ -1,0 +1,1 @@
+- kit: `BoxCollider3D.mask` (default every layer); layer 15 with mask 0 is a camera-only collider.

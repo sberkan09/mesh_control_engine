@@ -162,3 +162,21 @@ TEST_CASE("bodies3d: Trigger3D raises enter and exit events for bodies passing t
     CHECK(s.w.try_get<Trigger3D>(zone)->inside == 0);
     CHECK(s.w.try_get<Trigger3D>(zone)->last_other == b);
 }
+
+TEST_CASE(
+    "bodies3d: a layer-15 mask-0 box collider is invisible to bodies and default queries, but the camera boom stops on "
+    "it") {
+    Scene s;
+    BoxCollider3D canopy;
+    canopy.half = {2.0f, 0.25f, 2.0f};
+    canopy.layer = physics::kCameraLayer;
+    canopy.mask = 0;
+    s.w.spawn_with(at(0, 3, 0), canopy);
+    RigidBody3D box;
+    box.half = {0.5f, 0.5f, 0.5f};
+    const Entity e = s.w.spawn_with(at(0, 6, 0), box);
+    s.run(120);
+    CHECK(s.pose(e).position.y < 1.0f);                                 // fell past the canopy and landed on the floor
+    CHECK_FALSE(s.phys().world.raycast({0, 8, 0}, {0, -1, 0}, 4.0f));   // default ray passes through (to y = 4)
+    CHECK(s.phys().world.camera_sweep({0, 8, 0}, {0, 1.5f, 0}, 0.2f));  // the camera boom stops on it
+}

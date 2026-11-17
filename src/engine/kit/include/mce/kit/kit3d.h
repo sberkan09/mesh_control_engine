@@ -367,9 +367,12 @@ struct BoxCollider3D {
     math::vec3 offset;
     f32 friction = 0.6f;
     u32 layer = 0;  // collision layer 0..15
-    u32 pad_ = 0;
+    u16 mask = 0xFFFF;  // layers this collider collides with; 0 with layer 15 makes a camera-only collider
+    u16 pad_ = 0;
 };
-MCE_COMPONENT(BoxCollider3D, half, (pitch_deg, Range{-90, 90}), offset, (friction, Range{0, 2}), (layer, Range{0, 15}))
+MCE_COMPONENT(
+    BoxCollider3D, half, (pitch_deg, Range{-90, 90}), offset, (friction, Range{0, 2}), (layer, Range{0, 15}),
+    (mask, Help{"layers (bits 0..15) this collider collides with; layer 15 with mask 0 is seen only by the camera"}))
 
 // A static triangle-mesh collider from a mesh asset (its rest pose), built at Startup under the
 // entity's transform. Use a simple collision mesh, not the drawn one, for large levels.
