@@ -1,0 +1,1 @@
+- editor: the orbit camera ignores camera-only (layer 15) colliders when its pivot sits inside one, so framing a tree no longer glues the camera to the crown.
