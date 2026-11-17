@@ -42,7 +42,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   sidewalk strip reads near white. Suspect the fixed sun (intensity 3.0, exposure 1.0) and no grading; cause not confirmed.
   Check it on Metal as well (same shaders translated to MSL) before tuning.
 - **Characters and cars are blocky/toy Kenney models.** Characters now walk and run (E9, step 6 below); the car part is still open: wheels do not spin; no door, steering or lights animation.
-- **No sky**: no HDRI, no clouds, no stars; no night look; traffic lights do not change colour with the signal state.
+- **No sky**: no HDRI, no clouds, no stars; no night look; ~~traffic lights do not change colour with the signal state~~ **done ([M-SIGNALHEADS](M-SIGNALHEADS.md): poles with red, amber and green lamps at every signalised approach, lit by the lane's real light)**.
 - **No third-person feel**: ~~the player does not face its movement direction~~ **done ([M-FACEMOVE](M-FACEMOVE.md): `FaceVelocity3D` on the player model)**; the camera stays behind a fixed orbit (the gun is the player's since step 2a and aims along the camera).
 - **Visible feedback on shooting**: ~~no muzzle flash~~ **muzzle flash and a small view kick done ([M-SHOTFX](M-SHOTFX.md))**; **hit marker done ([M-HITMARKER](M-HITMARKER.md))**; **impact sparks done ([M-IMPACTFX](M-IMPACTFX.md))**; **bullet holes done ([M-SHOTMARKS](M-SHOTMARKS.md))**; ~~still no tracer line~~ **tracer line done ([M-TRACERS](M-TRACERS.md))**.
 - **Sparse city**: 121 box lots, no interiors, no props (lamps, hydrants, bins, benches, signs), no vegetation beyond boxes.

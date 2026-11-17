@@ -187,7 +187,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Rider3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `SignalHead` | `mce/kit/signal_head.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | allowed: the 09_openworld lamps and Luau arrive with M-SIGNALHEADS 56c and 56d; remove this line then |
+| `SignalHead` | `mce/kit/signal_head.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `Bone2DFollow` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `Skeleton2DAnimator` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |

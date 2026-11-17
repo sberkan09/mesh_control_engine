@@ -1,6 +1,6 @@
 # M-SIGNALHEADS — Traffic light heads that show the signal (milestone record)
 
-**Status:** in progress (2026-11-16), steps 56a to 56d. 56a (plan, #1271) and 56b (component and system) are done. **Owner: routine 2 thread (the M-VISUAL line).**
+**Status:** in progress (2026-11-16), steps 56a to 56d. 56a (plan, #1271), 56b (component and system, #1272) and 56d (heads in `09_openworld`) are done; 56c (Luau) is open. **Owner: routine 2 thread (the M-VISUAL line).**
 Follow-up of M-ROADS (`RoadNetwork3D`, `road_light`), M-OPENWORLD-GAPS section B ("traffic lights do not change colour with
 the signal state", open since the first play review) and M-OPENWORLD-LOOK ("traffic light heads that change colour" listed
 under Not done). No Linear issues (free limit); this record is the tracker. No step writes a shader or touches `render::`,
@@ -43,7 +43,7 @@ cones or volumetric glow, a point light per head (bloom from `emissive_tint` is 
 | 56a | This plan | docs | done (#1271) |
 | 56b | `SignalHead`, `signal_head_look`, `kit_signal_heads`, registered by `install_roads`; `tests/kit/test_signal_head.cpp` (looks per state, a lane that turns red at the exact tick `road_light` says, missing network untouched, `enabled` 0 untouched, padding, determinism hash with and without the system); the three registry includes the walls stage checks, user guide 29.3 paragraph, allow line | kit | done |
 | 56c | Luau `signal` table and `definitions.cpp`; `tests/script/test_script_signal.cpp` | script | open |
-| 56d | `09_openworld` heads on every signalised approach (generator, regenerated scene), `test_mcp_openworld` checks the heads exist and that a head's colour matches `road_light` at two ticks, M-OPENWORLD-GAPS section B and M-OPENWORLD-LOOK updated, user guide 18-samples | samples/09_openworld, tests/mcp | open |
+| 56d | `09_openworld` heads on every signalised approach (generator, regenerated scene), `test_mcp_openworld` checks that exactly one lamp of each trio is lit (so every approach found its lane), M-OPENWORLD-GAPS section B and M-OPENWORLD-LOOK updated, user guide 18-samples | samples/09_openworld, tests/mcp | done |
 
 56c and 56d are independent after 56b and touch disjoint modules, so they can run in parallel.
 
