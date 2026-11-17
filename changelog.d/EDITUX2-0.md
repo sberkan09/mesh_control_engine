@@ -1,0 +1,1 @@
+- Docs: M-EDITUX2 plan (multi-entity editor commands fuzzed under undo).
