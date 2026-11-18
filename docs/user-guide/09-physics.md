@@ -393,7 +393,8 @@ code, `physics::World3D` has the same vehicles with any number of wheels and axl
 with `use_input` sits in it, the `Horn` action plays the clip once at the car (3D, never faster than `min_gap_s`; `honks`
 counts them) and the `Lights` action cycles `VehicleLights3D.mode`: `Auto` (the day cycle decides, `TimedLight3D`), `On`
 (the car's `SpotLight3D` at its authored intensity) and `Off`. Setting `VehicleHorn3D.honk` to 1 honks once without
-input (scripts, tests). Traffic and police cars have no rider with `use_input`, so they never respond. `samples/09_openworld`
+input (scripts, tests). A honk also startles the crowd: a `Pedestrian3D` within 12 m of the car (`kit_crowd`) runs
+away from it for 2 s, and the panic spreads to its close neighbours like it does after a shot. Traffic and police cars have no rider with `use_input`, so they never respond. `samples/09_openworld`
 binds Horn to G (stick press) and Lights to L (D-pad right).
 
 `BrakeLight3D` makes a tail lamp: put it with a `PointLight3D` on an entity that is a `ChildOf` the car (the lamp sits behind

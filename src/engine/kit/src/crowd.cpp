@@ -12,6 +12,7 @@
 #include "mce/kit/combat3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/roads.h"
+#include "mce/kit/vehicle_extras.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/log.h"
 
@@ -315,6 +316,8 @@ constexpr f32 kRunDownSpeed = 6.0f;   // m/s a vehicle must go for pedestrians i
 constexpr f32 kRunDownTime = 2.0f;    // s ahead of it that counts as its path
 constexpr f32 kRunDownWidth = 2.5f;   // m either side of its line
 constexpr f32 kRunDownFlee = 3.0f;    // s a pedestrian runs from a vehicle that nearly hit it
+constexpr f32 kHornRadius = 12.0f;    // m: a pedestrian this close to a car that just honked jumps away from it (M-HORNSCARE)
+constexpr f32 kHornFlee = 2.0f;       // s it keeps running
 constexpr usize kMaxCars = 64;
 constexpr usize kMaxSources = 32;     // scare sources (shots and crashes) read in one tick
 
@@ -764,6 +767,12 @@ void kit_crowd(Frame& f) {
         movers.push_back(Mover{t.position, vec3{sign * fwd.x / len, 0.0f, sign * fwd.z / len}, std::fabs(v.speed)});
     });
 
+    // M-HORNSCARE: cars that honked this tick (VehicleHorn3D.since_s is 0 on the tick it honks, one dt the next).
+    Array<vec3> horns;
+    w.query<const VehicleHorn3D&, const LocalTransform&>().each([&](Entity, const VehicleHorn3D& h, const LocalTransform& t) {
+        if (h.since_s <= f.dt * 1.5f && horns.size() < kMaxCars) horns.push_back(t.position);
+    });
+
     // The spawners, with the network each walks on.
     Array<Info> infos;
     w.query<const CrowdSpawner3D&>().each([&](Entity e, const CrowdSpawner3D& s) {
@@ -870,6 +879,19 @@ void kit_crowd(Frame& f) {
             }
             fear->threat = origin;
             fear->left = kPedestrianFleeSeconds;
+        }
+        for (const vec3& hp3 : horns) {  // a horn right next to it: jump away from the car for kHornFlee seconds
+            const f32 dx = t.position.x - hp3.x, dz = t.position.z - hp3.z;
+            if (dx * dx + dz * dz > kHornRadius * kHornRadius) continue;
+            if (!fear) {
+                if (st.fears.size() >= kMaxFears) break;
+                st.fears.push_back(Fear{e, hp3, t.position, kHornFlee});
+                fear = &st.fears.back();
+            } else if (fear->left < kHornFlee) {
+                fear->threat = hp3;
+                fear->left = kHornFlee;
+            }
+            break;
         }
         for (const Mover& m : movers) {  // a vehicle bearing down on it: jump clear (run from where the vehicle is)
             const f32 rx = t.position.x - m.pos.x, rz = t.position.z - m.pos.z;

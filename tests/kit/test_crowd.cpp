@@ -18,6 +18,7 @@
 #include "mce/kit/crowd.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/roads.h"
+#include "mce/kit/vehicle_extras.h"
 #include "mce/kit/vehicles3d.h"
 
 using namespace mce;
@@ -696,4 +697,28 @@ TEST_CASE("crowd: panic spreads to close neighbours of a running pedestrian and 
     s.run(60 * 8);
     CHECK(s.w.try_get<Pedestrian3D>(a)->mode != PedestrianMode::Flee);
     CHECK(s.w.try_get<Pedestrian3D>(b)->mode != PedestrianMode::Flee);  // a ripple that dies out
+}
+
+TEST_CASE("crowd: a horn right next to a pedestrian sends it running for a moment, a far one does not (M-HORNSCARE)") {
+    for (const f32 horn_z : {-24.0f, -60.0f}) {  // the walker stands at z = -30
+        Scene s(spawner(0));
+        Pedestrian3D p;
+        p.speed = 1.5f;
+        const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p);
+        VehicleHorn3D horn;
+        horn.honk = 0;
+        horn.since_s = 100.0f;  // not honking
+        const Entity car = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, horn_z}, math::quat::identity(), {1, 1, 1}}, horn);
+        s.run(30);
+        CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+        s.w.try_get_mut<VehicleHorn3D>(car)->since_s = 0.0f;  // it honks
+        s.run(2);
+        s.w.try_get_mut<VehicleHorn3D>(car)->since_s = 100.0f;  // (kit_vehicle_extras is not installed here to age it)
+        const bool near = horn_z == -24.0f;
+        CHECK((s.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Flee) == near);
+        if (near) {
+            s.run(60 * 4);  // only kHornFlee seconds
+            CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+        }
+    }
 }
