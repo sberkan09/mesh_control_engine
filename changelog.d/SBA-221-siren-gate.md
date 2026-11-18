@@ -1,0 +1,1 @@
+- Light bars follow the siren, M-SIRENGATE (SBA-221): `LightFlasher3D::follow_siren` keeps a police light bar dark until the car's siren is audible. `docs/milestones/M-SIRENLIGHTS.md`.
