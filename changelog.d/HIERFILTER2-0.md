@@ -1,0 +1,1 @@
+- editor: the Hierarchy search filter is fuzzed against a plain model on any parent links, loops included (M-HIERFILTER2).
