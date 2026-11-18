@@ -7,8 +7,11 @@ cook::String entity_path(const EditorScene& scene, EntityId id) {
     if (scene.doc().find(id) == nullptr) return out;
     Array<EntityId> chain;  // id, its parent, ... up to a root
     EntityId cur = id;
-    for (usize steps = 0; cur != kNoEntity && steps <= scene.doc().size(); ++steps) {
+    while (cur != kNoEntity) {
         if (scene.doc().find(cur) == nullptr) break;
+        bool seen = false;  // a loop of parents: name each entity once
+        for (EntityId c : chain) seen = seen || c == cur;
+        if (seen) break;
         chain.push_back(cur);
         cur = scene.parent_of(cur);
     }

@@ -1,0 +1,1 @@
+- editor: `entity_path` (Copy path) no longer repeats entity names when the parent links loop (found by a new fuzz, M-ENTITYPATH2).
