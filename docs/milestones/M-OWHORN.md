@@ -6,4 +6,4 @@ Sample (`gen_assets.py`): a synthesized `audio/horn.wav`, `Horn` (G, stick press
 
 Tests: `tests/kit/test_vehicle_extras.cpp` (honk per press and gap, no honk outside the car, `honk` field, lights cycle), `test_mcp_openworld` (a seated player honks once and turns the lights on). Golden component count 178 to 180.
 
-Limits: pedestrians and traffic do not react to the horn; no brake or tail lights, no high beam, no HUD icon; the horn is a plain synthesized tone.
+Limits: traffic does not react to the horn (walkers jump away from it, [M-HORNSCARE](M-HORNSCARE.md)); no brake or tail lights, no high beam, no HUD icon; the horn is a plain synthesized tone.
