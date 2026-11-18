@@ -1,0 +1,1 @@
+- editor tests: a fuzz checks diff_scenes against the document bytes, its reversed diff and undo (M-SCENEDIFF2); no defect found.
