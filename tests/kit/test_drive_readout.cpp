@@ -6,6 +6,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/drive_readout.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 
@@ -67,4 +68,23 @@ TEST_CASE("drive_readout: on foot every field reads off, seated it shows the car
     s.sit(false);
     s.run(2);
     CHECK(s.d().kmh == doctest::Approx(kDriveReadoutOff));
+}
+
+TEST_CASE("drive_readout: lights reads 1 while the car's spot light shines, 0 otherwise, off on foot") {
+    Scene s;
+    s.sit(true);
+    s.run(2);
+    CHECK(s.d().lights == doctest::Approx(0.0f));  // the car has no spot light
+    SpotLight3D spot;
+    spot.intensity = 9.0f;
+    spot.enabled = 1;
+    s.w.add(s.car, spot);
+    s.run(2);
+    CHECK(s.d().lights == doctest::Approx(1.0f));
+    s.w.try_get_mut<SpotLight3D>(s.car)->enabled = 0;
+    s.run(2);
+    CHECK(s.d().lights == doctest::Approx(0.0f));
+    s.sit(false);
+    s.run(2);
+    CHECK(s.d().lights == doctest::Approx(kDriveReadoutOff));
 }
