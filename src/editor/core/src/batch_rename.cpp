@@ -22,7 +22,7 @@ FixedString<64> batch_rename_expand(StringView pattern, StringView old_name, u32
                 digits[n++] = static_cast<char>('0' + v % 10);
                 if (v < 10) break;
             }
-            for (usize pad = n; pad < width && pad < 16; ++pad) out.append(StringView("0", 1));
+            for (usize pad = n; pad < width; ++pad) out.append(StringView("0", 1));
             while (n > 0) out.append(StringView(&digits[--n], 1));
         } else {
             out.append(StringView(&pattern[i], 1));
