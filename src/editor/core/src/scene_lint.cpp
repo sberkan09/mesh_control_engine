@@ -172,8 +172,14 @@ usize fix_scene_lint(SceneDocument& doc) {
         }
     }
     // Duplicates last, in document order: the first holder keeps the name, a later one takes the first free " (n)".
+    // The sibling groups changed above (a dropped parent makes a root, an empty name got one), so the duplicates are
+    // looked up again instead of taken from the first pass.
+    const Array<LintFinding> now = lint_scene(doc);
     for (DocEntity& e : doc.entities_mut()) {
-        if (!flagged(e.id, LintKind::DuplicateSiblingName)) continue;
+        bool duplicate = false;
+        for (const LintFinding& f : now)
+            if (f.id == e.id && f.kind == LintKind::DuplicateSiblingName) duplicate = true;
+        if (!duplicate) continue;
         const EntityId parent = parent_id(e);
         const cook::String base(e.name.view());
         for (u32 n = 2;; ++n) {

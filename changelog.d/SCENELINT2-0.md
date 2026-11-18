@@ -1,0 +1,1 @@
+- editor: `fix_scene_lint` renames the duplicate names that dropping a missing parent link creates, so one run leaves the scene clean (found by a new fuzz over random broken scenes, M-SCENELINT2).

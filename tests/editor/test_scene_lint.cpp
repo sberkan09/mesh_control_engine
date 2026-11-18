@@ -4,7 +4,10 @@
 
 #include <algorithm>
 #include <limits>
+#include <random>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
@@ -205,4 +208,113 @@ TEST_CASE("fix_scene_lint on a tidy scene changes nothing") {
     CHECK(fix_scene_lint(doc) == 0);
     doc.serialize(after);
     CHECK(before.view() == after.view());
+}
+
+// Found by the fuzz below (seed 10): a parent link that names nothing is dropped, and the entity then joins the roots,
+// where it shares its name with two others. One repair run has to rename it too.
+TEST_CASE("fix_scene_lint renames the duplicates a dropped parent link creates") {
+    EditorScene s;
+    s.create_entity("Wall");
+    const EntityId second = s.create_entity("Wall");
+    const EntityId third = s.create_entity("Wall");
+    s.add_component(third, refl::type_of<ChildOf>());
+    REQUIRE(
+        s.set(third, ChildOf{doc_entity_ref(900)}));  // a parent the scene lacks: its own sibling group, then a root
+    SceneDocument doc = s.doc();
+    CHECK(fix_scene_lint(doc) > 0);
+    CHECK(lint_scene(doc).empty());
+    CHECK(doc.find(second)->name.view() == "Wall (2)");
+    CHECK(doc.find(third)->name.view() == "Wall (3)");
+    CHECK(fix_scene_lint(doc) == 0);
+}
+
+// M-SCENELINT2 step 1: random broken scenes. Whatever mix of empty and repeated names, parents that are missing, itself
+// or a loop, references to nothing, zero scales and NaNs a scene carries, the repair leaves it clean, changes it only
+// once, keeps every entity and id, keeps the name of an entity under a parent that stays and had no naming finding, and
+// the result still saves and loads to the same bytes.
+TEST_CASE("fix_scene_lint fuzz: random broken scenes come out clean, once, with every entity kept") {
+    u32 broken_scenes = 0;
+    for (u32 seed = 1; seed <= 200; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        EditorScene s;
+        const u32 n = 2 + static_cast<u32>(rng() % 9);
+        const char* const names[] = {"", "A", "A", "B", "Wall", "Wall", "C"};
+        for (u32 i = 0; i < n; ++i) s.create_entity(names[rng() % 7]);
+        const auto any = [&]() { return s.doc().at(rng() % s.doc().size()).id; };
+        for (u32 i = 0, k = static_cast<u32>(rng() % (n + 2)); i < k; ++i) {
+            const EntityId id = any();
+            switch (rng() % 5) {
+                case 0:
+                    s.add_component(id, refl::type_of<ChildOf>());
+                    s.set(id, ChildOf{doc_entity_ref(rng() % 4 == 0 ? static_cast<EntityId>(900 + rng() % 5)
+                                                                    : any())});  // may be itself or close a loop
+                    break;
+                case 1: {
+                    LocalTransform t;
+                    t.scale = {1.0f, rng() % 2 ? 0.0f : 2.0f, 1.0f};
+                    set_transform(s, id, t);
+                    break;
+                }
+                case 2: {
+                    LocalTransform t;
+                    t.position.y = std::numeric_limits<f32>::quiet_NaN();
+                    set_transform(s, id, t);
+                    break;
+                }
+                case 3: {
+                    s.add_component(id, refl::type_of<kit::AttachToBone>());
+                    kit::AttachToBone a;
+                    a.target = doc_entity_ref(rng() % 2 ? 950 : any());
+                    s.set(id, a);
+                    break;
+                }
+                default:
+                    s.set_parent(id, any());  // a clean parent link, or a refused cycle
+                    break;
+            }
+        }
+        SceneDocument doc = s.doc();
+        const Array<LintFinding> found = lint_scene(doc);
+        std::vector<EntityId> ids;
+        std::vector<std::string> kept_names;
+        for (const DocEntity& e : doc.entities()) {
+            ids.push_back(e.id);
+            // Dropping a parent link makes a root, so a later root may then be renamed; only an entity under a parent
+            // that stays (no finding of its own, a parent the scene has) keeps its name for certain.
+            bool naming = false;
+            const DocComponent* link = e.find(refl::type_of<ChildOf>());
+            if (link == nullptr ||
+                doc.find(doc_entity_id(static_cast<const ChildOf*>(link->data())->parent)) == nullptr)
+                naming = true;
+            for (const LintFinding& f : found)
+                if (f.id == e.id && (f.kind == LintKind::EmptyName || f.kind == LintKind::DuplicateSiblingName ||
+                                     f.kind == LintKind::ParentCycle || f.kind == LintKind::MissingParent))
+                    naming = true;
+            kept_names.push_back(naming ? std::string() : std::string(e.name.view()));
+        }
+
+        const usize fixed = fix_scene_lint(doc);
+        CHECK((fixed > 0) == !found.empty());
+        if (!found.empty()) ++broken_scenes;
+        CHECK(lint_scene(doc).empty());
+        REQUIRE(doc.size() == ids.size());
+        for (usize i = 0; i < ids.size(); ++i) {
+            CHECK(doc.at(i).id == ids[i]);
+            if (!kept_names[i].empty()) CHECK(doc.at(i).name.view() == kept_names[i]);
+        }
+        cook::String once, again;
+        doc.serialize(once);
+        CHECK(fix_scene_lint(doc) == 0);
+        doc.serialize(again);
+        CHECK(once.view() == again.view());
+
+        SceneDocument back;
+        cook::DiagList diags;
+        REQUIRE(back.parse(once.view(), "fuzz", diags));
+        cook::String reparsed;
+        back.serialize(reparsed);
+        CHECK(reparsed.view() == once.view());
+    }
+    CHECK(broken_scenes > 100);  // the generator does break scenes; a run of tidy ones would prove nothing
 }
