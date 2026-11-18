@@ -1109,6 +1109,10 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
                   "AudioSpatial": {"attenuation_id": 1}, "SirenAudio": {"min_level": min_level, "active_db": -8}})
     car = scene.add(name, comps)
     add_car_visuals(scene, car, name, "police")
+    # The light bar: a point light on the roof that flashes red and blue (LightFlasher3D, M-SIRENLIGHTS).
+    scene.add(name + " light bar", {"ChildOf": {"parent": scene.ref(car)}, "LocalTransform": tf((0, 0.5, 0.2)),
+                                    "PointLight3D": {"color": [1.0, 0.05, 0.04, 1], "intensity": 0, "radius": 11, "enabled": 0},
+                                    "LightFlasher3D": {"intensity": 14, "period_s": 0.5}})
     return car
 
 

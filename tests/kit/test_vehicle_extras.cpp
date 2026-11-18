@@ -171,3 +171,27 @@ TEST_CASE("vehicle extras: a tail lamp shows white in reverse unless the car bra
     s.run(1);
     CHECK(s.w.try_get<BrakeLight3D>(tail)->lit == 0);
 }
+
+TEST_CASE("vehicle extras: a light flasher alternates its two colours every half period and fades within each half") {
+    Scene s;
+    LightFlasher3D fl;
+    fl.period_s = 1.0f;
+    fl.intensity = 10.0f;
+    PointLight3D lamp;
+    lamp.enabled = 0;
+    const Entity e = s.w.spawn_with(at(0, 3, 0), lamp, fl);
+    const auto light = [&]() { return *s.w.try_get<PointLight3D>(e); };
+    s.run(1);  // t = 1/60: the start of A (red)
+    CHECK(light().enabled == 1);
+    CHECK(light().color.r > 0.9f);
+    CHECK(light().color.b < 0.2f);
+    CHECK(light().intensity > 9.0f);
+    s.run(20);  // t ~ 0.35: still A, dimmer
+    CHECK(light().color.r > 0.9f);
+    CHECK(light().intensity < 9.0f);
+    s.run(20);  // t ~ 0.68: B (blue), fresh
+    CHECK(light().color.b > 0.9f);
+    CHECK(light().color.r < 0.3f);
+    s.run(40);  // t ~ 1.35: A again
+    CHECK(light().color.r > 0.9f);
+}

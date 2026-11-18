@@ -397,6 +397,10 @@ input (scripts, tests). A honk also startles the crowd: a `Pedestrian3D` within 
 away from it for 2 s, and the panic spreads to its close neighbours like it does after a shot. Traffic and police cars have no rider with `use_input`, so they never respond. `samples/09_openworld`
 binds Horn to G (stick press) and Lights to L (D-pad right).
 
+`LightFlasher3D` flashes a light: put it with a `PointLight3D` on an entity (a police light bar, an ambulance); every `period_s` it
+shows `color_a` for the first half and `color_b` for the second, each half starting at `intensity` and fading to 30%. The police cars of
+`samples/09_openworld` carry a red and blue one on the roof.
+
 `BrakeLight3D` makes a tail lamp: put it with a `PointLight3D` on an entity that is a `ChildOf` the car (the lamp sits behind
 the car). While the car brakes (its own `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle
 against the way it rolls) the lamp shows `braking` as its intensity in `brake_color`; in reverse (`Vehicle3D.gear` below 0) and

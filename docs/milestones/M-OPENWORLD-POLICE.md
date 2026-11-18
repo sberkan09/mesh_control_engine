@@ -24,7 +24,7 @@ already exist ([M-WASTED](M-WASTED.md), [M-ARRESTLOSS](M-ARRESTLOSS.md), [M-HEAL
 
 - A roadblock stands in the road once spawned and traffic cars can queue against it; the block is in front of an arriving player only when the player comes from the plaza side (the layout is symmetric about the marker's line, but the officers are on one side). Pieces are created at the marker's height, so a marker on a slope needs a matching prefab.
 - The pursuit cars follow the road network (`drive_car` 2, M-ARREST 4) and ignore traffic lights and other cars; a target away from any road (more than 80 m) is approached in a straight line.
-- Cars neither ram nor shoot; no helicopters, no spike strips, no siren lights or sound (other threads: audio, HUD).
+- Cars neither ram nor shoot; no helicopters, no spike strips, no siren sound of its own beyond the loop (light bars: [M-SIRENLIGHTS](M-SIRENLIGHTS.md)).
 - Respawn points are flat pads on the avenue sidewalk; no hospital or station building.
 
 ## Test

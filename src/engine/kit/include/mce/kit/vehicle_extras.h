@@ -14,6 +14,9 @@
 //                    rolls) the lamp is lit at `braking` in `brake_color`; in reverse (gear < 0) and not braking it shows `reverse` in
 //                    `reverse_color` (0: not used); otherwise `idle` (0: off). `lit` is 1 while braking, 2 while reversing.
 //
+//   LightFlasher3D   on an entity with a PointLight3D (a police light bar, an ambulance): the light alternates `color_a` and
+//                    `color_b` every half `period_s`, each half starting at `intensity` and fading toward 30% of it.
+//
 // A car with no driver, or one driven by traffic or the police, reads no input. System: "kit_vehicle_extras"
 // (FixedUpdate_Pre, after "kit_timed_light").
 
@@ -69,6 +72,16 @@ MCE_COMPONENT(BrakeLight3D, (braking, Range{0, 100}, Help{"PointLight3D intensit
               (idle, Range{0, 100}, Help{"intensity otherwise; 0 switches the lamp off"}),
               (reverse, Range{0, 100}, Help{"intensity while the parent car is in reverse and not braking; 0: not used"}),
               (lit, ReadOnly, Transient), brake_color, reverse_color)
+
+struct LightFlasher3D {
+    math::Color color_a{1.0f, 0.05f, 0.04f, 1.0f};
+    math::Color color_b{0.1f, 0.2f, 1.0f, 1.0f};
+    f32 intensity = 12.0f;
+    f32 period_s = 0.5f;
+    f32 t = 0.0f;  // engine-written: seconds since the start
+};
+MCE_COMPONENT(LightFlasher3D, color_a, color_b, (intensity, Range{0, 100}), (period_s, Range{0.05f, 10}, Help{"one A then one B"}),
+              (t, ReadOnly, Transient))
 
 // Registers the components and adds the system. Idempotent.
 void install_vehicle_extras(World& world, asset::AssetSystem* assets);
