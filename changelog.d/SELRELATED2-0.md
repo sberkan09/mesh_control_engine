@@ -1,0 +1,1 @@
+- editor: Select > Siblings on an id that is gone no longer returns the roots (found by a new fuzz, M-SELRELATED2).
