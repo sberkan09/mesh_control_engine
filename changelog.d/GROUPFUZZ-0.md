@@ -1,0 +1,1 @@
+- editor: group and ungroup are fuzzed against a plain parent model, with world positions and one undo entry checked (M-GROUPFUZZ).
