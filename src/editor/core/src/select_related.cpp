@@ -40,6 +40,7 @@ Array<EntityId> select_related(const EditorScene& scene, Span<const EntityId> fr
                 break;
             }
             case Relation::Siblings:
+                if (scene.doc().find(id) == nullptr) break;  // an id that is gone has no siblings (not "the roots")
                 scene.children_of(scene.parent_of(id), kids);
                 for (const EntityId k : kids) add(out, k);
                 break;
