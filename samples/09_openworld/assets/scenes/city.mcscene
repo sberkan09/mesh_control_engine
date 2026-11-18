@@ -59950,6 +59950,37 @@
   },
   {
    "id": 2518,
+   "name": "Police car 1 light bar",
+   "components": {
+    "ChildOf": {
+     "parent": "$2506"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.5,
+      0.2
+     ]
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.05,
+      0.04,
+      1
+     ],
+     "intensity": 0,
+     "radius": 11,
+     "enabled": 0
+    },
+    "LightFlasher3D": {
+     "intensity": 14,
+     "period_s": 0.5
+    }
+   }
+  },
+  {
+   "id": 2519,
    "name": "Police car 2",
    "components": {
     "LocalTransform": {
@@ -59979,10 +60010,10 @@
      "engine_torque": 900,
      "self_right": 1,
      "anti_roll": 8000,
-     "wheel_fl": "$2519",
-     "wheel_fr": "$2521",
-     "wheel_rl": "$2523",
-     "wheel_rr": "$2525",
+     "wheel_fl": "$2520",
+     "wheel_fr": "$2522",
+     "wheel_rl": "$2524",
+     "wheel_rr": "$2526",
      "track": 0.427,
      "front_axle": -0.769,
      "rear_axle": 0.769,
@@ -60127,11 +60158,11 @@
    }
   },
   {
-   "id": 2519,
+   "id": 2520,
    "name": "Police car 2 Model",
    "components": {
     "ChildOf": {
-     "parent": "$2517"
+     "parent": "$2518"
     },
     "LocalTransform": {
      "position": [
@@ -60157,7 +60188,7 @@
    }
   },
   {
-   "id": 2520,
+   "id": 2521,
    "name": "Police car 2 Wheel fl",
    "components": {
     "LocalTransform": {
@@ -60170,11 +60201,11 @@
    }
   },
   {
-   "id": 2521,
+   "id": 2522,
    "name": "Police car 2 Wheel fl model",
    "components": {
     "ChildOf": {
-     "parent": "$2519"
+     "parent": "$2520"
     },
     "LocalTransform": {
      "position": [
@@ -60200,7 +60231,7 @@
    }
   },
   {
-   "id": 2522,
+   "id": 2523,
    "name": "Police car 2 Wheel fr",
    "components": {
     "LocalTransform": {
@@ -60213,11 +60244,11 @@
    }
   },
   {
-   "id": 2523,
+   "id": 2524,
    "name": "Police car 2 Wheel fr model",
    "components": {
     "ChildOf": {
-     "parent": "$2521"
+     "parent": "$2522"
     },
     "LocalTransform": {
      "position": [
@@ -60237,7 +60268,7 @@
    }
   },
   {
-   "id": 2524,
+   "id": 2525,
    "name": "Police car 2 Wheel rl",
    "components": {
     "LocalTransform": {
@@ -60250,11 +60281,11 @@
    }
   },
   {
-   "id": 2525,
+   "id": 2526,
    "name": "Police car 2 Wheel rl model",
    "components": {
     "ChildOf": {
-     "parent": "$2523"
+     "parent": "$2524"
     },
     "LocalTransform": {
      "position": [
@@ -60280,7 +60311,7 @@
    }
   },
   {
-   "id": 2526,
+   "id": 2527,
    "name": "Police car 2 Wheel rr",
    "components": {
     "LocalTransform": {
@@ -60293,11 +60324,11 @@
    }
   },
   {
-   "id": 2527,
+   "id": 2528,
    "name": "Police car 2 Wheel rr model",
    "components": {
     "ChildOf": {
-     "parent": "$2525"
+     "parent": "$2526"
     },
     "LocalTransform": {
      "position": [
@@ -60317,11 +60348,11 @@
    }
   },
   {
-   "id": 2528,
+   "id": 2529,
    "name": "Police car 2 Tail lamp",
    "components": {
     "ChildOf": {
-     "parent": "$2517"
+     "parent": "$2518"
     },
     "LocalTransform": {
      "position": [
@@ -60348,7 +60379,38 @@
    }
   },
   {
-   "id": 2529,
+   "id": 2530,
+   "name": "Police car 2 light bar",
+   "components": {
+    "ChildOf": {
+     "parent": "$2518"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.5,
+      0.2
+     ]
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.05,
+      0.04,
+      1
+     ],
+     "intensity": 0,
+     "radius": 11,
+     "enabled": 0
+    },
+    "LightFlasher3D": {
+     "intensity": 14,
+     "period_s": 0.5
+    }
+   }
+  },
+  {
+   "id": 2531,
    "name": "Police car 3",
    "components": {
     "LocalTransform": {
@@ -60378,10 +60440,10 @@
      "engine_torque": 900,
      "self_right": 1,
      "anti_roll": 8000,
-     "wheel_fl": "$2530",
-     "wheel_fr": "$2532",
-     "wheel_rl": "$2534",
-     "wheel_rr": "$2536",
+     "wheel_fl": "$2532",
+     "wheel_fr": "$2534",
+     "wheel_rl": "$2536",
+     "wheel_rr": "$2538",
      "track": 0.427,
      "front_axle": -0.769,
      "rear_axle": 0.769,
@@ -60526,11 +60588,11 @@
    }
   },
   {
-   "id": 2530,
+   "id": 2532,
    "name": "Police car 3 Model",
    "components": {
     "ChildOf": {
-     "parent": "$2528"
+     "parent": "$2530"
     },
     "LocalTransform": {
      "position": [
@@ -60556,7 +60618,7 @@
    }
   },
   {
-   "id": 2531,
+   "id": 2533,
    "name": "Police car 3 Wheel fl",
    "components": {
     "LocalTransform": {
@@ -60569,11 +60631,11 @@
    }
   },
   {
-   "id": 2532,
+   "id": 2534,
    "name": "Police car 3 Wheel fl model",
    "components": {
     "ChildOf": {
-     "parent": "$2530"
+     "parent": "$2532"
     },
     "LocalTransform": {
      "position": [
@@ -60586,43 +60648,6 @@
       1.0,
       0,
       0.0
-     ],
-     "scale": [
-      0.95,
-      0.95,
-      0.95
-     ]
-    },
-    "MeshRef": {
-     "mesh": "guid:42506dd1-3d99-57ce-a627-281c23cac37c"
-    }
-   }
-  },
-  {
-   "id": 2533,
-   "name": "Police car 3 Wheel fr",
-   "components": {
-    "LocalTransform": {
-     "position": [
-      0,
-      -1000,
-      0
-     ]
-    }
-   }
-  },
-  {
-   "id": 2534,
-   "name": "Police car 3 Wheel fr model",
-   "components": {
-    "ChildOf": {
-     "parent": "$2532"
-    },
-    "LocalTransform": {
-     "position": [
-      0,
-      0,
-      0
      ],
      "scale": [
       0.95,
@@ -60637,7 +60662,7 @@
   },
   {
    "id": 2535,
-   "name": "Police car 3 Wheel rl",
+   "name": "Police car 3 Wheel fr",
    "components": {
     "LocalTransform": {
      "position": [
@@ -60650,10 +60675,47 @@
   },
   {
    "id": 2536,
-   "name": "Police car 3 Wheel rl model",
+   "name": "Police car 3 Wheel fr model",
    "components": {
     "ChildOf": {
      "parent": "$2534"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:42506dd1-3d99-57ce-a627-281c23cac37c"
+    }
+   }
+  },
+  {
+   "id": 2537,
+   "name": "Police car 3 Wheel rl",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -1000,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2538,
+   "name": "Police car 3 Wheel rl model",
+   "components": {
+    "ChildOf": {
+     "parent": "$2536"
     },
     "LocalTransform": {
      "position": [
@@ -60679,7 +60741,7 @@
    }
   },
   {
-   "id": 2537,
+   "id": 2539,
    "name": "Police car 3 Wheel rr",
    "components": {
     "LocalTransform": {
@@ -60692,11 +60754,11 @@
    }
   },
   {
-   "id": 2538,
+   "id": 2540,
    "name": "Police car 3 Wheel rr model",
    "components": {
     "ChildOf": {
-     "parent": "$2536"
+     "parent": "$2538"
     },
     "LocalTransform": {
      "position": [
@@ -60716,11 +60778,11 @@
    }
   },
   {
-   "id": 2539,
+   "id": 2541,
    "name": "Police car 3 Tail lamp",
    "components": {
     "ChildOf": {
-     "parent": "$2528"
+     "parent": "$2530"
     },
     "LocalTransform": {
      "position": [
@@ -60747,7 +60809,38 @@
    }
   },
   {
-   "id": 2540,
+   "id": 2542,
+   "name": "Police car 3 light bar",
+   "components": {
+    "ChildOf": {
+     "parent": "$2530"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.5,
+      0.2
+     ]
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.05,
+      0.04,
+      1
+     ],
+     "intensity": 0,
+     "radius": 11,
+     "enabled": 0
+    },
+    "LightFlasher3D": {
+     "intensity": 14,
+     "period_s": 0.5
+    }
+   }
+  },
+  {
+   "id": 2543,
    "name": "Police car 4",
    "components": {
     "LocalTransform": {
@@ -60777,10 +60870,10 @@
      "engine_torque": 900,
      "self_right": 1,
      "anti_roll": 8000,
-     "wheel_fl": "$2541",
-     "wheel_fr": "$2543",
-     "wheel_rl": "$2545",
-     "wheel_rr": "$2547",
+     "wheel_fl": "$2544",
+     "wheel_fr": "$2546",
+     "wheel_rl": "$2548",
+     "wheel_rr": "$2550",
      "track": 0.427,
      "front_axle": -0.769,
      "rear_axle": 0.769,
@@ -60925,11 +61018,11 @@
    }
   },
   {
-   "id": 2541,
+   "id": 2544,
    "name": "Police car 4 Model",
    "components": {
     "ChildOf": {
-     "parent": "$2539"
+     "parent": "$2542"
     },
     "LocalTransform": {
      "position": [
@@ -60955,7 +61048,7 @@
    }
   },
   {
-   "id": 2542,
+   "id": 2545,
    "name": "Police car 4 Wheel fl",
    "components": {
     "LocalTransform": {
@@ -60968,11 +61061,11 @@
    }
   },
   {
-   "id": 2543,
+   "id": 2546,
    "name": "Police car 4 Wheel fl model",
    "components": {
     "ChildOf": {
-     "parent": "$2541"
+     "parent": "$2544"
     },
     "LocalTransform": {
      "position": [
@@ -60998,7 +61091,7 @@
    }
   },
   {
-   "id": 2544,
+   "id": 2547,
    "name": "Police car 4 Wheel fr",
    "components": {
     "LocalTransform": {
@@ -61011,11 +61104,11 @@
    }
   },
   {
-   "id": 2545,
+   "id": 2548,
    "name": "Police car 4 Wheel fr model",
    "components": {
     "ChildOf": {
-     "parent": "$2543"
+     "parent": "$2546"
     },
     "LocalTransform": {
      "position": [
@@ -61035,7 +61128,7 @@
    }
   },
   {
-   "id": 2546,
+   "id": 2549,
    "name": "Police car 4 Wheel rl",
    "components": {
     "LocalTransform": {
@@ -61048,11 +61141,11 @@
    }
   },
   {
-   "id": 2547,
+   "id": 2550,
    "name": "Police car 4 Wheel rl model",
    "components": {
     "ChildOf": {
-     "parent": "$2545"
+     "parent": "$2548"
     },
     "LocalTransform": {
      "position": [
@@ -61078,7 +61171,7 @@
    }
   },
   {
-   "id": 2548,
+   "id": 2551,
    "name": "Police car 4 Wheel rr",
    "components": {
     "LocalTransform": {
@@ -61091,11 +61184,11 @@
    }
   },
   {
-   "id": 2549,
+   "id": 2552,
    "name": "Police car 4 Wheel rr model",
    "components": {
     "ChildOf": {
-     "parent": "$2547"
+     "parent": "$2550"
     },
     "LocalTransform": {
      "position": [
@@ -61115,11 +61208,11 @@
    }
   },
   {
-   "id": 2550,
+   "id": 2553,
    "name": "Police car 4 Tail lamp",
    "components": {
     "ChildOf": {
-     "parent": "$2539"
+     "parent": "$2542"
     },
     "LocalTransform": {
      "position": [
@@ -61146,7 +61239,38 @@
    }
   },
   {
-   "id": 2551,
+   "id": 2554,
+   "name": "Police car 4 light bar",
+   "components": {
+    "ChildOf": {
+     "parent": "$2542"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.5,
+      0.2
+     ]
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.05,
+      0.04,
+      1
+     ],
+     "intensity": 0,
+     "radius": 11,
+     "enabled": 0
+    },
+    "LightFlasher3D": {
+     "intensity": 14,
+     "period_s": 0.5
+    }
+   }
+  },
+  {
+   "id": 2555,
    "name": "Roadblock 1",
    "components": {
     "LocalTransform": {
@@ -61178,7 +61302,7 @@
    }
   },
   {
-   "id": 2552,
+   "id": 2556,
    "name": "Roadblock 2",
    "components": {
     "LocalTransform": {
@@ -61210,7 +61334,7 @@
    }
   },
   {
-   "id": 2553,
+   "id": 2557,
    "name": "Roadblock 3",
    "components": {
     "LocalTransform": {
@@ -61242,7 +61366,7 @@
    }
   },
   {
-   "id": 2554,
+   "id": 2558,
    "name": "Roadblock 4",
    "components": {
     "LocalTransform": {
@@ -61268,7 +61392,7 @@
    }
   },
   {
-   "id": 2555,
+   "id": 2559,
    "name": "Hospital",
    "components": {
     "LocalTransform": {
@@ -61284,7 +61408,7 @@
    }
   },
   {
-   "id": 2556,
+   "id": 2560,
    "name": "Hospital pad",
    "components": {
     "LocalTransform": {
@@ -61312,7 +61436,7 @@
    }
   },
   {
-   "id": 2557,
+   "id": 2561,
    "name": "Police station",
    "components": {
     "LocalTransform": {
@@ -61328,7 +61452,7 @@
    }
   },
   {
-   "id": 2558,
+   "id": 2562,
    "name": "Police station pad",
    "components": {
     "LocalTransform": {
@@ -61356,7 +61480,7 @@
    }
   },
   {
-   "id": 2559,
+   "id": 2563,
    "name": "Ammo shop",
    "components": {
     "LocalTransform": {
@@ -61383,7 +61507,7 @@
    }
   },
   {
-   "id": 2560,
+   "id": 2564,
    "name": "Ammo shop pad",
    "components": {
     "LocalTransform": {
@@ -61411,7 +61535,7 @@
    }
   },
   {
-   "id": 2561,
+   "id": 2565,
    "name": "Mixer",
    "components": {
     "AudioLimiter": {
@@ -61420,7 +61544,7 @@
    }
   },
   {
-   "id": 2562,
+   "id": 2566,
    "name": "Pause mix",
    "components": {
     "AudioSnapshot": {
@@ -61433,7 +61557,7 @@
    }
   },
   {
-   "id": 2563,
+   "id": 2567,
    "name": "City ambience",
    "components": {
     "AudioSource": {
@@ -61455,7 +61579,7 @@
    }
   },
   {
-   "id": 2564,
+   "id": 2568,
    "name": "Clock",
    "components": {
     "LocalTransform": {},
@@ -61504,7 +61628,7 @@
    }
   },
   {
-   "id": 2565,
+   "id": 2569,
    "name": "Weather",
    "components": {
     "LocalTransform": {},
@@ -61532,8 +61656,8 @@
     },
     "CloudLayer": {},
     "WeatherAudio": {
-     "rain_source": "$2568",
-     "wind_source": "$2569",
+     "rain_source": "$2572",
+     "wind_source": "$2573",
      "rain_db": -10,
      "wind_db": -18,
      "fade_seconds": 6
@@ -61541,7 +61665,7 @@
    }
   },
   {
-   "id": 2566,
+   "id": 2570,
    "name": "Rain",
    "components": {
     "LocalTransform": {
@@ -61615,7 +61739,7 @@
    }
   },
   {
-   "id": 2567,
+   "id": 2571,
    "name": "Rain splashes",
    "components": {
     "LocalTransform": {},
@@ -61645,7 +61769,7 @@
    }
   },
   {
-   "id": 2568,
+   "id": 2572,
    "name": "Lightning",
    "components": {
     "LocalTransform": {},
@@ -61660,7 +61784,7 @@
    }
   },
   {
-   "id": 2569,
+   "id": 2573,
    "name": "Rain bed",
    "components": {
     "AudioSource": {
@@ -61674,7 +61798,7 @@
    }
   },
   {
-   "id": 2570,
+   "id": 2574,
    "name": "Wind bed",
    "components": {
     "AudioSource": {
@@ -61688,7 +61812,7 @@
    }
   },
   {
-   "id": 2571,
+   "id": 2575,
    "name": "Night bed",
    "components": {
     "AudioSource": {
@@ -61709,7 +61833,7 @@
    }
   },
   {
-   "id": 2572,
+   "id": 2576,
    "name": "Lamp 0_0_0 post",
    "components": {
     "LocalTransform": {
@@ -61731,7 +61855,7 @@
    }
   },
   {
-   "id": 2573,
+   "id": 2577,
    "name": "Lamp 0_0_0",
    "components": {
     "LocalTransform": {
@@ -61769,7 +61893,7 @@
    }
   },
   {
-   "id": 2574,
+   "id": 2578,
    "name": "Lamp 0_0_1 post",
    "components": {
     "LocalTransform": {
@@ -61791,7 +61915,7 @@
    }
   },
   {
-   "id": 2575,
+   "id": 2579,
    "name": "Lamp 0_0_1",
    "components": {
     "LocalTransform": {
@@ -61829,7 +61953,7 @@
    }
   },
   {
-   "id": 2576,
+   "id": 2580,
    "name": "Lamp 1_0_0 post",
    "components": {
     "LocalTransform": {
@@ -61851,7 +61975,7 @@
    }
   },
   {
-   "id": 2577,
+   "id": 2581,
    "name": "Lamp 1_0_0",
    "components": {
     "LocalTransform": {
@@ -61889,7 +62013,7 @@
    }
   },
   {
-   "id": 2578,
+   "id": 2582,
    "name": "Lamp 1_0_1 post",
    "components": {
     "LocalTransform": {
@@ -61911,7 +62035,7 @@
    }
   },
   {
-   "id": 2579,
+   "id": 2583,
    "name": "Lamp 1_0_1",
    "components": {
     "LocalTransform": {
@@ -61949,7 +62073,7 @@
    }
   },
   {
-   "id": 2580,
+   "id": 2584,
    "name": "Lamp 2_0_0 post",
    "components": {
     "LocalTransform": {
@@ -61971,7 +62095,7 @@
    }
   },
   {
-   "id": 2581,
+   "id": 2585,
    "name": "Lamp 2_0_0",
    "components": {
     "LocalTransform": {
@@ -62009,7 +62133,7 @@
    }
   },
   {
-   "id": 2582,
+   "id": 2586,
    "name": "Lamp 2_0_1 post",
    "components": {
     "LocalTransform": {
@@ -62031,7 +62155,7 @@
    }
   },
   {
-   "id": 2583,
+   "id": 2587,
    "name": "Lamp 2_0_1",
    "components": {
     "LocalTransform": {
@@ -62069,7 +62193,7 @@
    }
   },
   {
-   "id": 2584,
+   "id": 2588,
    "name": "Lamp 3_0_0 post",
    "components": {
     "LocalTransform": {
@@ -62091,7 +62215,7 @@
    }
   },
   {
-   "id": 2585,
+   "id": 2589,
    "name": "Lamp 3_0_0",
    "components": {
     "LocalTransform": {
@@ -62129,7 +62253,7 @@
    }
   },
   {
-   "id": 2586,
+   "id": 2590,
    "name": "Lamp 3_0_1 post",
    "components": {
     "LocalTransform": {
@@ -62151,7 +62275,7 @@
    }
   },
   {
-   "id": 2587,
+   "id": 2591,
    "name": "Lamp 3_0_1",
    "components": {
     "LocalTransform": {
@@ -62189,7 +62313,7 @@
    }
   },
   {
-   "id": 2588,
+   "id": 2592,
    "name": "Lamp 4_0_0 post",
    "components": {
     "LocalTransform": {
@@ -62211,7 +62335,7 @@
    }
   },
   {
-   "id": 2589,
+   "id": 2593,
    "name": "Lamp 4_0_0",
    "components": {
     "LocalTransform": {
@@ -62249,7 +62373,7 @@
    }
   },
   {
-   "id": 2590,
+   "id": 2594,
    "name": "Lamp 4_0_1 post",
    "components": {
     "LocalTransform": {
@@ -62271,7 +62395,7 @@
    }
   },
   {
-   "id": 2591,
+   "id": 2595,
    "name": "Lamp 4_0_1",
    "components": {
     "LocalTransform": {
@@ -62309,7 +62433,7 @@
    }
   },
   {
-   "id": 2592,
+   "id": 2596,
    "name": "Lamp 0_1_0 post",
    "components": {
     "LocalTransform": {
@@ -62331,7 +62455,7 @@
    }
   },
   {
-   "id": 2593,
+   "id": 2597,
    "name": "Lamp 0_1_0",
    "components": {
     "LocalTransform": {
@@ -62369,7 +62493,7 @@
    }
   },
   {
-   "id": 2594,
+   "id": 2598,
    "name": "Lamp 0_1_1 post",
    "components": {
     "LocalTransform": {
@@ -62391,7 +62515,7 @@
    }
   },
   {
-   "id": 2595,
+   "id": 2599,
    "name": "Lamp 0_1_1",
    "components": {
     "LocalTransform": {
@@ -62429,7 +62553,7 @@
    }
   },
   {
-   "id": 2596,
+   "id": 2600,
    "name": "Lamp 1_1_0 post",
    "components": {
     "LocalTransform": {
@@ -62451,7 +62575,7 @@
    }
   },
   {
-   "id": 2597,
+   "id": 2601,
    "name": "Lamp 1_1_0",
    "components": {
     "LocalTransform": {
@@ -62489,7 +62613,7 @@
    }
   },
   {
-   "id": 2598,
+   "id": 2602,
    "name": "Lamp 1_1_1 post",
    "components": {
     "LocalTransform": {
@@ -62511,7 +62635,7 @@
    }
   },
   {
-   "id": 2599,
+   "id": 2603,
    "name": "Lamp 1_1_1",
    "components": {
     "LocalTransform": {
@@ -62549,7 +62673,7 @@
    }
   },
   {
-   "id": 2600,
+   "id": 2604,
    "name": "Lamp 2_1_0 post",
    "components": {
     "LocalTransform": {
@@ -62571,7 +62695,7 @@
    }
   },
   {
-   "id": 2601,
+   "id": 2605,
    "name": "Lamp 2_1_0",
    "components": {
     "LocalTransform": {
@@ -62609,7 +62733,7 @@
    }
   },
   {
-   "id": 2602,
+   "id": 2606,
    "name": "Lamp 2_1_1 post",
    "components": {
     "LocalTransform": {
@@ -62631,7 +62755,7 @@
    }
   },
   {
-   "id": 2603,
+   "id": 2607,
    "name": "Lamp 2_1_1",
    "components": {
     "LocalTransform": {
@@ -62669,7 +62793,7 @@
    }
   },
   {
-   "id": 2604,
+   "id": 2608,
    "name": "Lamp 3_1_0 post",
    "components": {
     "LocalTransform": {
@@ -62691,7 +62815,7 @@
    }
   },
   {
-   "id": 2605,
+   "id": 2609,
    "name": "Lamp 3_1_0",
    "components": {
     "LocalTransform": {
@@ -62729,7 +62853,7 @@
    }
   },
   {
-   "id": 2606,
+   "id": 2610,
    "name": "Lamp 3_1_1 post",
    "components": {
     "LocalTransform": {
@@ -62751,7 +62875,7 @@
    }
   },
   {
-   "id": 2607,
+   "id": 2611,
    "name": "Lamp 3_1_1",
    "components": {
     "LocalTransform": {
@@ -62789,7 +62913,7 @@
    }
   },
   {
-   "id": 2608,
+   "id": 2612,
    "name": "Lamp 4_1_0 post",
    "components": {
     "LocalTransform": {
@@ -62811,7 +62935,7 @@
    }
   },
   {
-   "id": 2609,
+   "id": 2613,
    "name": "Lamp 4_1_0",
    "components": {
     "LocalTransform": {
@@ -62849,7 +62973,7 @@
    }
   },
   {
-   "id": 2610,
+   "id": 2614,
    "name": "Lamp 4_1_1 post",
    "components": {
     "LocalTransform": {
@@ -62871,7 +62995,7 @@
    }
   },
   {
-   "id": 2611,
+   "id": 2615,
    "name": "Lamp 4_1_1",
    "components": {
     "LocalTransform": {
@@ -62909,7 +63033,7 @@
    }
   },
   {
-   "id": 2612,
+   "id": 2616,
    "name": "Lamp 0_2_0 post",
    "components": {
     "LocalTransform": {
@@ -62931,7 +63055,7 @@
    }
   },
   {
-   "id": 2613,
+   "id": 2617,
    "name": "Lamp 0_2_0",
    "components": {
     "LocalTransform": {
@@ -62969,7 +63093,7 @@
    }
   },
   {
-   "id": 2614,
+   "id": 2618,
    "name": "Lamp 0_2_1 post",
    "components": {
     "LocalTransform": {
@@ -62991,7 +63115,7 @@
    }
   },
   {
-   "id": 2615,
+   "id": 2619,
    "name": "Lamp 0_2_1",
    "components": {
     "LocalTransform": {
@@ -63029,7 +63153,7 @@
    }
   },
   {
-   "id": 2616,
+   "id": 2620,
    "name": "Lamp 1_2_0 post",
    "components": {
     "LocalTransform": {
@@ -63051,7 +63175,7 @@
    }
   },
   {
-   "id": 2617,
+   "id": 2621,
    "name": "Lamp 1_2_0",
    "components": {
     "LocalTransform": {
@@ -63089,7 +63213,7 @@
    }
   },
   {
-   "id": 2618,
+   "id": 2622,
    "name": "Lamp 1_2_1 post",
    "components": {
     "LocalTransform": {
@@ -63111,7 +63235,7 @@
    }
   },
   {
-   "id": 2619,
+   "id": 2623,
    "name": "Lamp 1_2_1",
    "components": {
     "LocalTransform": {
@@ -63149,7 +63273,7 @@
    }
   },
   {
-   "id": 2620,
+   "id": 2624,
    "name": "Lamp 2_2_0 post",
    "components": {
     "LocalTransform": {
@@ -63171,7 +63295,7 @@
    }
   },
   {
-   "id": 2621,
+   "id": 2625,
    "name": "Lamp 2_2_0",
    "components": {
     "LocalTransform": {
@@ -63209,7 +63333,7 @@
    }
   },
   {
-   "id": 2622,
+   "id": 2626,
    "name": "Lamp 2_2_1 post",
    "components": {
     "LocalTransform": {
@@ -63231,7 +63355,7 @@
    }
   },
   {
-   "id": 2623,
+   "id": 2627,
    "name": "Lamp 2_2_1",
    "components": {
     "LocalTransform": {
@@ -63269,7 +63393,7 @@
    }
   },
   {
-   "id": 2624,
+   "id": 2628,
    "name": "Lamp 3_2_0 post",
    "components": {
     "LocalTransform": {
@@ -63291,7 +63415,7 @@
    }
   },
   {
-   "id": 2625,
+   "id": 2629,
    "name": "Lamp 3_2_0",
    "components": {
     "LocalTransform": {
@@ -63329,7 +63453,7 @@
    }
   },
   {
-   "id": 2626,
+   "id": 2630,
    "name": "Lamp 3_2_1 post",
    "components": {
     "LocalTransform": {
@@ -63351,7 +63475,7 @@
    }
   },
   {
-   "id": 2627,
+   "id": 2631,
    "name": "Lamp 3_2_1",
    "components": {
     "LocalTransform": {
@@ -63389,7 +63513,7 @@
    }
   },
   {
-   "id": 2628,
+   "id": 2632,
    "name": "Lamp 4_2_0 post",
    "components": {
     "LocalTransform": {
@@ -63411,7 +63535,7 @@
    }
   },
   {
-   "id": 2629,
+   "id": 2633,
    "name": "Lamp 4_2_0",
    "components": {
     "LocalTransform": {
@@ -63449,7 +63573,7 @@
    }
   },
   {
-   "id": 2630,
+   "id": 2634,
    "name": "Lamp 4_2_1 post",
    "components": {
     "LocalTransform": {
@@ -63471,7 +63595,7 @@
    }
   },
   {
-   "id": 2631,
+   "id": 2635,
    "name": "Lamp 4_2_1",
    "components": {
     "LocalTransform": {
@@ -63509,7 +63633,7 @@
    }
   },
   {
-   "id": 2632,
+   "id": 2636,
    "name": "Lamp 0_3_0 post",
    "components": {
     "LocalTransform": {
@@ -63531,7 +63655,7 @@
    }
   },
   {
-   "id": 2633,
+   "id": 2637,
    "name": "Lamp 0_3_0",
    "components": {
     "LocalTransform": {
@@ -63569,7 +63693,7 @@
    }
   },
   {
-   "id": 2634,
+   "id": 2638,
    "name": "Lamp 0_3_1 post",
    "components": {
     "LocalTransform": {
@@ -63591,7 +63715,7 @@
    }
   },
   {
-   "id": 2635,
+   "id": 2639,
    "name": "Lamp 0_3_1",
    "components": {
     "LocalTransform": {
@@ -63629,7 +63753,7 @@
    }
   },
   {
-   "id": 2636,
+   "id": 2640,
    "name": "Lamp 1_3_0 post",
    "components": {
     "LocalTransform": {
@@ -63651,7 +63775,7 @@
    }
   },
   {
-   "id": 2637,
+   "id": 2641,
    "name": "Lamp 1_3_0",
    "components": {
     "LocalTransform": {
@@ -63689,7 +63813,7 @@
    }
   },
   {
-   "id": 2638,
+   "id": 2642,
    "name": "Lamp 1_3_1 post",
    "components": {
     "LocalTransform": {
@@ -63711,7 +63835,7 @@
    }
   },
   {
-   "id": 2639,
+   "id": 2643,
    "name": "Lamp 1_3_1",
    "components": {
     "LocalTransform": {
@@ -63749,7 +63873,7 @@
    }
   },
   {
-   "id": 2640,
+   "id": 2644,
    "name": "Lamp 2_3_0 post",
    "components": {
     "LocalTransform": {
@@ -63771,7 +63895,7 @@
    }
   },
   {
-   "id": 2641,
+   "id": 2645,
    "name": "Lamp 2_3_0",
    "components": {
     "LocalTransform": {
@@ -63809,7 +63933,7 @@
    }
   },
   {
-   "id": 2642,
+   "id": 2646,
    "name": "Lamp 2_3_1 post",
    "components": {
     "LocalTransform": {
@@ -63831,7 +63955,7 @@
    }
   },
   {
-   "id": 2643,
+   "id": 2647,
    "name": "Lamp 2_3_1",
    "components": {
     "LocalTransform": {
@@ -63869,7 +63993,7 @@
    }
   },
   {
-   "id": 2644,
+   "id": 2648,
    "name": "Lamp 3_3_0 post",
    "components": {
     "LocalTransform": {
@@ -63891,7 +64015,7 @@
    }
   },
   {
-   "id": 2645,
+   "id": 2649,
    "name": "Lamp 3_3_0",
    "components": {
     "LocalTransform": {
@@ -63929,7 +64053,7 @@
    }
   },
   {
-   "id": 2646,
+   "id": 2650,
    "name": "Lamp 3_3_1 post",
    "components": {
     "LocalTransform": {
@@ -63951,7 +64075,7 @@
    }
   },
   {
-   "id": 2647,
+   "id": 2651,
    "name": "Lamp 3_3_1",
    "components": {
     "LocalTransform": {
@@ -63989,7 +64113,7 @@
    }
   },
   {
-   "id": 2648,
+   "id": 2652,
    "name": "Lamp 4_3_0 post",
    "components": {
     "LocalTransform": {
@@ -64011,7 +64135,7 @@
    }
   },
   {
-   "id": 2649,
+   "id": 2653,
    "name": "Lamp 4_3_0",
    "components": {
     "LocalTransform": {
@@ -64049,7 +64173,7 @@
    }
   },
   {
-   "id": 2650,
+   "id": 2654,
    "name": "Lamp 4_3_1 post",
    "components": {
     "LocalTransform": {
@@ -64071,7 +64195,7 @@
    }
   },
   {
-   "id": 2651,
+   "id": 2655,
    "name": "Lamp 4_3_1",
    "components": {
     "LocalTransform": {
@@ -64109,7 +64233,7 @@
    }
   },
   {
-   "id": 2652,
+   "id": 2656,
    "name": "Lamp 0_4_0 post",
    "components": {
     "LocalTransform": {
@@ -64131,7 +64255,7 @@
    }
   },
   {
-   "id": 2653,
+   "id": 2657,
    "name": "Lamp 0_4_0",
    "components": {
     "LocalTransform": {
@@ -64169,7 +64293,7 @@
    }
   },
   {
-   "id": 2654,
+   "id": 2658,
    "name": "Lamp 0_4_1 post",
    "components": {
     "LocalTransform": {
@@ -64191,7 +64315,7 @@
    }
   },
   {
-   "id": 2655,
+   "id": 2659,
    "name": "Lamp 0_4_1",
    "components": {
     "LocalTransform": {
@@ -64229,7 +64353,7 @@
    }
   },
   {
-   "id": 2656,
+   "id": 2660,
    "name": "Lamp 1_4_0 post",
    "components": {
     "LocalTransform": {
@@ -64251,7 +64375,7 @@
    }
   },
   {
-   "id": 2657,
+   "id": 2661,
    "name": "Lamp 1_4_0",
    "components": {
     "LocalTransform": {
@@ -64289,7 +64413,7 @@
    }
   },
   {
-   "id": 2658,
+   "id": 2662,
    "name": "Lamp 1_4_1 post",
    "components": {
     "LocalTransform": {
@@ -64311,7 +64435,7 @@
    }
   },
   {
-   "id": 2659,
+   "id": 2663,
    "name": "Lamp 1_4_1",
    "components": {
     "LocalTransform": {
@@ -64349,7 +64473,7 @@
    }
   },
   {
-   "id": 2660,
+   "id": 2664,
    "name": "Lamp 2_4_0 post",
    "components": {
     "LocalTransform": {
@@ -64371,7 +64495,7 @@
    }
   },
   {
-   "id": 2661,
+   "id": 2665,
    "name": "Lamp 2_4_0",
    "components": {
     "LocalTransform": {
@@ -64409,7 +64533,7 @@
    }
   },
   {
-   "id": 2662,
+   "id": 2666,
    "name": "Lamp 2_4_1 post",
    "components": {
     "LocalTransform": {
@@ -64431,7 +64555,7 @@
    }
   },
   {
-   "id": 2663,
+   "id": 2667,
    "name": "Lamp 2_4_1",
    "components": {
     "LocalTransform": {
@@ -64469,7 +64593,7 @@
    }
   },
   {
-   "id": 2664,
+   "id": 2668,
    "name": "Lamp 3_4_0 post",
    "components": {
     "LocalTransform": {
@@ -64491,7 +64615,7 @@
    }
   },
   {
-   "id": 2665,
+   "id": 2669,
    "name": "Lamp 3_4_0",
    "components": {
     "LocalTransform": {
@@ -64529,7 +64653,7 @@
    }
   },
   {
-   "id": 2666,
+   "id": 2670,
    "name": "Lamp 3_4_1 post",
    "components": {
     "LocalTransform": {
@@ -64551,7 +64675,7 @@
    }
   },
   {
-   "id": 2667,
+   "id": 2671,
    "name": "Lamp 3_4_1",
    "components": {
     "LocalTransform": {
@@ -64589,7 +64713,7 @@
    }
   },
   {
-   "id": 2668,
+   "id": 2672,
    "name": "Lamp 4_4_0 post",
    "components": {
     "LocalTransform": {
@@ -64611,7 +64735,7 @@
    }
   },
   {
-   "id": 2669,
+   "id": 2673,
    "name": "Lamp 4_4_0",
    "components": {
     "LocalTransform": {
@@ -64649,7 +64773,7 @@
    }
   },
   {
-   "id": 2670,
+   "id": 2674,
    "name": "Lamp 4_4_1 post",
    "components": {
     "LocalTransform": {
@@ -64671,7 +64795,7 @@
    }
   },
   {
-   "id": 2671,
+   "id": 2675,
    "name": "Lamp 4_4_1",
    "components": {
     "LocalTransform": {
@@ -64709,7 +64833,7 @@
    }
   },
   {
-   "id": 2672,
+   "id": 2676,
    "name": "Errand stop 1",
    "components": {
     "LocalTransform": {
@@ -64747,12 +64871,12 @@
    }
   },
   {
-   "id": 2673,
+   "id": 2677,
    "name": "Errand objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$2671",
+     "target": "$2675",
      "radius": 4.0
     },
     "SaveKey": {
@@ -64761,12 +64885,12 @@
    }
   },
   {
-   "id": 2674,
+   "id": 2678,
    "name": "Mission Errand",
    "components": {
     "Mission": {
      "id": "errand",
-     "objective": "$2672",
+     "objective": "$2676",
      "actor": "$2453",
      "fail_on_death": "$2453",
      "time_limit": 100
@@ -64787,7 +64911,7 @@
    }
   },
   {
-   "id": 2675,
+   "id": 2679,
    "name": "Mission Errand marker",
    "components": {
     "LocalTransform": {
@@ -64813,7 +64937,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$2673",
+     "mission": "$2677",
      "radius": 3.0
     },
     "MapMarker": {
@@ -64830,7 +64954,7 @@
    }
   },
   {
-   "id": 2676,
+   "id": 2680,
    "name": "Courier stop 1",
    "components": {
     "LocalTransform": {
@@ -64868,14 +64992,14 @@
    }
   },
   {
-   "id": 2677,
+   "id": 2681,
    "name": "Courier objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$2675",
+     "target": "$2679",
      "radius": 4.0,
-     "next": "$2678"
+     "next": "$2682"
     },
     "SaveKey": {
      "key": 1003
@@ -64883,7 +65007,7 @@
    }
   },
   {
-   "id": 2678,
+   "id": 2682,
    "name": "Courier stop 2",
    "components": {
     "LocalTransform": {
@@ -64921,12 +65045,12 @@
    }
   },
   {
-   "id": 2679,
+   "id": 2683,
    "name": "Courier objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$2677",
+     "target": "$2681",
      "radius": 4.0
     },
     "SaveKey": {
@@ -64935,12 +65059,12 @@
    }
   },
   {
-   "id": 2680,
+   "id": 2684,
    "name": "Mission Courier",
    "components": {
     "Mission": {
      "id": "courier",
-     "objective": "$2676",
+     "objective": "$2680",
      "actor": "$2453",
      "fail_on_death": "$2453",
      "time_limit": 170
@@ -64964,7 +65088,7 @@
    }
   },
   {
-   "id": 2681,
+   "id": 2685,
    "name": "Mission Courier marker",
    "components": {
     "LocalTransform": {
@@ -64990,7 +65114,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$2679",
+     "mission": "$2683",
      "radius": 3.0
     },
     "MapMarker": {
@@ -65007,7 +65131,7 @@
    }
   },
   {
-   "id": 2682,
+   "id": 2686,
    "name": "Long haul stop 1",
    "components": {
     "LocalTransform": {
@@ -65045,12 +65169,12 @@
    }
   },
   {
-   "id": 2683,
+   "id": 2687,
    "name": "Long haul objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$2681",
+     "target": "$2685",
      "radius": 4.0
     },
     "SaveKey": {
@@ -65059,12 +65183,12 @@
    }
   },
   {
-   "id": 2684,
+   "id": 2688,
    "name": "Mission Long haul",
    "components": {
     "Mission": {
      "id": "long_haul",
-     "objective": "$2682",
+     "objective": "$2686",
      "actor": "$2453",
      "fail_on_death": "$2453",
      "time_limit": 150
@@ -65088,7 +65212,7 @@
    }
   },
   {
-   "id": 2685,
+   "id": 2689,
    "name": "Mission Long haul marker",
    "components": {
     "LocalTransform": {
@@ -65114,7 +65238,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$2683",
+     "mission": "$2687",
      "radius": 3.0
     },
     "MapMarker": {
@@ -65131,7 +65255,7 @@
    }
   },
   {
-   "id": 2686,
+   "id": 2690,
    "name": "Hit target",
    "components": {
     "LocalTransform": {
@@ -65166,11 +65290,11 @@
    }
   },
   {
-   "id": 2687,
+   "id": 2691,
    "name": "Hit target model",
    "components": {
     "ChildOf": {
-     "parent": "$2685"
+     "parent": "$2689"
     },
     "LocalTransform": {
      "position": [
@@ -65199,14 +65323,14 @@
    }
   },
   {
-   "id": 2688,
+   "id": 2692,
    "name": "Hit objective 1",
    "components": {
     "Objective": {
      "kind": "Kill",
-     "target": "$2685",
+     "target": "$2689",
      "count": 1,
-     "next": "$2689"
+     "next": "$2693"
     },
     "SaveKey": {
      "key": 1008
@@ -65214,7 +65338,7 @@
    }
   },
   {
-   "id": 2689,
+   "id": 2693,
    "name": "Hit stop 2",
    "components": {
     "LocalTransform": {
@@ -65252,12 +65376,12 @@
    }
   },
   {
-   "id": 2690,
+   "id": 2694,
    "name": "Hit objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$2688",
+     "target": "$2692",
      "radius": 4.0
     },
     "SaveKey": {
@@ -65266,12 +65390,12 @@
    }
   },
   {
-   "id": 2691,
+   "id": 2695,
    "name": "Mission Hit",
    "components": {
     "Mission": {
      "id": "hit",
-     "objective": "$2687",
+     "objective": "$2691",
      "actor": "$2453",
      "fail_on_death": "$2453",
      "time_limit": 180
@@ -65292,7 +65416,7 @@
    }
   },
   {
-   "id": 2692,
+   "id": 2696,
    "name": "Mission Hit marker",
    "components": {
     "LocalTransform": {
@@ -65318,7 +65442,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$2690",
+     "mission": "$2694",
      "radius": 3.0
     },
     "MapMarker": {
@@ -65335,7 +65459,7 @@
    }
   },
   {
-   "id": 2693,
+   "id": 2697,
    "name": "Cop killer objective 1",
    "components": {
     "Objective": {
@@ -65343,7 +65467,7 @@
      "team": 2,
      "by_actor": 1,
      "count": 3,
-     "next": "$2694"
+     "next": "$2698"
     },
     "SaveKey": {
      "key": 1011
@@ -65351,7 +65475,7 @@
    }
   },
   {
-   "id": 2694,
+   "id": 2698,
    "name": "Cop killer stop 2",
    "components": {
     "LocalTransform": {
@@ -65389,12 +65513,12 @@
    }
   },
   {
-   "id": 2695,
+   "id": 2699,
    "name": "Cop killer objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$2693",
+     "target": "$2697",
      "radius": 4.0
     },
     "SaveKey": {
@@ -65403,12 +65527,12 @@
    }
   },
   {
-   "id": 2696,
+   "id": 2700,
    "name": "Mission Cop killer",
    "components": {
     "Mission": {
      "id": "cop_killer",
-     "objective": "$2692",
+     "objective": "$2696",
      "actor": "$2453",
      "fail_on_death": "$2453",
      "time_limit": 240
@@ -65429,7 +65553,7 @@
    }
   },
   {
-   "id": 2697,
+   "id": 2701,
    "name": "Mission Cop killer marker",
    "components": {
     "LocalTransform": {
@@ -65455,7 +65579,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$2695",
+     "mission": "$2699",
      "radius": 3.0
     },
     "MapMarker": {
@@ -65472,7 +65596,7 @@
    }
   },
   {
-   "id": 2698,
+   "id": 2702,
    "name": "Pickup stop 1",
    "components": {
     "LocalTransform": {
@@ -65510,14 +65634,14 @@
    }
   },
   {
-   "id": 2699,
+   "id": 2703,
    "name": "Pickup objective 1",
    "components": {
     "Objective": {
      "kind": "Interact",
-     "target": "$2697",
+     "target": "$2701",
      "radius": 2.5,
-     "next": "$2700"
+     "next": "$2704"
     },
     "SaveKey": {
      "key": 1014
@@ -65525,7 +65649,7 @@
    }
   },
   {
-   "id": 2700,
+   "id": 2704,
    "name": "Pickup stop 2",
    "components": {
     "LocalTransform": {
@@ -65563,12 +65687,12 @@
    }
   },
   {
-   "id": 2701,
+   "id": 2705,
    "name": "Pickup objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$2699",
+     "target": "$2703",
      "radius": 4.0
     },
     "SaveKey": {
@@ -65577,12 +65701,12 @@
    }
   },
   {
-   "id": 2702,
+   "id": 2706,
    "name": "Mission Pickup",
    "components": {
     "Mission": {
      "id": "pickup",
-     "objective": "$2698",
+     "objective": "$2702",
      "actor": "$2453",
      "fail_on_death": "$2453",
      "time_limit": 150
@@ -65606,7 +65730,7 @@
    }
   },
   {
-   "id": 2703,
+   "id": 2707,
    "name": "Mission Pickup marker",
    "components": {
     "LocalTransform": {
@@ -65632,7 +65756,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$2701",
+     "mission": "$2705",
      "radius": 3.0
     },
     "MapMarker": {
@@ -65649,7 +65773,7 @@
    }
   },
   {
-   "id": 2704,
+   "id": 2708,
    "name": "Cash 1",
    "components": {
     "LocalTransform": {
@@ -65692,7 +65816,7 @@
    }
   },
   {
-   "id": 2705,
+   "id": 2709,
    "name": "Cash 2",
    "components": {
     "LocalTransform": {
@@ -65735,7 +65859,7 @@
    }
   },
   {
-   "id": 2706,
+   "id": 2710,
    "name": "Cash 3",
    "components": {
     "LocalTransform": {
@@ -65778,7 +65902,7 @@
    }
   },
   {
-   "id": 2707,
+   "id": 2711,
    "name": "Cash 4",
    "components": {
     "LocalTransform": {
@@ -65821,7 +65945,7 @@
    }
   },
   {
-   "id": 2708,
+   "id": 2712,
    "name": "Cash 5",
    "components": {
     "LocalTransform": {
@@ -65864,7 +65988,7 @@
    }
   },
   {
-   "id": 2709,
+   "id": 2713,
    "name": "Cash 6",
    "components": {
     "LocalTransform": {
@@ -65907,7 +66031,7 @@
    }
   },
   {
-   "id": 2710,
+   "id": 2714,
    "name": "Cash 7",
    "components": {
     "LocalTransform": {
@@ -65950,7 +66074,7 @@
    }
   },
   {
-   "id": 2711,
+   "id": 2715,
    "name": "Cash 8",
    "components": {
     "LocalTransform": {
@@ -65993,7 +66117,7 @@
    }
   },
   {
-   "id": 2712,
+   "id": 2716,
    "name": "Cash 9",
    "components": {
     "LocalTransform": {
@@ -66036,7 +66160,7 @@
    }
   },
   {
-   "id": 2713,
+   "id": 2717,
    "name": "Cash 10",
    "components": {
     "LocalTransform": {
@@ -66079,7 +66203,7 @@
    }
   },
   {
-   "id": 2714,
+   "id": 2718,
    "name": "Cash 11",
    "components": {
     "LocalTransform": {
@@ -66122,7 +66246,7 @@
    }
   },
   {
-   "id": 2715,
+   "id": 2719,
    "name": "Cash 12",
    "components": {
     "LocalTransform": {
@@ -66165,7 +66289,7 @@
    }
   },
   {
-   "id": 2716,
+   "id": 2720,
    "name": "Ammo crate 1",
    "components": {
     "LocalTransform": {
@@ -66210,7 +66334,7 @@
    }
   },
   {
-   "id": 2717,
+   "id": 2721,
    "name": "Ammo crate 2",
    "components": {
     "LocalTransform": {
@@ -66255,7 +66379,7 @@
    }
   },
   {
-   "id": 2718,
+   "id": 2722,
    "name": "Ammo crate 3",
    "components": {
     "LocalTransform": {
@@ -66300,7 +66424,7 @@
    }
   },
   {
-   "id": 2719,
+   "id": 2723,
    "name": "Ammo crate 4",
    "components": {
     "LocalTransform": {
@@ -66345,7 +66469,7 @@
    }
   },
   {
-   "id": 2720,
+   "id": 2724,
    "name": "Ammo crate 5",
    "components": {
     "LocalTransform": {
@@ -66390,7 +66514,7 @@
    }
   },
   {
-   "id": 2721,
+   "id": 2725,
    "name": "Medic",
    "components": {
     "LocalTransform": {
@@ -66433,7 +66557,7 @@
    }
   },
   {
-   "id": 2722,
+   "id": 2726,
    "name": "Scrapyard",
    "components": {
     "LocalTransform": {
@@ -66476,7 +66600,7 @@
    }
   },
   {
-   "id": 2723,
+   "id": 2727,
    "name": "Repair shop 1",
    "components": {
     "LocalTransform": {
@@ -66521,7 +66645,7 @@
    }
   },
   {
-   "id": 2724,
+   "id": 2728,
    "name": "Repair shop 2",
    "components": {
     "LocalTransform": {
@@ -66566,7 +66690,7 @@
    }
   },
   {
-   "id": 2725,
+   "id": 2729,
    "name": "Pause menu",
    "components": {
     "UiScreen": {
@@ -66608,7 +66732,7 @@
    }
   },
   {
-   "id": 2726,
+   "id": 2730,
    "name": "Options menu",
    "components": {
     "UiScreen": {
@@ -66625,7 +66749,7 @@
    }
   },
   {
-   "id": 2727,
+   "id": 2731,
    "name": "Radio 1",
    "components": {
     "AudioSource": {
@@ -66639,7 +66763,7 @@
    }
   },
   {
-   "id": 2728,
+   "id": 2732,
    "name": "Radio 2",
    "components": {
     "AudioSource": {
@@ -66653,7 +66777,7 @@
    }
   },
   {
-   "id": 2729,
+   "id": 2733,
    "name": "Script: radio",
    "components": {
     "ScriptSystem": {
@@ -66667,7 +66791,7 @@
    }
   },
   {
-   "id": 2730,
+   "id": 2734,
    "name": "GI volume",
    "components": {
     "LocalTransform": {
@@ -66696,7 +66820,7 @@
    }
   },
   {
-   "id": 2731,
+   "id": 2735,
    "name": "Signal 1_1_0 pole",
    "components": {
     "LocalTransform": {
@@ -66724,7 +66848,7 @@
    }
   },
   {
-   "id": 2732,
+   "id": 2736,
    "name": "Signal 1_1_0 housing",
    "components": {
     "LocalTransform": {
@@ -66752,7 +66876,7 @@
    }
   },
   {
-   "id": 2733,
+   "id": 2737,
    "name": "Signal 1_1_0 Red",
    "components": {
     "LocalTransform": {
@@ -66783,7 +66907,7 @@
    }
   },
   {
-   "id": 2734,
+   "id": 2738,
    "name": "Signal 1_1_0 Amber",
    "components": {
     "LocalTransform": {
@@ -66814,7 +66938,7 @@
    }
   },
   {
-   "id": 2735,
+   "id": 2739,
    "name": "Signal 1_1_0 Green",
    "components": {
     "LocalTransform": {
@@ -66845,7 +66969,7 @@
    }
   },
   {
-   "id": 2736,
+   "id": 2740,
    "name": "Signal 1_1_1 pole",
    "components": {
     "LocalTransform": {
@@ -66873,7 +66997,7 @@
    }
   },
   {
-   "id": 2737,
+   "id": 2741,
    "name": "Signal 1_1_1 housing",
    "components": {
     "LocalTransform": {
@@ -66901,7 +67025,7 @@
    }
   },
   {
-   "id": 2738,
+   "id": 2742,
    "name": "Signal 1_1_1 Red",
    "components": {
     "LocalTransform": {
@@ -66932,7 +67056,7 @@
    }
   },
   {
-   "id": 2739,
+   "id": 2743,
    "name": "Signal 1_1_1 Amber",
    "components": {
     "LocalTransform": {
@@ -66963,7 +67087,7 @@
    }
   },
   {
-   "id": 2740,
+   "id": 2744,
    "name": "Signal 1_1_1 Green",
    "components": {
     "LocalTransform": {
@@ -66994,7 +67118,7 @@
    }
   },
   {
-   "id": 2741,
+   "id": 2745,
    "name": "Signal 1_1_2 pole",
    "components": {
     "LocalTransform": {
@@ -67022,7 +67146,7 @@
    }
   },
   {
-   "id": 2742,
+   "id": 2746,
    "name": "Signal 1_1_2 housing",
    "components": {
     "LocalTransform": {
@@ -67050,7 +67174,7 @@
    }
   },
   {
-   "id": 2743,
+   "id": 2747,
    "name": "Signal 1_1_2 Red",
    "components": {
     "LocalTransform": {
@@ -67081,7 +67205,7 @@
    }
   },
   {
-   "id": 2744,
+   "id": 2748,
    "name": "Signal 1_1_2 Amber",
    "components": {
     "LocalTransform": {
@@ -67112,7 +67236,7 @@
    }
   },
   {
-   "id": 2745,
+   "id": 2749,
    "name": "Signal 1_1_2 Green",
    "components": {
     "LocalTransform": {
@@ -67143,7 +67267,7 @@
    }
   },
   {
-   "id": 2746,
+   "id": 2750,
    "name": "Signal 1_1_3 pole",
    "components": {
     "LocalTransform": {
@@ -67171,7 +67295,7 @@
    }
   },
   {
-   "id": 2747,
+   "id": 2751,
    "name": "Signal 1_1_3 housing",
    "components": {
     "LocalTransform": {
@@ -67199,7 +67323,7 @@
    }
   },
   {
-   "id": 2748,
+   "id": 2752,
    "name": "Signal 1_1_3 Red",
    "components": {
     "LocalTransform": {
@@ -67230,7 +67354,7 @@
    }
   },
   {
-   "id": 2749,
+   "id": 2753,
    "name": "Signal 1_1_3 Amber",
    "components": {
     "LocalTransform": {
@@ -67261,7 +67385,7 @@
    }
   },
   {
-   "id": 2750,
+   "id": 2754,
    "name": "Signal 1_1_3 Green",
    "components": {
     "LocalTransform": {
@@ -67292,7 +67416,7 @@
    }
   },
   {
-   "id": 2751,
+   "id": 2755,
    "name": "Signal 2_1_0 pole",
    "components": {
     "LocalTransform": {
@@ -67320,7 +67444,7 @@
    }
   },
   {
-   "id": 2752,
+   "id": 2756,
    "name": "Signal 2_1_0 housing",
    "components": {
     "LocalTransform": {
@@ -67348,7 +67472,7 @@
    }
   },
   {
-   "id": 2753,
+   "id": 2757,
    "name": "Signal 2_1_0 Red",
    "components": {
     "LocalTransform": {
@@ -67379,7 +67503,7 @@
    }
   },
   {
-   "id": 2754,
+   "id": 2758,
    "name": "Signal 2_1_0 Amber",
    "components": {
     "LocalTransform": {
@@ -67410,7 +67534,7 @@
    }
   },
   {
-   "id": 2755,
+   "id": 2759,
    "name": "Signal 2_1_0 Green",
    "components": {
     "LocalTransform": {
@@ -67441,7 +67565,7 @@
    }
   },
   {
-   "id": 2756,
+   "id": 2760,
    "name": "Signal 2_1_1 pole",
    "components": {
     "LocalTransform": {
@@ -67469,7 +67593,7 @@
    }
   },
   {
-   "id": 2757,
+   "id": 2761,
    "name": "Signal 2_1_1 housing",
    "components": {
     "LocalTransform": {
@@ -67497,7 +67621,7 @@
    }
   },
   {
-   "id": 2758,
+   "id": 2762,
    "name": "Signal 2_1_1 Red",
    "components": {
     "LocalTransform": {
@@ -67528,7 +67652,7 @@
    }
   },
   {
-   "id": 2759,
+   "id": 2763,
    "name": "Signal 2_1_1 Amber",
    "components": {
     "LocalTransform": {
@@ -67559,7 +67683,7 @@
    }
   },
   {
-   "id": 2760,
+   "id": 2764,
    "name": "Signal 2_1_1 Green",
    "components": {
     "LocalTransform": {
@@ -67590,7 +67714,7 @@
    }
   },
   {
-   "id": 2761,
+   "id": 2765,
    "name": "Signal 2_1_2 pole",
    "components": {
     "LocalTransform": {
@@ -67618,7 +67742,7 @@
    }
   },
   {
-   "id": 2762,
+   "id": 2766,
    "name": "Signal 2_1_2 housing",
    "components": {
     "LocalTransform": {
@@ -67646,7 +67770,7 @@
    }
   },
   {
-   "id": 2763,
+   "id": 2767,
    "name": "Signal 2_1_2 Red",
    "components": {
     "LocalTransform": {
@@ -67677,7 +67801,7 @@
    }
   },
   {
-   "id": 2764,
+   "id": 2768,
    "name": "Signal 2_1_2 Amber",
    "components": {
     "LocalTransform": {
@@ -67708,7 +67832,7 @@
    }
   },
   {
-   "id": 2765,
+   "id": 2769,
    "name": "Signal 2_1_2 Green",
    "components": {
     "LocalTransform": {
@@ -67739,7 +67863,7 @@
    }
   },
   {
-   "id": 2766,
+   "id": 2770,
    "name": "Signal 2_1_3 pole",
    "components": {
     "LocalTransform": {
@@ -67767,7 +67891,7 @@
    }
   },
   {
-   "id": 2767,
+   "id": 2771,
    "name": "Signal 2_1_3 housing",
    "components": {
     "LocalTransform": {
@@ -67795,7 +67919,7 @@
    }
   },
   {
-   "id": 2768,
+   "id": 2772,
    "name": "Signal 2_1_3 Red",
    "components": {
     "LocalTransform": {
@@ -67826,7 +67950,7 @@
    }
   },
   {
-   "id": 2769,
+   "id": 2773,
    "name": "Signal 2_1_3 Amber",
    "components": {
     "LocalTransform": {
@@ -67857,7 +67981,7 @@
    }
   },
   {
-   "id": 2770,
+   "id": 2774,
    "name": "Signal 2_1_3 Green",
    "components": {
     "LocalTransform": {
@@ -67888,7 +68012,7 @@
    }
   },
   {
-   "id": 2771,
+   "id": 2775,
    "name": "Signal 3_1_0 pole",
    "components": {
     "LocalTransform": {
@@ -67916,7 +68040,7 @@
    }
   },
   {
-   "id": 2772,
+   "id": 2776,
    "name": "Signal 3_1_0 housing",
    "components": {
     "LocalTransform": {
@@ -67944,7 +68068,7 @@
    }
   },
   {
-   "id": 2773,
+   "id": 2777,
    "name": "Signal 3_1_0 Red",
    "components": {
     "LocalTransform": {
@@ -67975,7 +68099,7 @@
    }
   },
   {
-   "id": 2774,
+   "id": 2778,
    "name": "Signal 3_1_0 Amber",
    "components": {
     "LocalTransform": {
@@ -68006,7 +68130,7 @@
    }
   },
   {
-   "id": 2775,
+   "id": 2779,
    "name": "Signal 3_1_0 Green",
    "components": {
     "LocalTransform": {
@@ -68037,7 +68161,7 @@
    }
   },
   {
-   "id": 2776,
+   "id": 2780,
    "name": "Signal 3_1_1 pole",
    "components": {
     "LocalTransform": {
@@ -68065,7 +68189,7 @@
    }
   },
   {
-   "id": 2777,
+   "id": 2781,
    "name": "Signal 3_1_1 housing",
    "components": {
     "LocalTransform": {
@@ -68093,7 +68217,7 @@
    }
   },
   {
-   "id": 2778,
+   "id": 2782,
    "name": "Signal 3_1_1 Red",
    "components": {
     "LocalTransform": {
@@ -68124,7 +68248,7 @@
    }
   },
   {
-   "id": 2779,
+   "id": 2783,
    "name": "Signal 3_1_1 Amber",
    "components": {
     "LocalTransform": {
@@ -68155,7 +68279,7 @@
    }
   },
   {
-   "id": 2780,
+   "id": 2784,
    "name": "Signal 3_1_1 Green",
    "components": {
     "LocalTransform": {
@@ -68186,7 +68310,7 @@
    }
   },
   {
-   "id": 2781,
+   "id": 2785,
    "name": "Signal 3_1_2 pole",
    "components": {
     "LocalTransform": {
@@ -68214,7 +68338,7 @@
    }
   },
   {
-   "id": 2782,
+   "id": 2786,
    "name": "Signal 3_1_2 housing",
    "components": {
     "LocalTransform": {
@@ -68242,7 +68366,7 @@
    }
   },
   {
-   "id": 2783,
+   "id": 2787,
    "name": "Signal 3_1_2 Red",
    "components": {
     "LocalTransform": {
@@ -68273,7 +68397,7 @@
    }
   },
   {
-   "id": 2784,
+   "id": 2788,
    "name": "Signal 3_1_2 Amber",
    "components": {
     "LocalTransform": {
@@ -68304,7 +68428,7 @@
    }
   },
   {
-   "id": 2785,
+   "id": 2789,
    "name": "Signal 3_1_2 Green",
    "components": {
     "LocalTransform": {
@@ -68335,7 +68459,7 @@
    }
   },
   {
-   "id": 2786,
+   "id": 2790,
    "name": "Signal 3_1_3 pole",
    "components": {
     "LocalTransform": {
@@ -68363,7 +68487,7 @@
    }
   },
   {
-   "id": 2787,
+   "id": 2791,
    "name": "Signal 3_1_3 housing",
    "components": {
     "LocalTransform": {
@@ -68391,7 +68515,7 @@
    }
   },
   {
-   "id": 2788,
+   "id": 2792,
    "name": "Signal 3_1_3 Red",
    "components": {
     "LocalTransform": {
@@ -68422,7 +68546,7 @@
    }
   },
   {
-   "id": 2789,
+   "id": 2793,
    "name": "Signal 3_1_3 Amber",
    "components": {
     "LocalTransform": {
@@ -68453,7 +68577,7 @@
    }
   },
   {
-   "id": 2790,
+   "id": 2794,
    "name": "Signal 3_1_3 Green",
    "components": {
     "LocalTransform": {
@@ -68484,7 +68608,7 @@
    }
   },
   {
-   "id": 2791,
+   "id": 2795,
    "name": "Signal 1_2_0 pole",
    "components": {
     "LocalTransform": {
@@ -68512,7 +68636,7 @@
    }
   },
   {
-   "id": 2792,
+   "id": 2796,
    "name": "Signal 1_2_0 housing",
    "components": {
     "LocalTransform": {
@@ -68540,7 +68664,7 @@
    }
   },
   {
-   "id": 2793,
+   "id": 2797,
    "name": "Signal 1_2_0 Red",
    "components": {
     "LocalTransform": {
@@ -68571,7 +68695,7 @@
    }
   },
   {
-   "id": 2794,
+   "id": 2798,
    "name": "Signal 1_2_0 Amber",
    "components": {
     "LocalTransform": {
@@ -68602,7 +68726,7 @@
    }
   },
   {
-   "id": 2795,
+   "id": 2799,
    "name": "Signal 1_2_0 Green",
    "components": {
     "LocalTransform": {
@@ -68633,7 +68757,7 @@
    }
   },
   {
-   "id": 2796,
+   "id": 2800,
    "name": "Signal 1_2_1 pole",
    "components": {
     "LocalTransform": {
@@ -68661,7 +68785,7 @@
    }
   },
   {
-   "id": 2797,
+   "id": 2801,
    "name": "Signal 1_2_1 housing",
    "components": {
     "LocalTransform": {
@@ -68689,7 +68813,7 @@
    }
   },
   {
-   "id": 2798,
+   "id": 2802,
    "name": "Signal 1_2_1 Red",
    "components": {
     "LocalTransform": {
@@ -68720,7 +68844,7 @@
    }
   },
   {
-   "id": 2799,
+   "id": 2803,
    "name": "Signal 1_2_1 Amber",
    "components": {
     "LocalTransform": {
@@ -68751,7 +68875,7 @@
    }
   },
   {
-   "id": 2800,
+   "id": 2804,
    "name": "Signal 1_2_1 Green",
    "components": {
     "LocalTransform": {
@@ -68782,7 +68906,7 @@
    }
   },
   {
-   "id": 2801,
+   "id": 2805,
    "name": "Signal 1_2_2 pole",
    "components": {
     "LocalTransform": {
@@ -68810,7 +68934,7 @@
    }
   },
   {
-   "id": 2802,
+   "id": 2806,
    "name": "Signal 1_2_2 housing",
    "components": {
     "LocalTransform": {
@@ -68838,7 +68962,7 @@
    }
   },
   {
-   "id": 2803,
+   "id": 2807,
    "name": "Signal 1_2_2 Red",
    "components": {
     "LocalTransform": {
@@ -68869,7 +68993,7 @@
    }
   },
   {
-   "id": 2804,
+   "id": 2808,
    "name": "Signal 1_2_2 Amber",
    "components": {
     "LocalTransform": {
@@ -68900,7 +69024,7 @@
    }
   },
   {
-   "id": 2805,
+   "id": 2809,
    "name": "Signal 1_2_2 Green",
    "components": {
     "LocalTransform": {
@@ -68931,7 +69055,7 @@
    }
   },
   {
-   "id": 2806,
+   "id": 2810,
    "name": "Signal 1_2_3 pole",
    "components": {
     "LocalTransform": {
@@ -68959,7 +69083,7 @@
    }
   },
   {
-   "id": 2807,
+   "id": 2811,
    "name": "Signal 1_2_3 housing",
    "components": {
     "LocalTransform": {
@@ -68987,7 +69111,7 @@
    }
   },
   {
-   "id": 2808,
+   "id": 2812,
    "name": "Signal 1_2_3 Red",
    "components": {
     "LocalTransform": {
@@ -69018,7 +69142,7 @@
    }
   },
   {
-   "id": 2809,
+   "id": 2813,
    "name": "Signal 1_2_3 Amber",
    "components": {
     "LocalTransform": {
@@ -69049,7 +69173,7 @@
    }
   },
   {
-   "id": 2810,
+   "id": 2814,
    "name": "Signal 1_2_3 Green",
    "components": {
     "LocalTransform": {
@@ -69080,7 +69204,7 @@
    }
   },
   {
-   "id": 2811,
+   "id": 2815,
    "name": "Signal 2_2_0 pole",
    "components": {
     "LocalTransform": {
@@ -69108,7 +69232,7 @@
    }
   },
   {
-   "id": 2812,
+   "id": 2816,
    "name": "Signal 2_2_0 housing",
    "components": {
     "LocalTransform": {
@@ -69136,7 +69260,7 @@
    }
   },
   {
-   "id": 2813,
+   "id": 2817,
    "name": "Signal 2_2_0 Red",
    "components": {
     "LocalTransform": {
@@ -69167,7 +69291,7 @@
    }
   },
   {
-   "id": 2814,
+   "id": 2818,
    "name": "Signal 2_2_0 Amber",
    "components": {
     "LocalTransform": {
@@ -69198,7 +69322,7 @@
    }
   },
   {
-   "id": 2815,
+   "id": 2819,
    "name": "Signal 2_2_0 Green",
    "components": {
     "LocalTransform": {
@@ -69229,7 +69353,7 @@
    }
   },
   {
-   "id": 2816,
+   "id": 2820,
    "name": "Signal 2_2_1 pole",
    "components": {
     "LocalTransform": {
@@ -69257,7 +69381,7 @@
    }
   },
   {
-   "id": 2817,
+   "id": 2821,
    "name": "Signal 2_2_1 housing",
    "components": {
     "LocalTransform": {
@@ -69285,7 +69409,7 @@
    }
   },
   {
-   "id": 2818,
+   "id": 2822,
    "name": "Signal 2_2_1 Red",
    "components": {
     "LocalTransform": {
@@ -69316,7 +69440,7 @@
    }
   },
   {
-   "id": 2819,
+   "id": 2823,
    "name": "Signal 2_2_1 Amber",
    "components": {
     "LocalTransform": {
@@ -69347,7 +69471,7 @@
    }
   },
   {
-   "id": 2820,
+   "id": 2824,
    "name": "Signal 2_2_1 Green",
    "components": {
     "LocalTransform": {
@@ -69378,7 +69502,7 @@
    }
   },
   {
-   "id": 2821,
+   "id": 2825,
    "name": "Signal 2_2_2 pole",
    "components": {
     "LocalTransform": {
@@ -69406,7 +69530,7 @@
    }
   },
   {
-   "id": 2822,
+   "id": 2826,
    "name": "Signal 2_2_2 housing",
    "components": {
     "LocalTransform": {
@@ -69434,7 +69558,7 @@
    }
   },
   {
-   "id": 2823,
+   "id": 2827,
    "name": "Signal 2_2_2 Red",
    "components": {
     "LocalTransform": {
@@ -69465,7 +69589,7 @@
    }
   },
   {
-   "id": 2824,
+   "id": 2828,
    "name": "Signal 2_2_2 Amber",
    "components": {
     "LocalTransform": {
@@ -69496,7 +69620,7 @@
    }
   },
   {
-   "id": 2825,
+   "id": 2829,
    "name": "Signal 2_2_2 Green",
    "components": {
     "LocalTransform": {
@@ -69527,7 +69651,7 @@
    }
   },
   {
-   "id": 2826,
+   "id": 2830,
    "name": "Signal 2_2_3 pole",
    "components": {
     "LocalTransform": {
@@ -69555,7 +69679,7 @@
    }
   },
   {
-   "id": 2827,
+   "id": 2831,
    "name": "Signal 2_2_3 housing",
    "components": {
     "LocalTransform": {
@@ -69583,7 +69707,7 @@
    }
   },
   {
-   "id": 2828,
+   "id": 2832,
    "name": "Signal 2_2_3 Red",
    "components": {
     "LocalTransform": {
@@ -69614,7 +69738,7 @@
    }
   },
   {
-   "id": 2829,
+   "id": 2833,
    "name": "Signal 2_2_3 Amber",
    "components": {
     "LocalTransform": {
@@ -69645,7 +69769,7 @@
    }
   },
   {
-   "id": 2830,
+   "id": 2834,
    "name": "Signal 2_2_3 Green",
    "components": {
     "LocalTransform": {
@@ -69676,7 +69800,7 @@
    }
   },
   {
-   "id": 2831,
+   "id": 2835,
    "name": "Signal 3_2_0 pole",
    "components": {
     "LocalTransform": {
@@ -69704,7 +69828,7 @@
    }
   },
   {
-   "id": 2832,
+   "id": 2836,
    "name": "Signal 3_2_0 housing",
    "components": {
     "LocalTransform": {
@@ -69732,7 +69856,7 @@
    }
   },
   {
-   "id": 2833,
+   "id": 2837,
    "name": "Signal 3_2_0 Red",
    "components": {
     "LocalTransform": {
@@ -69763,7 +69887,7 @@
    }
   },
   {
-   "id": 2834,
+   "id": 2838,
    "name": "Signal 3_2_0 Amber",
    "components": {
     "LocalTransform": {
@@ -69794,7 +69918,7 @@
    }
   },
   {
-   "id": 2835,
+   "id": 2839,
    "name": "Signal 3_2_0 Green",
    "components": {
     "LocalTransform": {
@@ -69825,7 +69949,7 @@
    }
   },
   {
-   "id": 2836,
+   "id": 2840,
    "name": "Signal 3_2_1 pole",
    "components": {
     "LocalTransform": {
@@ -69853,7 +69977,7 @@
    }
   },
   {
-   "id": 2837,
+   "id": 2841,
    "name": "Signal 3_2_1 housing",
    "components": {
     "LocalTransform": {
@@ -69881,7 +70005,7 @@
    }
   },
   {
-   "id": 2838,
+   "id": 2842,
    "name": "Signal 3_2_1 Red",
    "components": {
     "LocalTransform": {
@@ -69912,7 +70036,7 @@
    }
   },
   {
-   "id": 2839,
+   "id": 2843,
    "name": "Signal 3_2_1 Amber",
    "components": {
     "LocalTransform": {
@@ -69943,7 +70067,7 @@
    }
   },
   {
-   "id": 2840,
+   "id": 2844,
    "name": "Signal 3_2_1 Green",
    "components": {
     "LocalTransform": {
@@ -69974,7 +70098,7 @@
    }
   },
   {
-   "id": 2841,
+   "id": 2845,
    "name": "Signal 3_2_2 pole",
    "components": {
     "LocalTransform": {
@@ -70002,7 +70126,7 @@
    }
   },
   {
-   "id": 2842,
+   "id": 2846,
    "name": "Signal 3_2_2 housing",
    "components": {
     "LocalTransform": {
@@ -70030,7 +70154,7 @@
    }
   },
   {
-   "id": 2843,
+   "id": 2847,
    "name": "Signal 3_2_2 Red",
    "components": {
     "LocalTransform": {
@@ -70061,7 +70185,7 @@
    }
   },
   {
-   "id": 2844,
+   "id": 2848,
    "name": "Signal 3_2_2 Amber",
    "components": {
     "LocalTransform": {
@@ -70092,7 +70216,7 @@
    }
   },
   {
-   "id": 2845,
+   "id": 2849,
    "name": "Signal 3_2_2 Green",
    "components": {
     "LocalTransform": {
@@ -70123,7 +70247,7 @@
    }
   },
   {
-   "id": 2846,
+   "id": 2850,
    "name": "Signal 3_2_3 pole",
    "components": {
     "LocalTransform": {
@@ -70151,7 +70275,7 @@
    }
   },
   {
-   "id": 2847,
+   "id": 2851,
    "name": "Signal 3_2_3 housing",
    "components": {
     "LocalTransform": {
@@ -70179,7 +70303,7 @@
    }
   },
   {
-   "id": 2848,
+   "id": 2852,
    "name": "Signal 3_2_3 Red",
    "components": {
     "LocalTransform": {
@@ -70210,7 +70334,7 @@
    }
   },
   {
-   "id": 2849,
+   "id": 2853,
    "name": "Signal 3_2_3 Amber",
    "components": {
     "LocalTransform": {
@@ -70241,7 +70365,7 @@
    }
   },
   {
-   "id": 2850,
+   "id": 2854,
    "name": "Signal 3_2_3 Green",
    "components": {
     "LocalTransform": {
@@ -70272,7 +70396,7 @@
    }
   },
   {
-   "id": 2851,
+   "id": 2855,
    "name": "Signal 1_3_0 pole",
    "components": {
     "LocalTransform": {
@@ -70300,7 +70424,7 @@
    }
   },
   {
-   "id": 2852,
+   "id": 2856,
    "name": "Signal 1_3_0 housing",
    "components": {
     "LocalTransform": {
@@ -70328,7 +70452,7 @@
    }
   },
   {
-   "id": 2853,
+   "id": 2857,
    "name": "Signal 1_3_0 Red",
    "components": {
     "LocalTransform": {
@@ -70359,7 +70483,7 @@
    }
   },
   {
-   "id": 2854,
+   "id": 2858,
    "name": "Signal 1_3_0 Amber",
    "components": {
     "LocalTransform": {
@@ -70390,7 +70514,7 @@
    }
   },
   {
-   "id": 2855,
+   "id": 2859,
    "name": "Signal 1_3_0 Green",
    "components": {
     "LocalTransform": {
@@ -70421,7 +70545,7 @@
    }
   },
   {
-   "id": 2856,
+   "id": 2860,
    "name": "Signal 1_3_1 pole",
    "components": {
     "LocalTransform": {
@@ -70449,7 +70573,7 @@
    }
   },
   {
-   "id": 2857,
+   "id": 2861,
    "name": "Signal 1_3_1 housing",
    "components": {
     "LocalTransform": {
@@ -70477,7 +70601,7 @@
    }
   },
   {
-   "id": 2858,
+   "id": 2862,
    "name": "Signal 1_3_1 Red",
    "components": {
     "LocalTransform": {
@@ -70508,7 +70632,7 @@
    }
   },
   {
-   "id": 2859,
+   "id": 2863,
    "name": "Signal 1_3_1 Amber",
    "components": {
     "LocalTransform": {
@@ -70539,7 +70663,7 @@
    }
   },
   {
-   "id": 2860,
+   "id": 2864,
    "name": "Signal 1_3_1 Green",
    "components": {
     "LocalTransform": {
@@ -70570,7 +70694,7 @@
    }
   },
   {
-   "id": 2861,
+   "id": 2865,
    "name": "Signal 1_3_2 pole",
    "components": {
     "LocalTransform": {
@@ -70598,7 +70722,7 @@
    }
   },
   {
-   "id": 2862,
+   "id": 2866,
    "name": "Signal 1_3_2 housing",
    "components": {
     "LocalTransform": {
@@ -70626,7 +70750,7 @@
    }
   },
   {
-   "id": 2863,
+   "id": 2867,
    "name": "Signal 1_3_2 Red",
    "components": {
     "LocalTransform": {
@@ -70657,7 +70781,7 @@
    }
   },
   {
-   "id": 2864,
+   "id": 2868,
    "name": "Signal 1_3_2 Amber",
    "components": {
     "LocalTransform": {
@@ -70688,7 +70812,7 @@
    }
   },
   {
-   "id": 2865,
+   "id": 2869,
    "name": "Signal 1_3_2 Green",
    "components": {
     "LocalTransform": {
@@ -70719,7 +70843,7 @@
    }
   },
   {
-   "id": 2866,
+   "id": 2870,
    "name": "Signal 1_3_3 pole",
    "components": {
     "LocalTransform": {
@@ -70747,7 +70871,7 @@
    }
   },
   {
-   "id": 2867,
+   "id": 2871,
    "name": "Signal 1_3_3 housing",
    "components": {
     "LocalTransform": {
@@ -70775,7 +70899,7 @@
    }
   },
   {
-   "id": 2868,
+   "id": 2872,
    "name": "Signal 1_3_3 Red",
    "components": {
     "LocalTransform": {
@@ -70806,7 +70930,7 @@
    }
   },
   {
-   "id": 2869,
+   "id": 2873,
    "name": "Signal 1_3_3 Amber",
    "components": {
     "LocalTransform": {
@@ -70837,7 +70961,7 @@
    }
   },
   {
-   "id": 2870,
+   "id": 2874,
    "name": "Signal 1_3_3 Green",
    "components": {
     "LocalTransform": {
@@ -70868,7 +70992,7 @@
    }
   },
   {
-   "id": 2871,
+   "id": 2875,
    "name": "Signal 2_3_0 pole",
    "components": {
     "LocalTransform": {
@@ -70896,7 +71020,7 @@
    }
   },
   {
-   "id": 2872,
+   "id": 2876,
    "name": "Signal 2_3_0 housing",
    "components": {
     "LocalTransform": {
@@ -70924,7 +71048,7 @@
    }
   },
   {
-   "id": 2873,
+   "id": 2877,
    "name": "Signal 2_3_0 Red",
    "components": {
     "LocalTransform": {
@@ -70955,7 +71079,7 @@
    }
   },
   {
-   "id": 2874,
+   "id": 2878,
    "name": "Signal 2_3_0 Amber",
    "components": {
     "LocalTransform": {
@@ -70986,7 +71110,7 @@
    }
   },
   {
-   "id": 2875,
+   "id": 2879,
    "name": "Signal 2_3_0 Green",
    "components": {
     "LocalTransform": {
@@ -71017,7 +71141,7 @@
    }
   },
   {
-   "id": 2876,
+   "id": 2880,
    "name": "Signal 2_3_1 pole",
    "components": {
     "LocalTransform": {
@@ -71045,7 +71169,7 @@
    }
   },
   {
-   "id": 2877,
+   "id": 2881,
    "name": "Signal 2_3_1 housing",
    "components": {
     "LocalTransform": {
@@ -71073,7 +71197,7 @@
    }
   },
   {
-   "id": 2878,
+   "id": 2882,
    "name": "Signal 2_3_1 Red",
    "components": {
     "LocalTransform": {
@@ -71104,7 +71228,7 @@
    }
   },
   {
-   "id": 2879,
+   "id": 2883,
    "name": "Signal 2_3_1 Amber",
    "components": {
     "LocalTransform": {
@@ -71135,7 +71259,7 @@
    }
   },
   {
-   "id": 2880,
+   "id": 2884,
    "name": "Signal 2_3_1 Green",
    "components": {
     "LocalTransform": {
@@ -71166,7 +71290,7 @@
    }
   },
   {
-   "id": 2881,
+   "id": 2885,
    "name": "Signal 2_3_2 pole",
    "components": {
     "LocalTransform": {
@@ -71194,7 +71318,7 @@
    }
   },
   {
-   "id": 2882,
+   "id": 2886,
    "name": "Signal 2_3_2 housing",
    "components": {
     "LocalTransform": {
@@ -71222,7 +71346,7 @@
    }
   },
   {
-   "id": 2883,
+   "id": 2887,
    "name": "Signal 2_3_2 Red",
    "components": {
     "LocalTransform": {
@@ -71253,7 +71377,7 @@
    }
   },
   {
-   "id": 2884,
+   "id": 2888,
    "name": "Signal 2_3_2 Amber",
    "components": {
     "LocalTransform": {
@@ -71284,7 +71408,7 @@
    }
   },
   {
-   "id": 2885,
+   "id": 2889,
    "name": "Signal 2_3_2 Green",
    "components": {
     "LocalTransform": {
@@ -71315,7 +71439,7 @@
    }
   },
   {
-   "id": 2886,
+   "id": 2890,
    "name": "Signal 2_3_3 pole",
    "components": {
     "LocalTransform": {
@@ -71343,7 +71467,7 @@
    }
   },
   {
-   "id": 2887,
+   "id": 2891,
    "name": "Signal 2_3_3 housing",
    "components": {
     "LocalTransform": {
@@ -71371,7 +71495,7 @@
    }
   },
   {
-   "id": 2888,
+   "id": 2892,
    "name": "Signal 2_3_3 Red",
    "components": {
     "LocalTransform": {
@@ -71402,7 +71526,7 @@
    }
   },
   {
-   "id": 2889,
+   "id": 2893,
    "name": "Signal 2_3_3 Amber",
    "components": {
     "LocalTransform": {
@@ -71433,7 +71557,7 @@
    }
   },
   {
-   "id": 2890,
+   "id": 2894,
    "name": "Signal 2_3_3 Green",
    "components": {
     "LocalTransform": {
@@ -71464,7 +71588,7 @@
    }
   },
   {
-   "id": 2891,
+   "id": 2895,
    "name": "Signal 3_3_0 pole",
    "components": {
     "LocalTransform": {
@@ -71492,7 +71616,7 @@
    }
   },
   {
-   "id": 2892,
+   "id": 2896,
    "name": "Signal 3_3_0 housing",
    "components": {
     "LocalTransform": {
@@ -71520,7 +71644,7 @@
    }
   },
   {
-   "id": 2893,
+   "id": 2897,
    "name": "Signal 3_3_0 Red",
    "components": {
     "LocalTransform": {
@@ -71551,7 +71675,7 @@
    }
   },
   {
-   "id": 2894,
+   "id": 2898,
    "name": "Signal 3_3_0 Amber",
    "components": {
     "LocalTransform": {
@@ -71582,7 +71706,7 @@
    }
   },
   {
-   "id": 2895,
+   "id": 2899,
    "name": "Signal 3_3_0 Green",
    "components": {
     "LocalTransform": {
@@ -71613,7 +71737,7 @@
    }
   },
   {
-   "id": 2896,
+   "id": 2900,
    "name": "Signal 3_3_1 pole",
    "components": {
     "LocalTransform": {
@@ -71641,7 +71765,7 @@
    }
   },
   {
-   "id": 2897,
+   "id": 2901,
    "name": "Signal 3_3_1 housing",
    "components": {
     "LocalTransform": {
@@ -71669,7 +71793,7 @@
    }
   },
   {
-   "id": 2898,
+   "id": 2902,
    "name": "Signal 3_3_1 Red",
    "components": {
     "LocalTransform": {
@@ -71700,7 +71824,7 @@
    }
   },
   {
-   "id": 2899,
+   "id": 2903,
    "name": "Signal 3_3_1 Amber",
    "components": {
     "LocalTransform": {
@@ -71731,7 +71855,7 @@
    }
   },
   {
-   "id": 2900,
+   "id": 2904,
    "name": "Signal 3_3_1 Green",
    "components": {
     "LocalTransform": {
@@ -71762,7 +71886,7 @@
    }
   },
   {
-   "id": 2901,
+   "id": 2905,
    "name": "Signal 3_3_2 pole",
    "components": {
     "LocalTransform": {
@@ -71790,7 +71914,7 @@
    }
   },
   {
-   "id": 2902,
+   "id": 2906,
    "name": "Signal 3_3_2 housing",
    "components": {
     "LocalTransform": {
@@ -71818,7 +71942,7 @@
    }
   },
   {
-   "id": 2903,
+   "id": 2907,
    "name": "Signal 3_3_2 Red",
    "components": {
     "LocalTransform": {
@@ -71849,7 +71973,7 @@
    }
   },
   {
-   "id": 2904,
+   "id": 2908,
    "name": "Signal 3_3_2 Amber",
    "components": {
     "LocalTransform": {
@@ -71880,7 +72004,7 @@
    }
   },
   {
-   "id": 2905,
+   "id": 2909,
    "name": "Signal 3_3_2 Green",
    "components": {
     "LocalTransform": {
@@ -71911,7 +72035,7 @@
    }
   },
   {
-   "id": 2906,
+   "id": 2910,
    "name": "Signal 3_3_3 pole",
    "components": {
     "LocalTransform": {
@@ -71939,7 +72063,7 @@
    }
   },
   {
-   "id": 2907,
+   "id": 2911,
    "name": "Signal 3_3_3 housing",
    "components": {
     "LocalTransform": {
@@ -71967,7 +72091,7 @@
    }
   },
   {
-   "id": 2908,
+   "id": 2912,
    "name": "Signal 3_3_3 Red",
    "components": {
     "LocalTransform": {
@@ -71998,7 +72122,7 @@
    }
   },
   {
-   "id": 2909,
+   "id": 2913,
    "name": "Signal 3_3_3 Amber",
    "components": {
     "LocalTransform": {
@@ -72029,7 +72153,7 @@
    }
   },
   {
-   "id": 2910,
+   "id": 2914,
    "name": "Signal 3_3_3 Green",
    "components": {
     "LocalTransform": {

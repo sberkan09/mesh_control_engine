@@ -207,6 +207,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `VehicleHorn3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `VehicleLights3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `BrakeLight3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `LightFlasher3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `VehicleRam3D` | `mce/kit/vehicle_ram.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/08_movement/assets/scenes/race.mcscene |

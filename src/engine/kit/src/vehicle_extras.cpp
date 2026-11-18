@@ -19,6 +19,7 @@ namespace mce::kit {
 static_assert(sizeof(VehicleHorn3D) == 48);
 static_assert(sizeof(VehicleLights3D) == 4);
 static_assert(sizeof(BrakeLight3D) == 48);
+static_assert(sizeof(LightFlasher3D) == 44);
 
 namespace {
 
@@ -83,6 +84,17 @@ void kit_vehicle_extras(Frame& f) {
         pl.enabled = level > 0.0f ? 1u : 0u;
     });
 
+    f.query<LightFlasher3D, PointLight3D>().each([&](Entity, LightFlasher3D& fl, PointLight3D& pl) {
+        fl.t += f.dt;
+        const f32 half = fl.period_s * 0.5f;
+        const f32 phase = std::fmod(fl.t, fl.period_s);
+        const bool a = phase < half;
+        const f32 into = (a ? phase : phase - half) / half;  // 0..1 through this half
+        pl.color = a ? fl.color_a : fl.color_b;
+        pl.intensity = fl.intensity * (1.0f - 0.7f * into);
+        pl.enabled = 1;
+    });
+
     f.query<VehicleHorn3D>().each([&](Entity e, VehicleHorn3D& h) {
         if (h.since_s < 1.0e6f) h.since_s += f.dt;
         if (in && in->has_action(kHorn) && in->pressed(kHorn) && player_drives(w, e)) h.honk = 1;
@@ -107,7 +119,7 @@ void install_vehicle_extras(World& world, asset::AssetSystem* assets) {
     install_timed_light(world, assets);  // the light write this system overrides
     if (world.try_resource<VehicleExtrasInstalled>()) return;
     world.set_resource(VehicleExtrasInstalled{});
-    world.register_components<VehicleHorn3D, VehicleLights3D, BrakeLight3D>();
+    world.register_components<VehicleHorn3D, VehicleLights3D, BrakeLight3D, LightFlasher3D>();
     world.add_system(Phase::FixedUpdate_Pre, "kit_vehicle_extras", &kit_vehicle_extras, "kit_timed_light");
 }
 

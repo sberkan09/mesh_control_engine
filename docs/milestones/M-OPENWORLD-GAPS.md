@@ -76,7 +76,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   crowds do not avoid each other.
 - **Traffic**: no lane changes, no overtaking, no horns, no reaction to a car crash; a car stopped for a still pedestrian waits.
 - **Police**: the navmesh covers only the middle blocks, so units stay there; no police cars (A9), no helicopters, no
-  roadblocks; wanted level has no on-screen indicator (A1) and no flashing sirens.
+  roadblocks; wanted level has no on-screen indicator (A1) and no flashing sirens (the police cars' light bars flash red and blue now, [M-SIRENLIGHTS](M-SIRENLIGHTS.md)).
 - **Driving**: one car type for the player, ~~no radio, no gears display, no lights toggle, no horn~~ (radio, horn and lights done; speed and gear on the HUD: [M-DRIVEHUD](M-DRIVEHUD.md)), no damage model on the
   drive path in the sample.
 - ~~**No progression or goal**~~ five goals with cash rewards and a HUD count done ([M-PROGRESS](M-PROGRESS.md)); still no story or levels.
