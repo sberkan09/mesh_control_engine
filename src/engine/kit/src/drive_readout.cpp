@@ -3,12 +3,13 @@
 #include <cmath>
 
 #include "mce/ecs/world.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 
 namespace mce::kit {
 
-static_assert(sizeof(DriveReadout3D) == 12);
+static_assert(sizeof(DriveReadout3D) == 16);
 
 namespace {
 
@@ -20,12 +21,14 @@ void kit_drive_readout(Frame& f) {
         const Rider3D* r = w.try_get<Rider3D>(e);
         const Vehicle3D* v = r && r->seated == 1 && w.alive(r->vehicle) ? w.try_get<Vehicle3D>(r->vehicle) : nullptr;
         if (!v) {
-            d.kmh = d.gear = d.rpm = kDriveReadoutOff;
+            d.kmh = d.gear = d.rpm = d.lights = kDriveReadoutOff;
             return;
         }
         d.kmh = std::fabs(v->speed) * 3.6f;
         d.gear = static_cast<f32>(v->gear);
         d.rpm = v->rpm;
+        const SpotLight3D* sl = w.try_get<SpotLight3D>(r->vehicle);
+        d.lights = sl && sl->enabled && sl->intensity > 0.0f ? 1.0f : 0.0f;
     });
 }
 

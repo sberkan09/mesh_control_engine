@@ -423,7 +423,8 @@ seated rider is ignored. `yaw_offset` (pi) is for a mesh that faces +Z. Only the
 `mce/kit/drive_readout.h`: put `DriveReadout3D` on the entity that holds the `Rider3D` (the player). While it is seated
 in a car, `kmh`, `gear` (-1 reverse, 0 neutral, 1.. forward) and `rpm` mirror the car's `Vehicle3D`; on foot they read
 -1000, so a HUD widget bound to one with a `range` starting above that (for example `[-0.5, 1000, 0]`) shows only in a car.
-`samples/09_openworld` draws "N KM/H" and "GEAR n" at the bottom right.
+`lights` is 1 while the car's `SpotLight3D` is on (enabled, intensity above 0) and 0 otherwise, so a widget with `range` `[0.5, 2, 0]`
+is an indicator. `samples/09_openworld` draws "N KM/H", "GEAR n" and "LIGHTS" (headlights on) at the bottom right.
 
 ### Impact sparks
 
