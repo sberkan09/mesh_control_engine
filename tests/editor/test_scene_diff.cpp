@@ -2,6 +2,8 @@
 
 #include <doctest/doctest.h>
 
+#include <random>
+#include <string>
 #include <string_view>
 
 #include "mce/ecs/transform.h"
@@ -116,4 +118,82 @@ TEST_CASE("a reorder is reported once, without per-entity noise") {
     CHECK(d.reordered);
     CHECK(d.entities.empty());
     CHECK(has(format_diff(d), "~ entity order"));
+}
+
+// M-SCENEDIFF2 step 1: random edit sequences. The diff must agree with the bytes: empty exactly when the two documents
+// serialize alike, and the same pair read backwards must list the same entities with Added and Removed swapped; undoing
+// every edit brings the diff back to empty.
+TEST_CASE("diff_scenes fuzz: empty exactly when the texts match, antisymmetric, empty again after undo") {
+    u32 changed_pairs = 0;
+    for (u32 seed = 1; seed <= 100; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        EditorScene s;
+        for (u32 i = 0, n = 2 + static_cast<u32>(rng() % 6); i < n; ++i) s.create_entity("E" + std::to_string(i));
+        s.clear_undo();
+        const SceneDocument a = snapshot_of(s);
+        CHECK(diff_scenes(a, a).empty());
+
+        const auto any = [&]() { return s.doc().at(rng() % s.doc().size()).id; };
+        for (u32 i = 0, k = static_cast<u32>(rng() % 8); i < k; ++i) {
+            s.seal_undo();
+            if (s.doc().size() == 0) {
+                s.create_entity("N");
+                continue;
+            }
+            switch (rng() % 7) {
+                case 0:
+                    s.create_entity("N" + std::to_string(rng() % 9));
+                    break;
+                case 1:
+                    s.destroy_entity(any());
+                    break;
+                case 2:
+                    s.rename_entity(any(), "R" + std::to_string(rng() % 9));
+                    break;
+                case 3: {
+                    LocalTransform t;
+                    t.position.x = static_cast<f32>(rng() % 5);
+                    const EntityId id = any();
+                    s.add_component(id, refl::type_of<LocalTransform>());
+                    s.set(id, t);
+                    break;
+                }
+                case 4:
+                    s.remove_component(any(), refl::type_of<LocalTransform>());
+                    break;
+                case 5:
+                    s.move_entity(any(), rng() % s.doc().size());
+                    break;
+                default:
+                    s.set_parent(any(), any());
+                    break;
+            }
+        }
+        const SceneDocument b = snapshot_of(s);
+        cook::String ta, tb;
+        a.serialize(ta);
+        b.serialize(tb);
+        const bool same = ta.view() == tb.view();
+
+        const SceneDiff ab = diff_scenes(a, b);
+        const SceneDiff ba = diff_scenes(b, a);
+        CHECK(ab.empty() == same);
+        CHECK(ba.empty() == same);
+        CHECK(format_diff(ab).empty() == same);
+        if (!same) ++changed_pairs;
+        CHECK(ab.entities.size() == ba.entities.size());
+        CHECK(ab.reordered == ba.reordered);
+        for (const EntityDiff& e : ab.entities) {
+            const EntityDiff* back = find(ba, e.id);
+            REQUIRE(back != nullptr);
+            if (e.kind == DiffKind::Added) CHECK(back->kind == DiffKind::Removed);
+            if (e.kind == DiffKind::Removed) CHECK(back->kind == DiffKind::Added);
+            if (e.kind == DiffKind::Changed) CHECK(back->kind == DiffKind::Changed);
+        }
+
+        while (s.can_undo()) REQUIRE(s.undo());
+        CHECK(diff_scenes(a, snapshot_of(s)).empty());
+    }
+    CHECK(changed_pairs > 50);  // the edits do change scenes
 }
