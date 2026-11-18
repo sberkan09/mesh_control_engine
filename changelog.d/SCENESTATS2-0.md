@@ -1,0 +1,1 @@
+- editor: `scene_stats` no longer reports a depth above the longest possible chain for a scene whose parents loop (found by a new fuzz, M-SCENESTATS2).

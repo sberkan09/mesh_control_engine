@@ -52,10 +52,11 @@ SceneStats scene_stats(const SceneDocument& doc) {
     SceneStats s;
     s.entities = static_cast<u32>(doc.size());
     for (const DocEntity& e : doc.entities()) {
-        // Depth: the parents above, with a guard so a ChildOf cycle ends the walk.
+        // Depth: the parents above, with a guard so a ChildOf cycle ends the walk. A chain of n entities is n - 1 deep,
+        // so the walk takes at most n - 1 steps and a loop never reports more than that.
         u32 depth = 0;
         EntityId p = parent_id(doc, e);
-        for (usize guard = 0; p != kNoEntity && guard <= doc.size(); ++guard) {
+        for (usize guard = 0; p != kNoEntity && guard + 1 < doc.size(); ++guard) {
             ++depth;
             const DocEntity* pe = doc.find(p);
             p = pe == nullptr ? kNoEntity : parent_id(doc, *pe);
