@@ -1,0 +1,1 @@
+- editor tests: a fuzz checks find_entities against a plain scan on scenes with missing, self and looping parents (M-SCENEFIND2); no defect found.
