@@ -1,0 +1,1 @@
+- editor: Match transform (position) no longer leaves a child off the anchor when its parent is matched too (found by a new fuzz, M-MATCH2).
