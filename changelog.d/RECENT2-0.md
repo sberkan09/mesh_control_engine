@@ -1,0 +1,1 @@
+- editor: the Open Recent list is fuzzed against a plain model, including cap 0 and the save-load round trip (M-RECENT2).
