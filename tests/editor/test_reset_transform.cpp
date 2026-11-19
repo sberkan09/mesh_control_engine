@@ -2,7 +2,10 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <random>
+#include <vector>
 
 #include "mce/ecs/transform.h"
 #include "mce/editor/reset_transform.h"
@@ -59,4 +62,43 @@ TEST_CASE("reset_transforms skips identities and entities without a transform, w
     s.undo();  // the set above; leaves the entity without a LocalTransform
     const EntityId none[] = {bare, kNoEntity};
     CHECK(reset_transforms(s, Span<const EntityId>(none, 2)) == 0);
+}
+
+TEST_CASE("reset_transforms fuzz: the selection ends at identity, the rest is untouched, the count is exact") {
+    for (u32 seed = 1; seed <= 200; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        EditorScene s;
+        std::vector<EntityId> all;
+        for (u32 i = 0, n = 2 + static_cast<u32>(rng() % 6); i < n; ++i) {
+            all.push_back(place(s, "E", static_cast<f32>(rng() % 10), 1.0f));
+            if (rng() % 4 == 0) (void)s.set(all.back(), LocalTransform{});  // some already at the identity
+        }
+        for (u32 i = 0, k = static_cast<u32>(rng() % 5); i < k; ++i)
+            (void)s.set_parent(all[rng() % all.size()], all[rng() % all.size()]);
+        std::vector<EntityId> pick;
+        for (EntityId id : all)
+            if (rng() % 2 == 0) pick.push_back(id);
+        if (!pick.empty()) pick.push_back(pick.front());  // a repeated id counts once
+        std::shuffle(pick.begin(), pick.end(), rng);
+        usize want = 0;
+        std::vector<EntityId> seen;
+        for (EntityId id : pick) {
+            if (std::find(seen.begin(), seen.end(), id) != seen.end()) continue;
+            seen.push_back(id);
+            want += is_identity(*s.get<LocalTransform>(id)) ? 0 : 1;
+        }
+        std::vector<LocalTransform> before;
+        before.reserve(all.size());
+        for (EntityId id : all) before.push_back(*s.get<LocalTransform>(id));
+        CHECK(reset_transforms(s, Span<const EntityId>(pick.data(), pick.size())) == want);
+        for (usize i = 0; i < all.size(); ++i) {
+            const bool picked = std::find(pick.begin(), pick.end(), all[i]) != pick.end();
+            const LocalTransform* t = s.get<LocalTransform>(all[i]);
+            if (picked)
+                CHECK(is_identity(*t));
+            else
+                CHECK(t->position.x == before[i].position.x);
+        }
+    }
 }

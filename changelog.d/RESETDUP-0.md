@@ -1,0 +1,1 @@
+- editor: Duplicate offset puts the copy of a child whose parent was not selected at the original's world position plus the offset, not at its local position (found by a new fuzz, M-RESETDUP).
