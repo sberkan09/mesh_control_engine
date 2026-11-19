@@ -5,6 +5,7 @@
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
+#include "mce/kit/vehicle_extras.h"
 #include "mce/kit/vehicles3d.h"
 
 namespace mce::kit {
@@ -28,7 +29,9 @@ void kit_drive_readout(Frame& f) {
         d.gear = static_cast<f32>(v->gear);
         d.rpm = v->rpm;
         const SpotLight3D* sl = w.try_get<SpotLight3D>(r->vehicle);
-        d.lights = sl && sl->enabled && sl->intensity > 0.0f ? 1.0f : 0.0f;
+        const VehicleLights3D* vl = w.try_get<VehicleLights3D>(r->vehicle);
+        const bool lit = sl && sl->enabled && sl->intensity > 0.0f;
+        d.lights = !lit ? 0.0f : vl && vl->mode == HeadlightMode::High ? 2.0f : 1.0f;
     });
 }
 

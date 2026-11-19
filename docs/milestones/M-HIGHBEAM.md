@@ -10,4 +10,4 @@ beam as 1, so it does not change.
 
 **Test.** `tests/kit/test_vehicle_extras.cpp`: the cycle test now checks High (1.5 times, not compounding) and the restore on Off.
 
-**Not done.** A HUD value that tells High from On; dazzling other drivers.
+**Not done.** Dazzling other drivers. (The HUD value that tells High from On: [M-HIGHHUD](M-HIGHHUD.md).)

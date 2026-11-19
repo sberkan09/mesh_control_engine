@@ -1,0 +1,1 @@
+- HUD shows HIGH BEAM, M-HIGHHUD (SBA-224): `DriveReadout3D.lights` is 2 on high beam; 09_openworld has a HIGH BEAM text. `docs/milestones/M-HIGHHUD.md`.

@@ -6,6 +6,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/drive_readout.h"
+#include "mce/kit/vehicle_extras.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
@@ -79,6 +80,14 @@ TEST_CASE("drive_readout: lights reads 1 while the car's spot light shines, 0 ot
     spot.intensity = 9.0f;
     spot.enabled = 1;
     s.w.add(s.car, spot);
+    s.run(2);
+    CHECK(s.d().lights == doctest::Approx(1.0f));
+    VehicleLights3D vl;
+    vl.mode = HeadlightMode::High;
+    s.w.add(s.car, vl);
+    s.run(2);
+    CHECK(s.d().lights == doctest::Approx(2.0f));  // high beam
+    s.w.try_get_mut<VehicleLights3D>(s.car)->mode = HeadlightMode::On;
     s.run(2);
     CHECK(s.d().lights == doctest::Approx(1.0f));
     s.w.try_get_mut<SpotLight3D>(s.car)->enabled = 0;

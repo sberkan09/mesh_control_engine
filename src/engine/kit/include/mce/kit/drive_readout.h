@@ -29,7 +29,7 @@ struct DriveReadout3D {
 MCE_COMPONENT(DriveReadout3D, (kmh, ReadOnly, Transient, Help{"km/h of the car the Rider3D sits in; -1000 on foot"}),
               (gear, ReadOnly, Transient, Help{"-1 reverse, 0 neutral, 1.. forward; -1000 on foot"}),
               (rpm, ReadOnly, Transient, Help{"engine rpm; -1000 on foot"}),
-              (lights, ReadOnly, Transient, Help{"1 while the car's headlight SpotLight3D shines, 0 when it does not or the car has none; -1000 on foot"}))
+              (lights, ReadOnly, Transient, Help{"1 while the car's headlight SpotLight3D shines, 2 on high beam, 0 when it does not or the car has none; -1000 on foot"}))
 
 // Registers the component and adds the system. Idempotent.
 void install_drive_readout(World& world);
