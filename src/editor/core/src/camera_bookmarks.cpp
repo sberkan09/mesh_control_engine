@@ -70,7 +70,8 @@ void CameraBookmarks::parse(StringView text) {
         for (; n < 10; ++n) {
             char* next = nullptr;
             v[n] = std::strtod(p, &next);
-            if (next == p || !std::isfinite(v[n])) break;
+            // Finite as an f32 too: 1e300 is a finite double that the stored float turns into infinity.
+            if (next == p || !std::isfinite(v[n]) || !std::isfinite(static_cast<f32>(v[n]))) break;
             p = next;
         }
         while (*p == ' ' || *p == '\r' || *p == '\t') ++p;

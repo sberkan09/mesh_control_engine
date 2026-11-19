@@ -1,0 +1,1 @@
+- editor: loading camera bookmarks skips a line whose number overflows a float instead of storing infinity (found by a new fuzz, M-BOOKMARK2).
