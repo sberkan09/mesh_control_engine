@@ -10,7 +10,7 @@
 
 namespace mce::kit {
 
-static_assert(sizeof(DriveReadout3D) == 16);
+static_assert(sizeof(DriveReadout3D) == 20);
 
 namespace {
 
@@ -22,7 +22,7 @@ void kit_drive_readout(Frame& f) {
         const Rider3D* r = w.try_get<Rider3D>(e);
         const Vehicle3D* v = r && r->seated == 1 && w.alive(r->vehicle) ? w.try_get<Vehicle3D>(r->vehicle) : nullptr;
         if (!v) {
-            d.kmh = d.gear = d.rpm = d.lights = kDriveReadoutOff;
+            d.kmh = d.gear = d.rpm = d.lights = d.hazard = kDriveReadoutOff;
             return;
         }
         d.kmh = std::fabs(v->speed) * 3.6f;
@@ -31,6 +31,8 @@ void kit_drive_readout(Frame& f) {
         const SpotLight3D* sl = w.try_get<SpotLight3D>(r->vehicle);
         const VehicleLights3D* vl = w.try_get<VehicleLights3D>(r->vehicle);
         const bool lit = sl && sl->enabled && sl->intensity > 0.0f;
+        const VehicleHazards3D* hz = w.try_get<VehicleHazards3D>(r->vehicle);
+        d.hazard = hz && hz->on ? 1.0f : 0.0f;
         d.lights = !lit ? 0.0f : vl && vl->mode == HeadlightMode::High ? 2.0f : 1.0f;
     });
 }

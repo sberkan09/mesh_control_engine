@@ -377,6 +377,54 @@
    "value": 2
   },
   {
+   "name": "hazard",
+   "kind": "Text",
+   "text": "HAZARD",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.6,
+     0.1,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -306
+    ],
+    "offset_max": [
+     -24,
+     -278
+    ]
+   },
+   "bind": "DriveReadout3D/hazard",
+   "visible": false,
+   "range": [
+    0.5,
+    1.5,
+    0
+   ],
+   "value": 1
+  },
+  {
    "name": "kills",
    "kind": "Text",
    "text": "KILLS 0",
