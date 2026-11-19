@@ -20,9 +20,12 @@
 //                    `follow_siren` 1 it runs only while its parent car's SirenAudio is audible (the wanted level reached the
 //                    siren's `min_level`) and is dark otherwise.
 //
+//   VehicleHazards3D on a car: the Hazard action (the driver) toggles `on`; the car's TurnSignal3D lamps then blink together (both
+//                    sides, standing or rolling) until it is toggled off.
+//
 //   TurnSignal3D     on a child lamp entity of a car (a ChildOf the car, with a PointLight3D): while the car steers toward `side`
 //                    (-1 left, 1 right) by more than `threshold` (-1..1; its own `steer`, or the player's Move.x) and rolls faster
-//                    than 0.5 m/s, the lamp blinks `color` at `intensity`, on for the first half of each `period_s`.
+//                    than 0.5 m/s (or its car's VehicleHazards3D is on), the lamp blinks `color` at `intensity`, on for the first half of each `period_s`.
 //
 // A car with no driver, or one driven by traffic or the police, reads no input. System: "kit_vehicle_extras"
 // (FixedUpdate_Pre, after "kit_timed_light").
@@ -99,6 +102,12 @@ struct LightFlasher3D {
 };
 MCE_COMPONENT(LightFlasher3D, color_a, color_b, (intensity, Range{0, 100}), (period_s, Range{0.05f, 10}, Help{"one A then one B"}),
               (t, ReadOnly, Transient), (follow_siren, Range{0, 1}, Help{"1: only while the parent car's SirenAudio is audible"}))
+
+struct VehicleHazards3D {
+    u8 on = 0;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(VehicleHazards3D, (on, Save, Range{0, 1}, Help{"1: the hazard lights blink (the Hazard action toggles it for the driver)"}))
 
 struct TurnSignal3D {
     math::Color color{1.0f, 0.55f, 0.05f, 1.0f};

@@ -273,6 +273,17 @@
      ]
     },
     {
+     "name": "Hazard",
+     "bindings": [
+      {
+       "key": "K"
+      },
+      {
+       "gamepad_button": "RightStick"
+      }
+     ]
+    },
+    {
      "name": "Pause",
      "bindings": [
       {

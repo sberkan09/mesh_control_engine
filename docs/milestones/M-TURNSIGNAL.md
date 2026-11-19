@@ -13,4 +13,4 @@ player's), two more disabled point lights per car; a lamp costs nothing while da
 
 **Test.** `tests/kit/test_vehicle_extras.cpp`: "a turn signal blinks only while the car steers toward its side and rolls".
 
-**Not done.** Hazard lights; front signals; a glowing lens mesh.
+**Not done.** Front signals (hazard lights: [M-HAZARD](M-HAZARD.md)); a glowing lens mesh.

@@ -1,0 +1,1 @@
+- Hazard lights, M-HAZARD (SBA-226): kit `VehicleHazards3D` and the `Hazard` action make both turn signals blink. `docs/milestones/M-HAZARD.md`.

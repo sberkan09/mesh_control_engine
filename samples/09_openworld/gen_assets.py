@@ -241,6 +241,8 @@ def input_map():
         {"name": "Throw", "bindings": [key("B"), {"gamepad_button": "Back"}]},
         {"name": "Horn", "bindings": [key("G"), {"gamepad_button": "LeftStick"}]},
         {"name": "Lights", "bindings": [key("L"), {"gamepad_button": "DpadRight"}]},
+        # Hazard lights (M-HAZARD): K, or a click of the right stick (Melee shares it, but cannot be used seated).
+        {"name": "Hazard", "bindings": [key("K"), {"gamepad_button": "RightStick"}]},
         {"name": "Pause", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},
     ]
     ui = [
@@ -1085,6 +1087,7 @@ def car_entities(model, traffic):
         # The driver's horn (G, stick press) and headlights (L, D-pad right): kit_vehicle_extras.
         root["VehicleHorn3D"] = {"clip": "guid:" + audio_guid("horn"), "gain_db": -4, "attenuation_id": 1}
         root["VehicleLights3D"] = {}
+        root["VehicleHazards3D"] = {}
     # The model's front faces +z, the car drives toward -z; the body and the four wheels are separate models (M-WHEELSPIN).
     visuals, fields = car_visuals(model)
     root["Vehicle3D"].update(fields)
