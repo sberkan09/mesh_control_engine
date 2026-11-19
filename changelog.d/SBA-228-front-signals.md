@@ -1,0 +1,1 @@
+- Front turn signals, M-FRONTSIGNAL (SBA-228): every 09_openworld car also has left and right amber signals at the front corners. `docs/milestones/M-FRONTSIGNAL.md`.

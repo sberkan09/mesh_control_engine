@@ -405,9 +405,9 @@ shows `color_a` for the first half and `color_b` for the second, each half start
 
 `TurnSignal3D` makes a turn signal: put it with a `PointLight3D` on an entity that is a `ChildOf` the car (a rear corner), and set `side`
 (-1 left, 1 right). While the car steers toward that side by more than `threshold` (its own `steer` or the player's Move.x) and rolls
-faster than 0.5 m/s, the lamp blinks `color` at `intensity` (on for half of each `period_s`). Every car of `samples/09_openworld` has a
-left and a right one. `VehicleHazards3D` on the car lets the driver switch the hazard lights on and off with the `Hazard` action (K, or a
-click of the right stick in the sample): both signals then blink together, standing or rolling.
+faster than 0.5 m/s, the lamp blinks `color` at `intensity` (on for half of each `period_s`). Every car of `samples/09_openworld` has one at
+each of its four corners. `VehicleHazards3D` on the car lets the driver switch the hazard lights on and off with the `Hazard` action (K, or a
+click of the right stick in the sample): all the signals then blink together, standing or rolling.
 
 `BrakeLight3D` makes a tail lamp: put it with a `PointLight3D` on an entity that is a `ChildOf` the car (the lamp sits behind
 the car). While the car brakes (its own `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle

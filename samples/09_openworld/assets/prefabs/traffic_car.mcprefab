@@ -448,6 +448,66 @@
      "intensity": 5.0
     }
    }
+  },
+  {
+   "name": "Left front signal",
+   "components": {
+    "ChildOf": {
+     "parent": "$0"
+    },
+    "LocalTransform": {
+     "position": [
+      -0.75,
+      -0.2,
+      -2.0
+     ]
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.55,
+      0.05,
+      1
+     ],
+     "intensity": 0,
+     "radius": 3.0,
+     "enabled": 0
+    },
+    "TurnSignal3D": {
+     "side": -1,
+     "intensity": 5.0
+    }
+   }
+  },
+  {
+   "name": "Right front signal",
+   "components": {
+    "ChildOf": {
+     "parent": "$0"
+    },
+    "LocalTransform": {
+     "position": [
+      0.75,
+      -0.2,
+      -2.0
+     ]
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.55,
+      0.05,
+      1
+     ],
+     "intensity": 0,
+     "radius": 3.0,
+     "enabled": 0
+    },
+    "TurnSignal3D": {
+     "side": 1,
+     "intensity": 5.0
+    }
+   }
   }
  ]
 }
