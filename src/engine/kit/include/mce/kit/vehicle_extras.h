@@ -20,6 +20,10 @@
 //                    `follow_siren` 1 it runs only while its parent car's SirenAudio is audible (the wanted level reached the
 //                    siren's `min_level`) and is dark otherwise.
 //
+//   TurnSignal3D     on a child lamp entity of a car (a ChildOf the car, with a PointLight3D): while the car steers toward `side`
+//                    (-1 left, 1 right) by more than `threshold` (-1..1; its own `steer`, or the player's Move.x) and rolls faster
+//                    than 0.5 m/s, the lamp blinks `color` at `intensity`, on for the first half of each `period_s`.
+//
 // A car with no driver, or one driven by traffic or the police, reads no input. System: "kit_vehicle_extras"
 // (FixedUpdate_Pre, after "kit_timed_light").
 
@@ -95,6 +99,19 @@ struct LightFlasher3D {
 };
 MCE_COMPONENT(LightFlasher3D, color_a, color_b, (intensity, Range{0, 100}), (period_s, Range{0.05f, 10}, Help{"one A then one B"}),
               (t, ReadOnly, Transient), (follow_siren, Range{0, 1}, Help{"1: only while the parent car's SirenAudio is audible"}))
+
+struct TurnSignal3D {
+    math::Color color{1.0f, 0.55f, 0.05f, 1.0f};
+    f32 intensity = 5.0f;
+    f32 period_s = 0.7f;
+    f32 threshold = 0.3f;
+    f32 t = 0.0f;  // engine-written: seconds since the signal started
+    i8 side = 1;   // -1 left, 1 right
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(TurnSignal3D, color, (intensity, Range{0, 100}), (period_s, Range{0.1f, 5}, Help{"one blink: on for half, off for half"}),
+              (threshold, Range{0, 1}, Help{"how far the car steers toward `side` before it blinks"}), (t, ReadOnly, Transient),
+              (side, Range{-1, 1}, Help{"-1 left, 1 right"}))
 
 // Registers the components and adds the system. Idempotent.
 void install_vehicle_extras(World& world, asset::AssetSystem* assets);

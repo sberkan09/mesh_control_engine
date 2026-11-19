@@ -1,0 +1,1 @@
+- Blinking turn signals, M-TURNSIGNAL (SBA-225): kit `TurnSignal3D`; every 09_openworld car has left and right amber lamps. `docs/milestones/M-TURNSIGNAL.md`.
