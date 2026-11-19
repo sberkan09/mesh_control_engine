@@ -5,6 +5,8 @@
 #include <doctest/doctest.h>
 
 #include <filesystem>
+#include <map>
+#include <random>
 #include <string>
 
 #include "cook_test_util.h"
@@ -125,4 +127,73 @@ TEST_CASE("SceneTabs: closing tabs keeps or drops parked edits as asked") {
     CHECK(f.tabs.tabs().size() == 0);
     CHECK(f.tabs.active() == -1);
     CHECK(f.session.scene().path().empty());
+}
+
+// Random open / switch / edit / save / close sequences over three scenes. The model: a scene left by a switch comes
+// back with the same entity count while its tab stays; the tab list never repeats a path; the active tab is the
+// session's scene.
+TEST_CASE("SceneTabs fuzz: switching keeps every scene's entities and the tab list consistent") {
+    static const char* const files[] = {"scenes/a.mcscene", "scenes/b.mcscene", "scenes/c.mcscene"};
+    for (u32 seed = 1; seed <= 60; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        Fixture f("scene_tabs_fuzz");
+        f.session.new_scene("c");
+        REQUIRE(f.session.save_scene_as("scenes/c.mcscene"));
+        REQUIRE(f.session.open_scene("scenes/a.mcscene"));
+        f.tabs.sync(f.session);
+        std::map<std::string, usize> expect;  // the entity count a scene had when it was left
+        for (u32 step = 0; step < 25; ++step) {
+            CAPTURE(step);
+            cook::String err;
+            const std::string here(f.session.scene().path().data(), f.session.scene().path().size());
+            const u32 op = static_cast<u32>(rng() % 5);
+            if (op == 0) {
+                f.session.scene().create_entity("E");
+            } else if (op == 1) {
+                if (f.session.save_scene()) CHECK_FALSE(f.session.scene().dirty());
+            } else if (op == 2 || op == 3) {
+                const usize left = f.session.scene().doc().size();
+                std::string target;
+                if (op == 2) {
+                    target = files[rng() % 3];
+                } else if (!f.tabs.tabs().empty()) {
+                    const u32 idx = static_cast<u32>(rng() % f.tabs.tabs().size());
+                    target.assign(f.tabs.tabs()[idx].path.view().data(), f.tabs.tabs()[idx].path.view().size());
+                }
+                if (target.empty()) continue;
+                const bool ok = op == 2 ? f.tabs.open(f.session, sv(target), err) : [&] {
+                    for (u32 i = 0; i < f.tabs.tabs().size(); ++i)
+                        if (f.tabs.tabs()[i].path.view() == sv(target)) return f.tabs.activate(f.session, i, err);
+                    return false;
+                }();
+                if (!ok) {  // refused by design: a dirty untitled scene has no file to park beside
+                    CHECK(here.empty());
+                    CHECK(f.session.scene().dirty());
+                    continue;
+                }
+                const std::string now(f.session.scene().path().data(), f.session.scene().path().size());
+                CHECK_FALSE(now.empty());
+                const bool moved = now != here;
+                if (moved && !here.empty()) expect[here] = left;
+                const auto it = expect.find(now);
+                if (it != expect.end() && moved) CHECK(f.session.scene().doc().size() == it->second);
+            } else if (!f.tabs.tabs().empty()) {
+                const u32 idx = static_cast<u32>(rng() % f.tabs.tabs().size());
+                const std::string gone(f.tabs.tabs()[idx].path.view().data(), f.tabs.tabs()[idx].path.view().size());
+                if (f.tabs.close(f.session, idx, rng() % 2 == 0, err)) expect.erase(gone);
+                f.tabs.sync(f.session);
+            }
+            f.tabs.sync(f.session);
+            // The tab list: no path twice, and the active tab is the session's scene.
+            for (u32 i = 0; i < f.tabs.tabs().size(); ++i)
+                for (u32 j = i + 1; j < f.tabs.tabs().size(); ++j)
+                    CHECK_FALSE(f.tabs.tabs()[i].path.view() == f.tabs.tabs()[j].path.view());
+            if (f.tabs.active() >= 0) {
+                REQUIRE(static_cast<u32>(f.tabs.active()) < f.tabs.tabs().size());
+                CHECK(f.tabs.tabs()[static_cast<u32>(f.tabs.active())].path.view() == f.session.scene().path());
+            }
+            CHECK(f.session.scene().verify_world());
+        }
+    }
 }
