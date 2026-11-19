@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "mce/ecs/transform.h"
+#include "mce/editor/parents_first.h"
 
 namespace mce::editor {
 
@@ -44,15 +45,8 @@ bool flip_entities(EditorScene& scene, Span<const EntityId> ids, AlignAxis axis)
         targets.push_back({id, w});
     }
 
-    // Parents first: moving a parent carries its children, so a child set before its parent would end up displaced.
-    // Depth = how many of the selected entities are ancestors of it.
-    const auto depth = [&](EntityId id) {
-        usize d = 0;
-        for (EntityId other : items) d += scene.is_ancestor(other, id) ? 1 : 0;
-        return d;
-    };
-    std::stable_sort(targets.begin(), targets.end(),
-                     [&](const Target& a, const Target& b) { return depth(a.id) < depth(b.id); });
+    sort_parents_first(scene, targets,
+                       [](const Target& t) { return t.id; });  // a parent that moves carries its children
 
     scene.begin_edit("Flip");
     for (const Target& t : targets) {

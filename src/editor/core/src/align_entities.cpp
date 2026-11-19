@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mce/ecs/transform.h"
+#include "mce/editor/parents_first.h"
 
 namespace mce::editor {
 
@@ -50,9 +51,12 @@ bool align_entities(EditorScene& scene, Span<const EntityId> ids, AlignAxis axis
         hi = std::max(hi, it.pos);
     }
     const f32 target = mode == AlignMode::Min ? lo : mode == AlignMode::Max ? hi : (lo + hi) * 0.5f;
+    // Parents first: a parent that moves carries its children, which then still have to land on the target.
+    Array<Item> order = items;
+    sort_parents_first(scene, order, [](const Item& it) { return it.id; });
     bool moved = false;
     scene.begin_edit("Align");
-    for (const Item& it : items) moved = move_to(scene, it.id, axis, target) || moved;
+    for (const Item& it : order) moved = move_to(scene, it.id, axis, target) || moved;
     scene.end_edit();
     return moved;
 }
@@ -63,10 +67,20 @@ bool distribute_entities(EditorScene& scene, Span<const EntityId> ids, AlignAxis
     std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.pos < b.pos; });
     const f32 lo = items[0].pos;
     const f32 step = (items[items.size() - 1].pos - lo) / static_cast<f32>(items.size() - 1);
+    // Every entity gets its slot (the two outermost keep theirs), applied parents first: a middle entity that moves
+    // carries its children, an outermost one among them included, and they have to be put back.
+    struct Slot {
+        EntityId id;
+        f32 value;
+    };
+    Array<Slot> slots;
+    for (usize i = 0; i < items.size(); ++i) slots.push_back({items[i].id, lo + step * static_cast<f32>(i)});
+    slots[0].value = items[0].pos;
+    slots[slots.size() - 1].value = items[items.size() - 1].pos;
+    sort_parents_first(scene, slots, [](const Slot& s) { return s.id; });
     bool moved = false;
     scene.begin_edit("Distribute");
-    for (usize i = 1; i + 1 < items.size(); ++i)
-        moved = move_to(scene, items[i].id, axis, lo + step * static_cast<f32>(i)) || moved;
+    for (const Slot& sl : slots) moved = move_to(scene, sl.id, axis, sl.value) || moved;
     scene.end_edit();
     return moved;
 }
