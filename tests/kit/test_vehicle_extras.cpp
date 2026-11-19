@@ -107,7 +107,7 @@ TEST_CASE("vehicle extras: nobody honks from outside the car, and `honk` works f
     CHECK(s.w.try_get<VehicleHorn3D>(s.car)->honk == 0);
 }
 
-TEST_CASE("vehicle extras: Lights cycles Auto, On, Off over the spot light") {
+TEST_CASE("vehicle extras: Lights cycles Auto, On, High, Off over the spot light") {
     Scene s;
     const auto spot = [&]() { return *s.w.try_get<SpotLight3D>(s.car); };
     const auto mode = [&]() { return s.w.try_get<VehicleLights3D>(s.car)->mode; };
@@ -118,8 +118,17 @@ TEST_CASE("vehicle extras: Lights cycles Auto, On, Off over the spot light") {
     CHECK(spot().enabled == 1);
     s.run(5);
     CHECK(spot().enabled == 1);
+    const f32 normal_intensity = spot().intensity, normal_radius = spot().radius;
+    s.run(1, "Lights");
+    CHECK(mode() == HeadlightMode::High);  // brighter and further
+    CHECK(spot().enabled == 1);
+    CHECK(spot().intensity == doctest::Approx(normal_intensity * 1.5f));
+    CHECK(spot().radius == doctest::Approx(normal_radius * 1.5f));
+    s.run(5);
+    CHECK(spot().radius == doctest::Approx(normal_radius * 1.5f));  // not compounding
     s.run(1, "Lights");
     CHECK(mode() == HeadlightMode::Off);
+    CHECK(spot().radius == doctest::Approx(normal_radius));  // the normal beam is back
     CHECK(spot().enabled == 0);
     s.run(1, "Lights");
     CHECK(mode() == HeadlightMode::Auto);
@@ -233,6 +242,7 @@ TEST_CASE("vehicle extras: a tail lamp glows at `headlight_idle` while the car's
     s.run(1);
     CHECK(light().intensity == doctest::Approx(5.0f));  // braking still wins
     s.w.try_get_mut<Vehicle3D>(s.car)->brake = 0.0f;
+    s.run(1, "Lights");  // High: still lit
     s.run(1, "Lights");  // Off
     s.run(1);
     CHECK(light().enabled == 0);

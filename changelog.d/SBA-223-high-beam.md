@@ -1,0 +1,1 @@
+- High-beam headlights, M-HIGHBEAM (SBA-223): the Lights action cycles Auto, On, High, Off; `VehicleLights3D::high_scale`. `docs/milestones/M-HIGHBEAM.md`.

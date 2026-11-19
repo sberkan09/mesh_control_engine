@@ -53,14 +53,19 @@ MCE_COMPONENT(VehicleHorn3D, (clip, Help{"the horn sound; null: silent"}), (gain
               (honk, Help{"set to 1 to honk once (the engine clears it); the Horn action sets it for the driver"}),
               (since_s, ReadOnly, Transient), (honks, ReadOnly, Transient))
 
-enum class HeadlightMode : u8 { Auto, On, Off };
-MCE_ENUM(HeadlightMode, Auto, On, Off)
+enum class HeadlightMode : u8 { Auto, On, Off, High };
+MCE_ENUM(HeadlightMode, Auto, On, Off, High)
 
 struct VehicleLights3D {
     HeadlightMode mode = HeadlightMode::Auto;
     u8 pad_[3] = {};
+    f32 high_scale = 1.5f;       // High beam: intensity and radius times this
+    f32 base_radius = 0.0f;      // engine-written: the radius before High (0: not in High)
+    f32 base_intensity = 0.0f;   // engine-written: the intensity before High
 };
-MCE_COMPONENT(VehicleLights3D, (mode, Save, Help{"Auto: the day cycle decides; On / Off: the driver's choice (Lights cycles)"}))
+MCE_COMPONENT(VehicleLights3D, (mode, Save, Help{"Auto: the day cycle decides; On / High / Off: the driver's choice (Lights cycles Auto, On, High, Off)"}),
+              (high_scale, Range{1, 4}, Help{"High beam multiplies the spot's intensity and radius by this"}),
+              (base_radius, ReadOnly, Transient), (base_intensity, ReadOnly, Transient))
 
 struct BrakeLight3D {
     f32 braking = 4.0f;
