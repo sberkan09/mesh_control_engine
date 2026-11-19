@@ -1,0 +1,1 @@
+- HUD shows HAZARD, M-HAZARDHUD (SBA-227): `DriveReadout3D.hazard`; 09_openworld has a HAZARD text. `docs/milestones/M-HAZARDHUD.md`.

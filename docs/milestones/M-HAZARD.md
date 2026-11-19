@@ -11,4 +11,4 @@ seated) and `VehicleHazards3D` on the cars the player can take.
 
 **Test.** `tests/kit/test_vehicle_extras.cpp`: "the Hazard action toggles both signals blinking, standing still".
 
-**Not done.** A HUD indicator for the hazards; front signals; the hazards switching on by themselves after a crash.
+**Not done.** Front signals (the HUD indicator: [M-HAZARDHUD](M-HAZARDHUD.md)); the hazards switching on by themselves after a crash.

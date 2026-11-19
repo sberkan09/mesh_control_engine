@@ -97,3 +97,19 @@ TEST_CASE("drive_readout: lights reads 1 while the car's spot light shines, 0 ot
     s.run(2);
     CHECK(s.d().lights == doctest::Approx(kDriveReadoutOff));
 }
+
+TEST_CASE("drive_readout: hazard reads 1 while the car's hazard lights are on, 0 otherwise, off on foot") {
+    Scene s;
+    s.sit(true);
+    s.run(2);
+    CHECK(s.d().hazard == doctest::Approx(0.0f));  // no VehicleHazards3D
+    s.w.add(s.car, VehicleHazards3D{});
+    s.run(2);
+    CHECK(s.d().hazard == doctest::Approx(0.0f));
+    s.w.try_get_mut<VehicleHazards3D>(s.car)->on = 1;
+    s.run(2);
+    CHECK(s.d().hazard == doctest::Approx(1.0f));
+    s.sit(false);
+    s.run(2);
+    CHECK(s.d().hazard == doctest::Approx(kDriveReadoutOff));
+}

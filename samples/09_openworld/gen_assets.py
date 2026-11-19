@@ -1753,6 +1753,9 @@ def hud():
         # High beam: the same slot says HIGH BEAM while DriveReadout3D.lights is 2 (M-HIGHHUD).
         {**hud_text("lights_high", "HIGH BEAM", 22, hud_box(-300, -276, -24, -248, 1, 1), "DriveReadout3D/lights", None, [0.6, 0.8, 1.0, 1], "Right"),
          "visible": False, "range": [1.5, 2.5, 0], "value": 2},
+        # The hazard indicator, under the lights: shown while the hazard lights blink (DriveReadout3D.hazard 1, M-HAZARDHUD).
+        {**hud_text("hazard", "HAZARD", 22, hud_box(-300, -306, -24, -278, 1, 1), "DriveReadout3D/hazard", None, [1.0, 0.6, 0.1, 1], "Right"),
+         "visible": False, "range": [0.5, 1.5, 0], "value": 1},
         hud_text("kills", "KILLS 0", 22, hud_box(24, -96, 280, -68, 0, 1), "Wanted3D/kills", "KILLS %.0f", [1.0, 0.6, 0.45, 1]),
         hud_text("goals", "GOALS 0 / 5", 22, hud_box(24, -126, 280, -98, 0, 1), "Progress3D/goals_done", "GOALS %.0f / 5", [1.0, 0.9, 0.5, 1]),
         hud_text("grenades", "GRENADES 3", 22, hud_box(24, -156, 280, -128, 0, 1), "Grenade3D/count", "GRENADES %.0f", [0.8, 1.0, 0.6, 1]),
