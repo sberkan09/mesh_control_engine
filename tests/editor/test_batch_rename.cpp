@@ -69,7 +69,7 @@ TEST_CASE("batch_rename_expand fuzz: equals a plain expansion of the pattern") {
                 while (i < pattern.size() && pattern[i] == '#') ++width, ++i;
                 wide += width > 16 ? 1 : 0;
                 std::string num = std::to_string(start + index);
-                while (num.size() < width) num = "0" + num;
+                if (num.size() < width) num.insert(0, width - num.size(), '0');
                 want += num;
             } else {
                 want += pattern[i++];
