@@ -124,7 +124,7 @@ TEST_CASE("SelectionHistory fuzz: visit, back, forward and clear match a plain m
                     h.visit(id);
                     const EntityId cur = pos < 0 ? kNoEntity : items[static_cast<usize>(pos)];
                     if (id == kNoEntity || id == cur) break;
-                    items.resize(static_cast<usize>(pos + 1));
+                    items.resize(static_cast<usize>(pos) + 1);
                     items.push_back(id);
                     if (items.size() > SelectionHistory::kCap) items.erase(items.begin());
                     pos = static_cast<int>(items.size()) - 1;
