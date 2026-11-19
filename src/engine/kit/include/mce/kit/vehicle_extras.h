@@ -12,7 +12,8 @@
 //   BrakeLight3D     on a child lamp entity of a car (a ChildOf the car, with a PointLight3D): while the car brakes (its
 //                    `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle against the way it
 //                    rolls) the lamp is lit at `braking` in `brake_color`; in reverse (gear < 0) and not braking it shows `reverse` in
-//                    `reverse_color` (0: not used); otherwise `idle` (0: off). `lit` is 1 while braking, 2 while reversing.
+//                    `reverse_color` (0: not used); otherwise `idle` (0: off), or `headlight_idle` while the parent car's SpotLight3D headlight
+//                    is on (0: not used). `lit` is 1 while braking, 2 while reversing.
 //
 //   LightFlasher3D   on an entity with a PointLight3D (a police light bar, an ambulance): the light alternates `color_a` and
 //                    `color_b` every half `period_s`, each half starting at `intensity` and fading toward 30% of it. With
@@ -67,13 +68,16 @@ struct BrakeLight3D {
     f32 reverse = 0.0f;  // intensity while the car is in reverse and not braking; 0: the lamp stays at `idle`
     u8 lit = 0;          // engine-written: 1 braking, 2 reversing
     u8 pad_[3] = {};
+    f32 headlight_idle = 0.0f;  // intensity when not braking or reversing and the parent's headlight is on; 0: not used
     math::Color brake_color{1.0f, 0.04f, 0.02f, 1.0f};
     math::Color reverse_color{1.0f, 0.95f, 0.85f, 1.0f};
 };
 MCE_COMPONENT(BrakeLight3D, (braking, Range{0, 100}, Help{"PointLight3D intensity while the parent car brakes"}),
               (idle, Range{0, 100}, Help{"intensity otherwise; 0 switches the lamp off"}),
               (reverse, Range{0, 100}, Help{"intensity while the parent car is in reverse and not braking; 0: not used"}),
-              (lit, ReadOnly, Transient), brake_color, reverse_color)
+              (lit, ReadOnly, Transient),
+              (headlight_idle, Range{0, 100}, Help{"intensity while the parent car's headlight is on and the lamp is otherwise idle; 0: not used"}),
+              brake_color, reverse_color)
 
 struct LightFlasher3D {
     math::Color color_a{1.0f, 0.05f, 0.04f, 1.0f};

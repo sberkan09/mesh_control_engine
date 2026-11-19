@@ -405,7 +405,8 @@ shows `color_a` for the first half and `color_b` for the second, each half start
 `BrakeLight3D` makes a tail lamp: put it with a `PointLight3D` on an entity that is a `ChildOf` the car (the lamp sits behind
 the car). While the car brakes (its own `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle
 against the way it rolls) the lamp shows `braking` as its intensity in `brake_color`; in reverse (`Vehicle3D.gear` below 0) and
-not braking it shows `reverse` in `reverse_color` (0: not used); otherwise `idle` (0 switches it off). `lit` is 1 while
+not braking it shows `reverse` in `reverse_color` (0: not used); otherwise `idle` (0 switches it off). `headlight_idle`
+replaces `idle` while the car's own `SpotLight3D` headlight is on (0: not used), so a night car shows dim rear lamps. `lit` is 1 while
 braking, 2 while reversing. Every car of `samples/09_openworld` has one.
 
 ### Hit marker
