@@ -2,7 +2,10 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <random>
+#include <vector>
 
 #include "mce/ecs/transform.h"
 #include "mce/editor/match_transform.h"
@@ -66,4 +69,49 @@ TEST_CASE("match_transforms respects a parent when matching position and ignores
     CHECK(close(s.world_transform(b).position.x, 3.0f));
 
     CHECK(match_transforms(s, Span<const EntityId>(ids, 2), kNoEntity, MatchPart::Position) == 0);
+}
+
+// Found by the fuzz below: a child that already sat at the anchor was skipped, then carried away when its parent was
+// matched.
+TEST_CASE("match_transforms puts a child on the anchor when its parent is matched too") {
+    EditorScene s;
+    const EntityId anchor = place(s, "Anchor", 4.0f, 5.0f, 1.0f);
+    const EntityId p = place(s, "P", 0.0f, 0.0f, 1.0f);
+    const EntityId c = place(s, "C", 4.0f, 5.0f, 1.0f);
+    REQUIRE(s.set_parent(c, p));  // c keeps world (4, 5)
+    const EntityId ids[] = {c, p, anchor};
+    CHECK(match_transforms(s, Span<const EntityId>(ids, 3), anchor, MatchPart::Position) == 1);
+    CHECK(close(s.world_transform(p).position.x, 4.0f));
+    CHECK(close(s.world_transform(c).position.x, 4.0f));
+    CHECK(close(s.world_transform(c).position.y, 5.0f));
+}
+
+TEST_CASE("match_transforms fuzz: every selected entity ends on the anchor, whatever the order") {
+    for (u32 seed = 1; seed <= 200; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        EditorScene s;
+        std::vector<EntityId> all;
+        for (u32 i = 0, n = 3 + static_cast<u32>(rng() % 6); i < n; ++i)
+            all.push_back(
+                place(s, "E", static_cast<f32>(rng() % 40) - 20.0f, static_cast<f32>(rng() % 40) - 20.0f, 1.0f));
+        for (u32 i = 0, k = static_cast<u32>(rng() % 5); i < k; ++i)
+            (void)s.set_parent(all[rng() % all.size()], all[rng() % all.size()]);
+        const EntityId anchor = all[rng() % all.size()];
+        std::vector<EntityId> pick;
+        for (EntityId id : all) {
+            // Matching a parent of the anchor would move the anchor itself: leave those out.
+            if (id != anchor && !s.is_ancestor(id, anchor) && rng() % 4 != 0) pick.push_back(id);
+        }
+        pick.push_back(anchor);
+        std::shuffle(pick.begin(), pick.end(), rng);
+        const WorldTransform target = s.world_transform(anchor);
+        (void)match_transforms(s, Span<const EntityId>(pick.data(), pick.size()), anchor, MatchPart::Position);
+        for (EntityId id : pick) {
+            const WorldTransform w = s.world_transform(id);
+            CHECK(close(w.position.x, target.position.x));
+            CHECK(close(w.position.y, target.position.y));
+            CHECK(close(w.position.z, target.position.z));
+        }
+    }
 }
