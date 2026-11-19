@@ -214,3 +214,26 @@ TEST_CASE("vehicle extras: a light flasher that follows the siren is dark until 
     s.run(2);
     CHECK(s.w.try_get<PointLight3D>(bar)->enabled == 0);
 }
+
+TEST_CASE("vehicle extras: a tail lamp glows at `headlight_idle` while the car's headlights are on") {
+    Scene s;
+    PointLight3D lamp;
+    BrakeLight3D b;
+    b.braking = 5.0f;
+    b.headlight_idle = 1.0f;
+    const Entity tail = s.w.spawn_with(at(0, 0.6f, 1.9f), ChildOf{s.car}, lamp, b);
+    const auto light = [&]() { return *s.w.try_get<PointLight3D>(tail); };
+    s.run(1);
+    CHECK(light().enabled == 0);  // headlights off (Auto in daylight): dark
+    s.run(1, "Lights");           // On
+    s.run(1);
+    CHECK(light().enabled == 1);
+    CHECK(light().intensity == doctest::Approx(1.0f));
+    s.w.try_get_mut<Vehicle3D>(s.car)->brake = 0.8f;
+    s.run(1);
+    CHECK(light().intensity == doctest::Approx(5.0f));  // braking still wins
+    s.w.try_get_mut<Vehicle3D>(s.car)->brake = 0.0f;
+    s.run(1, "Lights");  // Off
+    s.run(1);
+    CHECK(light().enabled == 0);
+}

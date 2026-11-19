@@ -1,0 +1,1 @@
+- Tail lamps glow while the headlights are on, M-TAILGLOW (SBA-222): `BrakeLight3D::headlight_idle`. `docs/milestones/M-TAILGLOW.md`.
