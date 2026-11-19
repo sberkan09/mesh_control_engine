@@ -12,4 +12,4 @@ while the lights are on, in a car.
 
 **Tests.** `tests/kit/test_drive_readout.cpp`: lights 0 without a spot, 1 with one on, 0 when it is switched off, off on foot.
 
-**Not done.** A high-beam state.
+**Not done.** ~~A high-beam state~~ (done: [M-HIGHBEAM](M-HIGHBEAM.md)).

@@ -18,7 +18,7 @@
 namespace mce::kit {
 
 static_assert(sizeof(VehicleHorn3D) == 48);
-static_assert(sizeof(VehicleLights3D) == 4);
+static_assert(sizeof(VehicleLights3D) == 16);
 static_assert(sizeof(BrakeLight3D) == 52);
 static_assert(sizeof(LightFlasher3D) == 48);
 
@@ -57,13 +57,19 @@ void kit_vehicle_extras(Frame& f) {
 
     f.query<VehicleLights3D>().each([&](Entity e, VehicleLights3D& l) {
         if (in && in->has_action(kLights) && in->pressed(kLights) && player_drives(w, e)) {
-            l.mode = l.mode == HeadlightMode::Auto ? HeadlightMode::On
-                     : l.mode == HeadlightMode::On ? HeadlightMode::Off
-                                                   : HeadlightMode::Auto;
+            l.mode = l.mode == HeadlightMode::Auto   ? HeadlightMode::On
+                     : l.mode == HeadlightMode::On   ? HeadlightMode::High
+                     : l.mode == HeadlightMode::High ? HeadlightMode::Off
+                                                     : HeadlightMode::Auto;
         }
-        if (l.mode == HeadlightMode::Auto) return;
         SpotLight3D* sl = w.try_get_mut<SpotLight3D>(e);
         if (!sl) return;
+        if (l.mode != HeadlightMode::High && l.base_radius > 0.0f) {  // leaving High: give the spot back
+            sl->radius = l.base_radius;
+            sl->intensity = l.base_intensity;
+            l.base_radius = 0.0f;
+        }
+        if (l.mode == HeadlightMode::Auto) return;
         if (l.mode == HeadlightMode::Off) {
             sl->enabled = 0;
             return;
@@ -71,6 +77,14 @@ void kit_vehicle_extras(Frame& f) {
         const TimedLight3D* t = w.try_get<TimedLight3D>(e);
         if (t && t->captured) sl->intensity = t->spot_scale;
         sl->enabled = 1;
+        if (l.mode == HeadlightMode::High) {
+            if (l.base_radius <= 0.0f) {  // entering High: remember the normal beam
+                l.base_radius = sl->radius;
+                l.base_intensity = sl->intensity;
+            }
+            sl->radius = l.base_radius * l.high_scale;
+            sl->intensity = l.base_intensity * l.high_scale;
+        }
     });
 
     f.query<BrakeLight3D, PointLight3D>().each([&](Entity e, BrakeLight3D& b, PointLight3D& pl) {
