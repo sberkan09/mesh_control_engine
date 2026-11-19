@@ -247,3 +247,28 @@ TEST_CASE("vehicle extras: a tail lamp glows at `headlight_idle` while the car's
     s.run(1);
     CHECK(light().enabled == 0);
 }
+
+TEST_CASE("vehicle extras: a turn signal blinks only while the car steers toward its side and rolls") {
+    Scene s;
+    TurnSignal3D ts;
+    ts.side = 1;
+    ts.period_s = 0.5f;
+    PointLight3D lamp;
+    lamp.enabled = 0;
+    const Entity e = s.w.spawn_with(at(0.8f, 0.6f, 1.9f), ChildOf{s.car}, lamp, ts);
+    const auto lit = [&]() { return s.w.try_get<PointLight3D>(e)->enabled; };
+    s.run(2);
+    CHECK(lit() == 0);  // straight
+    s.w.try_get_mut<Vehicle3D>(s.car)->steer = 0.8f;
+    s.w.try_get_mut<Vehicle3D>(s.car)->speed = 5.0f;
+    s.run(1);
+    CHECK(lit() == 1);  // first half of the blink
+    s.run(20);          // ~0.35 s: the off half
+    s.w.try_get_mut<Vehicle3D>(s.car)->steer = 0.8f;
+    s.w.try_get_mut<Vehicle3D>(s.car)->speed = 5.0f;
+    CHECK(lit() == 0);
+    s.run(15);  // ~0.6 s: on again
+    s.w.try_get_mut<Vehicle3D>(s.car)->steer = -0.8f;  // the other way: not this lamp
+    s.run(1);
+    CHECK(lit() == 0);
+}

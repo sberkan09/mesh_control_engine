@@ -21,6 +21,7 @@ static_assert(sizeof(VehicleHorn3D) == 48);
 static_assert(sizeof(VehicleLights3D) == 16);
 static_assert(sizeof(BrakeLight3D) == 52);
 static_assert(sizeof(LightFlasher3D) == 48);
+static_assert(sizeof(TurnSignal3D) == 36);
 
 namespace {
 
@@ -101,6 +102,24 @@ void kit_vehicle_extras(Frame& f) {
         pl.enabled = level > 0.0f ? 1u : 0u;
     });
 
+    f.query<TurnSignal3D, PointLight3D>().each([&](Entity e, TurnSignal3D& ts, PointLight3D& pl) {
+        const ChildOf* c = w.try_get<ChildOf>(e);
+        const Vehicle3D* v = c ? w.try_get<Vehicle3D>(c->parent) : nullptr;
+        f32 steer = v ? v->steer : 0.0f;
+        if (v && v->use_input && in && std::fabs(in->move.x) > std::fabs(steer)) steer = in->move.x;
+        const bool active = v && std::fabs(v->speed) > 0.5f && steer * static_cast<f32>(ts.side) > ts.threshold;
+        if (!active) {
+            ts.t = 0.0f;
+            pl.enabled = 0;
+            return;
+        }
+        ts.t += f.dt;
+        const bool on = std::fmod(ts.t, ts.period_s) < ts.period_s * 0.5f;
+        pl.color = ts.color;
+        pl.intensity = ts.intensity;
+        pl.enabled = on ? 1u : 0u;
+    });
+
     f.query<LightFlasher3D, PointLight3D>().each([&](Entity e, LightFlasher3D& fl, PointLight3D& pl) {
         if (fl.follow_siren) {
             const ChildOf* co = w.try_get<ChildOf>(e);
@@ -145,7 +164,7 @@ void install_vehicle_extras(World& world, asset::AssetSystem* assets) {
     install_timed_light(world, assets);  // the light write this system overrides
     if (world.try_resource<VehicleExtrasInstalled>()) return;
     world.set_resource(VehicleExtrasInstalled{});
-    world.register_components<VehicleHorn3D, VehicleLights3D, BrakeLight3D, LightFlasher3D>();
+    world.register_components<VehicleHorn3D, VehicleLights3D, BrakeLight3D, LightFlasher3D, TurnSignal3D>();
     world.add_system(Phase::FixedUpdate_Pre, "kit_vehicle_extras", &kit_vehicle_extras, "kit_timed_light");
 }
 
