@@ -208,6 +208,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `VehicleLights3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `BrakeLight3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `LightFlasher3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `VehicleHazards3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `TurnSignal3D` | `mce/kit/vehicle_extras.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `VehicleRam3D` | `mce/kit/vehicle_ram.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |

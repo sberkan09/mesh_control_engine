@@ -57992,6 +57992,7 @@
      "attenuation_id": 1
     },
     "VehicleLights3D": {},
+    "VehicleHazards3D": {},
     "MapMarker": {
      "color": [
       0.3,
@@ -58480,6 +58481,7 @@
      "attenuation_id": 1
     },
     "VehicleLights3D": {},
+    "VehicleHazards3D": {},
     "CarOwner3D": {
      "heat": 12,
      "needs_witness": 1
@@ -58972,6 +58974,7 @@
      "attenuation_id": 1
     },
     "VehicleLights3D": {},
+    "VehicleHazards3D": {},
     "CarOwner3D": {
      "heat": 12,
      "needs_witness": 1

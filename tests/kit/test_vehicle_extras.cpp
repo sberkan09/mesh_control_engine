@@ -272,3 +272,32 @@ TEST_CASE("vehicle extras: a turn signal blinks only while the car steers toward
     s.run(1);
     CHECK(lit() == 0);
 }
+
+TEST_CASE("vehicle extras: the Hazard action toggles both signals blinking, standing still") {
+    Scene s;
+    s.w.add(s.car, VehicleHazards3D{});
+    TurnSignal3D l, r;
+    l.side = -1;
+    r.side = 1;
+    l.period_s = r.period_s = 0.5f;
+    PointLight3D lamp;
+    lamp.enabled = 0;
+    const Entity le = s.w.spawn_with(at(-0.8f, 0.6f, 1.9f), ChildOf{s.car}, lamp, l);
+    const Entity re = s.w.spawn_with(at(0.8f, 0.6f, 1.9f), ChildOf{s.car}, lamp, r);
+    const auto lit = [&](Entity e) { return s.w.try_get<PointLight3D>(e)->enabled; };
+    s.run(2);
+    CHECK(lit(le) == 0);
+    CHECK(lit(re) == 0);
+    s.run(1, "Hazard");
+    CHECK(s.w.try_get<VehicleHazards3D>(s.car)->on == 1);
+    CHECK(lit(le) == 1);  // both, with the car standing
+    CHECK(lit(re) == 1);
+    s.run(20);  // the off half
+    CHECK(lit(le) == 0);
+    CHECK(lit(re) == 0);
+    s.run(1, "Hazard");
+    CHECK(s.w.try_get<VehicleHazards3D>(s.car)->on == 0);
+    s.run(15);
+    CHECK(lit(le) == 0);
+    CHECK(lit(re) == 0);
+}
