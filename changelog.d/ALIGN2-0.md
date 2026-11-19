@@ -1,0 +1,1 @@
+- editor: Align, Distribute and Snap to grid place parents before children, so a selected child no longer ends off its target when its parent moves too (found by new fuzz, M-ALIGN2).
