@@ -1,0 +1,1 @@
+- editor: Flip no longer leaves a child in place when it is selected before its parent (found by a new fuzz, M-FLIP2).
