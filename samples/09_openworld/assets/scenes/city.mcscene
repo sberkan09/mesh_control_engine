@@ -59975,7 +59975,8 @@
     },
     "LightFlasher3D": {
      "intensity": 14,
-     "period_s": 0.5
+     "period_s": 0.5,
+     "follow_siren": 1
     }
    }
   },
@@ -60405,7 +60406,8 @@
     },
     "LightFlasher3D": {
      "intensity": 14,
-     "period_s": 0.5
+     "period_s": 0.5,
+     "follow_siren": 1
     }
    }
   },
@@ -60835,7 +60837,8 @@
     },
     "LightFlasher3D": {
      "intensity": 14,
-     "period_s": 0.5
+     "period_s": 0.5,
+     "follow_siren": 1
     }
    }
   },
@@ -61265,7 +61268,8 @@
     },
     "LightFlasher3D": {
      "intensity": 14,
-     "period_s": 0.5
+     "period_s": 0.5,
+     "follow_siren": 1
     }
    }
   },

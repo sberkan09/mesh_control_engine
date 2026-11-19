@@ -9,6 +9,7 @@
 #include "mce/kit/seats3d.h"
 #include "mce/kit/timed_light.h"
 #include "mce/kit/vehicles3d.h"
+#include "mce/kit/world_audio.h"
 #include "mce/math/math.h"
 #include "mce/string_id.h"
 
@@ -19,7 +20,7 @@ namespace mce::kit {
 static_assert(sizeof(VehicleHorn3D) == 48);
 static_assert(sizeof(VehicleLights3D) == 4);
 static_assert(sizeof(BrakeLight3D) == 48);
-static_assert(sizeof(LightFlasher3D) == 44);
+static_assert(sizeof(LightFlasher3D) == 48);
 
 namespace {
 
@@ -84,7 +85,16 @@ void kit_vehicle_extras(Frame& f) {
         pl.enabled = level > 0.0f ? 1u : 0u;
     });
 
-    f.query<LightFlasher3D, PointLight3D>().each([&](Entity, LightFlasher3D& fl, PointLight3D& pl) {
+    f.query<LightFlasher3D, PointLight3D>().each([&](Entity e, LightFlasher3D& fl, PointLight3D& pl) {
+        if (fl.follow_siren) {
+            const ChildOf* co = w.try_get<ChildOf>(e);
+            const SirenAudio* sa = co && w.alive(co->parent) ? w.try_get<SirenAudio>(co->parent) : nullptr;
+            if (!sa || sa->current_db < -30.0f) {  // the siren is silent: the bar is dark and starts over with A
+                fl.t = 0.0f;
+                pl.enabled = 0;
+                return;
+            }
+        }
         fl.t += f.dt;
         const f32 half = fl.period_s * 0.5f;
         const f32 phase = std::fmod(fl.t, fl.period_s);

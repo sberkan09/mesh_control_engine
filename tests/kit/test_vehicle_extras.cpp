@@ -15,6 +15,7 @@
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicle_extras.h"
 #include "mce/kit/vehicles3d.h"
+#include "mce/kit/world_audio.h"
 #include "mce/string_id.h"
 
 using namespace mce;
@@ -194,4 +195,22 @@ TEST_CASE("vehicle extras: a light flasher alternates its two colours every half
     CHECK(light().color.r < 0.3f);
     s.run(40);  // t ~ 1.35: A again
     CHECK(light().color.r > 0.9f);
+}
+
+TEST_CASE("vehicle extras: a light flasher that follows the siren is dark until the parent's siren is audible") {
+    Scene s;
+    const Entity car = s.w.spawn_with(at(0, 0, 0), SirenAudio{});  // current_db starts at -60: silent
+    LightFlasher3D fl;
+    fl.follow_siren = 1;
+    PointLight3D lamp;
+    lamp.enabled = 0;
+    const Entity bar = s.w.spawn_with(at(0, 1, 0), lamp, fl, ChildOf{car});
+    s.run(5);
+    CHECK(s.w.try_get<PointLight3D>(bar)->enabled == 0);
+    s.w.try_get_mut<SirenAudio>(car)->current_db = -8.0f;
+    s.run(2);
+    CHECK(s.w.try_get<PointLight3D>(bar)->enabled == 1);
+    s.w.try_get_mut<SirenAudio>(car)->current_db = -60.0f;
+    s.run(2);
+    CHECK(s.w.try_get<PointLight3D>(bar)->enabled == 0);
 }

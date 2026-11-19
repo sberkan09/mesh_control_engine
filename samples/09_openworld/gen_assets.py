@@ -1112,7 +1112,7 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
     # The light bar: a point light on the roof that flashes red and blue (LightFlasher3D, M-SIRENLIGHTS).
     scene.add(name + " light bar", {"ChildOf": {"parent": scene.ref(car)}, "LocalTransform": tf((0, 0.5, 0.2)),
                                     "PointLight3D": {"color": [1.0, 0.05, 0.04, 1], "intensity": 0, "radius": 11, "enabled": 0},
-                                    "LightFlasher3D": {"intensity": 14, "period_s": 0.5}})
+                                    "LightFlasher3D": {"intensity": 14, "period_s": 0.5, "follow_siren": 1}})
     return car
 
 

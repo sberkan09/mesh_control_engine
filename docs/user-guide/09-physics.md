@@ -399,7 +399,8 @@ binds Horn to G (stick press) and Lights to L (D-pad right).
 
 `LightFlasher3D` flashes a light: put it with a `PointLight3D` on an entity (a police light bar, an ambulance); every `period_s` it
 shows `color_a` for the first half and `color_b` for the second, each half starting at `intensity` and fading to 30%. The police cars of
-`samples/09_openworld` carry a red and blue one on the roof.
+`samples/09_openworld` carry a red and blue one on the roof; with `follow_siren` 1 (they set it) the bar flashes only while the parent car's
+`SirenAudio` is audible, i.e. while the wanted level has reached the siren's `min_level`, and is dark otherwise.
 
 `BrakeLight3D` makes a tail lamp: put it with a `PointLight3D` on an entity that is a `ChildOf` the car (the lamp sits behind
 the car). While the car brakes (its own `brake` or `handbrake`, the player's brake trigger or handbrake key, or the throttle
