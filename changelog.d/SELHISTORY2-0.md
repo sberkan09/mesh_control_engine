@@ -1,0 +1,1 @@
+- editor: the Back/Forward selection history is fuzzed against a plain model, including the cap and entries that are gone (M-SELHISTORY2).
