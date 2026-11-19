@@ -1,0 +1,1 @@
+- editor: Batch rename pads a run of more than 16 `#` to its full length (found by a new fuzz, M-BATCHRENAME2).
