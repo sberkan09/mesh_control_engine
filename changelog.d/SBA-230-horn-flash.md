@@ -1,0 +1,1 @@
+- Flash to pass, M-HORNFLASH (SBA-230): `VehicleLights3D::flash_s` makes a honk flash the headlights High. `docs/milestones/M-HORNFLASH.md`.

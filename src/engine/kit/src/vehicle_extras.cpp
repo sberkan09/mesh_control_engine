@@ -19,7 +19,7 @@
 namespace mce::kit {
 
 static_assert(sizeof(VehicleHorn3D) == 48);
-static_assert(sizeof(VehicleLights3D) == 16);
+static_assert(sizeof(VehicleLights3D) == 20);
 static_assert(sizeof(BrakeLight3D) == 52);
 static_assert(sizeof(LightFlasher3D) == 48);
 static_assert(sizeof(TurnSignal3D) == 36);
@@ -68,20 +68,25 @@ void kit_vehicle_extras(Frame& f) {
         }
         SpotLight3D* sl = w.try_get_mut<SpotLight3D>(e);
         if (!sl) return;
-        if (l.mode != HeadlightMode::High && l.base_radius > 0.0f) {  // leaving High: give the spot back
+        const VehicleHorn3D* hn = l.flash_s > 0.0f ? w.try_get<VehicleHorn3D>(e) : nullptr;
+        const bool flash = hn && hn->since_s < l.flash_s;  // M-HORNFLASH: a honk flashes the beam
+        const bool high = l.mode == HeadlightMode::High || flash;
+        if (!high && l.base_radius > 0.0f) {  // leaving High: give the spot back
             sl->radius = l.base_radius;
             sl->intensity = l.base_intensity;
             l.base_radius = 0.0f;
+            if (l.mode == HeadlightMode::Auto) sl->enabled = l.base_on;  // a flash in Auto: the lamp goes back as it was
         }
-        if (l.mode == HeadlightMode::Auto) return;
-        if (l.mode == HeadlightMode::Off) {
+        if (l.mode == HeadlightMode::Auto && !flash) return;
+        if (l.mode == HeadlightMode::Off && !flash) {
             sl->enabled = 0;
             return;
         }
         const TimedLight3D* t = w.try_get<TimedLight3D>(e);
         if (t && t->captured) sl->intensity = t->spot_scale;
+        if (high && l.base_radius <= 0.0f) l.base_on = static_cast<u8>(sl->enabled);
         sl->enabled = 1;
-        if (l.mode == HeadlightMode::High) {
+        if (high) {
             if (l.base_radius <= 0.0f) {  // entering High: remember the normal beam
                 l.base_radius = sl->radius;
                 l.base_intensity = sl->intensity;

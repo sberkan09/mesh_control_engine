@@ -394,7 +394,7 @@ with `use_input` sits in it, the `Horn` action plays the clip once at the car (3
 counts them) and the `Lights` action cycles `VehicleLights3D.mode`: `Auto` (the day cycle decides, `TimedLight3D`), `On`
 (the car's `SpotLight3D` at its authored intensity), `High` (the same with intensity and radius times `high_scale`, 1.5 by default; the normal beam
 comes back when it leaves High) and `Off`; the order is Auto, On, High, Off. Setting `VehicleHorn3D.honk` to 1 honks once without
-input (scripts, tests). A honk also startles the crowd: a `Pedestrian3D` within 12 m of the car (`kit_crowd`) runs
+input (scripts, tests). `VehicleLights3D.flash_s` (0 by default, 0.25 in `samples/09_openworld`) also flashes the beam High for that many seconds after each honk, whatever the mode. A honk also startles the crowd: a `Pedestrian3D` within 12 m of the car (`kit_crowd`) runs
 away from it for 2 s, and the panic spreads to its close neighbours like it does after a shot. Traffic and police cars have no rider with `use_input`, so they never respond. `samples/09_openworld`
 binds Horn to G (stick press) and Lights to L (D-pad right).
 

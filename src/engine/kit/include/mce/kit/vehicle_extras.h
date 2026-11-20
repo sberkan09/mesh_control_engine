@@ -66,13 +66,16 @@ MCE_ENUM(HeadlightMode, Auto, On, Off, High)
 
 struct VehicleLights3D {
     HeadlightMode mode = HeadlightMode::Auto;
-    u8 pad_[3] = {};
+    u8 base_on = 0;  // engine-written: the spot's enabled flag before High or a flash
+    u8 pad_[2] = {};
     f32 high_scale = 1.5f;       // High beam: intensity and radius times this
+    f32 flash_s = 0.0f;          // seconds the beam goes High after each honk (flash to pass); 0: never
     f32 base_radius = 0.0f;      // engine-written: the radius before High (0: not in High)
     f32 base_intensity = 0.0f;   // engine-written: the intensity before High
 };
 MCE_COMPONENT(VehicleLights3D, (mode, Save, Help{"Auto: the day cycle decides; On / High / Off: the driver's choice (Lights cycles Auto, On, High, Off)"}),
               (high_scale, Range{1, 4}, Help{"High beam multiplies the spot's intensity and radius by this"}),
+              (flash_s, Range{0, 5}, Help{"seconds the beam flashes High after each honk, whatever the mode; 0: never"}),
               (base_radius, ReadOnly, Transient), (base_intensity, ReadOnly, Transient))
 
 struct BrakeLight3D {

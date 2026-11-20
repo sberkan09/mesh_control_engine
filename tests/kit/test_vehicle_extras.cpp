@@ -107,6 +107,27 @@ TEST_CASE("vehicle extras: nobody honks from outside the car, and `honk` works f
     CHECK(s.w.try_get<VehicleHorn3D>(s.car)->honk == 0);
 }
 
+TEST_CASE("vehicle extras: a honk flashes the beam High for flash_s, whatever the mode") {
+    Scene s;
+    const auto spot = [&]() { return *s.w.try_get<SpotLight3D>(s.car); };
+    const f32 normal = spot().intensity, radius = spot().radius;
+    s.run(3, "Horn");  // flash_s is 0 by default: nothing happens
+    CHECK(spot().enabled == 0);
+    s.run(60);  // clear of the honk gap
+    s.w.try_get_mut<VehicleLights3D>(s.car)->flash_s = 0.25f;
+    s.run(1, "Horn");
+    s.run(1);
+    CHECK(spot().enabled == 1);  // Auto, the lamp was off: the flash lights it
+    CHECK(spot().intensity == doctest::Approx(normal * 1.5f));
+    CHECK(spot().radius == doctest::Approx(radius * 1.5f));
+    s.run(2);
+    CHECK(spot().intensity == doctest::Approx(normal * 1.5f));  // not compounding
+    s.run(60);  // well past flash_s
+    CHECK(spot().enabled == 0);
+    CHECK(spot().intensity == doctest::Approx(normal));
+    CHECK(spot().radius == doctest::Approx(radius));
+}
+
 TEST_CASE("vehicle extras: Lights cycles Auto, On, High, Off over the spot light") {
     Scene s;
     const auto spot = [&]() { return *s.w.try_get<SpotLight3D>(s.car); };

@@ -57991,7 +57991,9 @@
      "gain_db": -4,
      "attenuation_id": 1
     },
-    "VehicleLights3D": {},
+    "VehicleLights3D": {
+     "flash_s": 0.25
+    },
     "VehicleHazards3D": {
      "crash_speed": 8
     },
@@ -58544,7 +58546,9 @@
      "gain_db": -4,
      "attenuation_id": 1
     },
-    "VehicleLights3D": {},
+    "VehicleLights3D": {
+     "flash_s": 0.25
+    },
     "VehicleHazards3D": {
      "crash_speed": 8
     },
@@ -59101,7 +59105,9 @@
      "gain_db": -4,
      "attenuation_id": 1
     },
-    "VehicleLights3D": {},
+    "VehicleLights3D": {
+     "flash_s": 0.25
+    },
     "VehicleHazards3D": {
      "crash_speed": 8
     },
