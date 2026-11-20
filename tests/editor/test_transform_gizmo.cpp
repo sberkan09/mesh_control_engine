@@ -193,7 +193,9 @@ TEST_CASE("gizmo fuzz: a move drag shifts every selected entity by the drag, and
         Forest f;
         f.build(rng, true);
         std::vector<math::vec3> before;
+        before.reserve(f.pick.size());
         std::vector<LocalTransform> locals;
+        locals.reserve(f.pick.size());
         for (EntityId id : f.pick) {
             before.push_back(f.s.world_transform(id).position);
             locals.push_back(*f.s.get<LocalTransform>(id));
@@ -230,6 +232,7 @@ TEST_CASE("gizmo fuzz: a rotate drag turns every selected entity about the pivot
         Forest f;
         f.build(rng, true);
         std::vector<math::vec3> before;
+        before.reserve(f.pick.size());
         for (EntityId id : f.pick) before.push_back(f.s.world_transform(id).position);
         math::vec2 pivot;
         REQUIRE(TransformGizmo::pivot(f.s, pivot));
@@ -259,6 +262,7 @@ TEST_CASE("gizmo fuzz: a uniform scale drag scales every selected entity's offse
         Forest f;
         f.build(rng, false);
         std::vector<math::vec3> before;
+        before.reserve(f.pick.size());
         for (EntityId id : f.pick) before.push_back(f.s.world_transform(id).position);
         math::vec2 pivot;
         REQUIRE(TransformGizmo::pivot(f.s, pivot));
