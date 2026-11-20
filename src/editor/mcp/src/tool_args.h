@@ -20,6 +20,9 @@ editor::EditorScene& scene(ToolCall& c);
 // An entity argument: its id (an integer) or its unique name (a string).
 bool resolve_entity(ToolCall& c, const char* arg_name, const cook::JsonValue& v, editor::EntityId& out);
 bool arg_entity(ToolCall& c, const char* name, editor::EntityId& out);
+// "entities": an array of entity ids or names with `min` to kMaxEntityListArg entries (tools_layout.cpp).
+constexpr u32 kMaxEntityListArg = 4096;
+bool arg_entities(ToolCall& c, Array<editor::EntityId>& out, u32 min);
 bool need_project(ToolCall& c);
 // A .mcscene path under assets/ ("scenes/level.mcscene"): `abs` receives the file's path.
 bool scene_path(Server& server, StringView rel, cook::String& abs, cook::String& err);

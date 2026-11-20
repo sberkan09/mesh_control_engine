@@ -13,17 +13,13 @@
 
 namespace mce::mcp {
 
-namespace {
-
-constexpr u32 kMaxLayoutEntities = 4096;
-
 // "entities": an array of entity ids or names, at least `min` of them.
 bool arg_entities(ToolCall& c, Array<editor::EntityId>& out, u32 min) {
     const cook::JsonValue v = arg(c, "entities");
     if (!v.valid() || !v.is_array()) return arg_missing(c, "entities", "an array of entity ids or names");
-    if (v.size() < min || v.size() > kMaxLayoutEntities) {
+    if (v.size() < min || v.size() > kMaxEntityListArg) {
         c.error += "argument 'entities' needs ";
-        cook::appendf(c.error, "%u to %u entries", min, kMaxLayoutEntities);
+        cook::appendf(c.error, "%u to %u entries", min, kMaxEntityListArg);
         return false;
     }
     for (u32 i = 0; i < v.size(); ++i) {
@@ -33,6 +29,8 @@ bool arg_entities(ToolCall& c, Array<editor::EntityId>& out, u32 min) {
     }
     return true;
 }
+
+namespace {
 
 bool arg_axis(ToolCall& c, editor::AlignAxis& axis) {
     StringView s;

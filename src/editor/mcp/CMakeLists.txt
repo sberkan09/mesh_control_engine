@@ -41,6 +41,7 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/tools_import.cpp
         src/tools_views.cpp
         src/tools_layout.cpp
+        src/tools_hierarchy.cpp
         src/tools_content.cpp
         src/tools_docs.cpp
         src/tools_render.cpp
