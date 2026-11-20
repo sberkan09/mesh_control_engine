@@ -1,0 +1,1 @@
+- Hazards after a crash, M-CRASHHAZARD (SBA-229): `VehicleHazards3D::crash_speed` switches the hazard lights on after a hard hit. `docs/milestones/M-CRASHHAZARD.md`.

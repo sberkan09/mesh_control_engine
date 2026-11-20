@@ -5,6 +5,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
+#include "mce/kit/bodies3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/timed_light.h"
@@ -22,7 +23,7 @@ static_assert(sizeof(VehicleLights3D) == 16);
 static_assert(sizeof(BrakeLight3D) == 52);
 static_assert(sizeof(LightFlasher3D) == 48);
 static_assert(sizeof(TurnSignal3D) == 36);
-static_assert(sizeof(VehicleHazards3D) == 4);
+static_assert(sizeof(VehicleHazards3D) == 8);
 
 namespace {
 
@@ -106,6 +107,9 @@ void kit_vehicle_extras(Frame& f) {
 
     f.query<VehicleHazards3D>().each([&](Entity e, VehicleHazards3D& h) {
         if (in && in->has_action(kHazard) && in->pressed(kHazard) && player_drives(w, e)) h.on = h.on ? 0 : 1;
+        if (h.crash_speed > 0.0f)  // a hard hit switches them on (M-CRASHHAZARD)
+            for (const ContactBegin3D& cb : f.events().read<ContactBegin3D>())
+                if ((cb.a == e || cb.b == e) && cb.approach_speed >= h.crash_speed) h.on = 1;
     });
 
     f.query<TurnSignal3D, PointLight3D>().each([&](Entity e, TurnSignal3D& ts, PointLight3D& pl) {

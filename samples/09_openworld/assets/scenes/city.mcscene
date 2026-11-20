@@ -57992,7 +57992,9 @@
      "attenuation_id": 1
     },
     "VehicleLights3D": {},
-    "VehicleHazards3D": {},
+    "VehicleHazards3D": {
+     "crash_speed": 8
+    },
     "MapMarker": {
      "color": [
       0.3,
@@ -58543,7 +58545,9 @@
      "attenuation_id": 1
     },
     "VehicleLights3D": {},
-    "VehicleHazards3D": {},
+    "VehicleHazards3D": {
+     "crash_speed": 8
+    },
     "CarOwner3D": {
      "heat": 12,
      "needs_witness": 1
@@ -59098,7 +59102,9 @@
      "attenuation_id": 1
     },
     "VehicleLights3D": {},
-    "VehicleHazards3D": {},
+    "VehicleHazards3D": {
+     "crash_speed": 8
+    },
     "CarOwner3D": {
      "heat": 12,
      "needs_witness": 1
