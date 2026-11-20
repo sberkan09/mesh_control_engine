@@ -1,0 +1,1 @@
+- mcp: new tools `entity_align`, `entity_distribute`, `entity_snap`, `entity_flip` and `entity_match_transform` lay out several entities of the open scene (M-LAYOUTTOOLS 2).

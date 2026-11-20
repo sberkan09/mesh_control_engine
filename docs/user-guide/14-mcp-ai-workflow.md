@@ -103,6 +103,11 @@ each result's `content[0].text` is the tool's JSON).
 | Edit | `entity_create` | `name`, `components?` (object: type name → fields), `transform?` (bool, default true: add a `LocalTransform`), `at?` (int: hierarchy index, default the end) | returns the id; place the entity with `components.LocalTransform`, e.g. `{"name": "Crate", "components": {"LocalTransform": {"position": [0, 1, 0]}}}` |
 | | `entity_create` with `prefab` | `name`, `prefab` (`"guid:<uuid>"` of a `.mcprefab`), `components?` | an instance; `components` override the prefab root's fields, `LocalTransform` places it |
 | | `entity_delete`, `entity_duplicate` | `entity` | |
+| | `entity_align` | `entities` (ids or names), `axis` (`x`, `y`), `mode` (`min`, `center`, `max`) | puts the entities on one world line; one undo step; `changed` is false when they already lined up |
+| | `entity_distribute` | `entities` (three or more), `axis` | spaces them evenly between the two outermost |
+| | `entity_snap` | `entities`, `step` (> 0) | rounds world x and y to a grid; returns `moved` |
+| | `entity_flip` | `entities`, `axis` | mirrors them across the middle of the group (one entity flips in place) |
+| | `entity_match_transform` | `entities`, `anchor`, `part` (`position`, `rotation`, `scale`) | copies the anchor's world position, rotation or scale |
 | | `scene_clear` | | every entity, one undo step; keeps GUID and path |
 | | `component_add` | `entity`, `component`, `value?` | |
 | | `component_remove` | `entity`, `component` | |

@@ -51,6 +51,9 @@ bool asset_validate_and_write(ToolCall& c, StringView rel, asset::Guid guid, Str
 Span<const ToolDef> import_tool_table();
 // tools_views.cpp: view_list, view_add, player_list, player_setup (M-VIEWS).
 Span<const ToolDef> views_tool_table();
+// tools_layout.cpp (M-LAYOUTTOOLS 2): entity_align, entity_distribute, entity_snap, entity_flip,
+// entity_match_transform.
+Span<const ToolDef> layout_tool_table();
 // tools_terrain.cpp (M-TERRAIN 6): terrain_sculpt, terrain_paint, terrain_import, terrain_generate.
 Span<const ToolDef> terrain_tool_table();
 // tools_roads.cpp (M-OPENWORLD B1): roads_info, roads_generate.
