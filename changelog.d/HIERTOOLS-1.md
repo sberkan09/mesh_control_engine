@@ -1,0 +1,1 @@
+- mcp: new tools `entity_move` (reorder) and `entity_batch_rename` (pattern with numbers) complete the hierarchy tools (M-HIERTOOLS 2).

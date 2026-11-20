@@ -178,3 +178,33 @@ TEST_CASE("hierarchy tools: reparent keeps the world place, group and ungroup un
     CHECK(pos(c, a, 0) == doctest::Approx(0.0));
     CHECK(c.fails("entity_group", R"({"entities":[]})").find("entities") != std::string::npos);
 }
+
+// M-HIERTOOLS 2: entity_move and entity_batch_rename.
+TEST_CASE("hierarchy tools: entity_move reorders and entity_batch_rename numbers in scene order") {
+    const std::string root = layout_project("mcp_hier2");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const int a = make(c, "Torch", 0, 0), b = make(c, "Lamp", 1, 0), d = make(c, "Post", 2, 0);
+    auto id_s = [](int v) { return std::to_string(v); };
+
+    auto mv = c.ok("entity_move", "{\"entity\":" + id_s(d) + R"(,"index":0})");
+    CHECK(mv.v().get("changed").as_bool());
+    CHECK(mv.v().get("index").as_number() == 0);
+    CHECK_FALSE(c.ok("entity_move", "{\"entity\":" + id_s(d) + R"(,"index":0})").v().get("changed").as_bool());
+    CHECK(c.ok("entity_move", "{\"entity\":" + id_s(d) + R"(,"index":999})").v().get("index").as_number() ==
+          c.ok("scene_info").v().get("entities").as_number() - 1);
+    CHECK(c.fails("entity_move", "{\"entity\":" + id_s(d) + R"(,"index":-1})").find("index") != std::string::npos);
+
+    // Listed in reverse, numbered in scene order: Torch (a) first, then Lamp (b).
+    auto r = c.ok("entity_batch_rename",
+                  "{\"entities\":[" + id_s(b) + "," + id_s(a) + R"(],"pattern":"Prop_##","first":7})");
+    CHECK(r.v().get("renamed").as_number() == 2);
+    CHECK(str(c.ok("scene_get_entity", "{\"entity\":" + id_s(a) + "}").v().get("name")) == "Prop_07");
+    CHECK(str(c.ok("scene_get_entity", "{\"entity\":" + id_s(b) + "}").v().get("name")) == "Prop_08");
+    c.ok("scene_undo");  // one undo step for both
+    CHECK(str(c.ok("scene_get_entity", "{\"entity\":" + id_s(a) + "}").v().get("name")) == "Torch");
+    CHECK(str(c.ok("scene_get_entity", "{\"entity\":" + id_s(b) + "}").v().get("name")) == "Lamp");
+    CHECK(c.fails("entity_batch_rename", "{\"entities\":[" + id_s(a) + R"(],"pattern":""})").find("pattern") !=
+          std::string::npos);
+}

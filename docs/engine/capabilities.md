@@ -394,6 +394,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `debug_view` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
 | `entity_set_parent` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `entity_rename` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_move` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_batch_rename` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `entity_group` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `entity_ungroup` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `entity_reset_transform` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
