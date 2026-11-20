@@ -275,7 +275,8 @@ private:
         ConfirmOpen,
         Recover,
         QuickOpen,
-        BatchRename
+        BatchRename,
+        ArrayDuplicate
     };
     Popup popup_ = Popup::None;
     bool popup_opened_ = false;

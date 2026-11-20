@@ -1,0 +1,1 @@
+- editor: Edit > Array duplicate... copies the selection into a columns x rows grid at a step you set, as one undo step (M-LAYOUTTOOLS 4).
