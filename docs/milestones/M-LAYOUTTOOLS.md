@@ -1,13 +1,13 @@
 # M-LAYOUTTOOLS — layout commands for the editor and the MCP tools (milestone record)
 
-**Status:** in progress (step 1 done 2026-11-20). **Owner: the "Geliştirme rutini 3" thread.** The editor has align, distribute, snap, flip, match and duplicate-offset commands, but a person or an agent can only reach them from the editor shell; the MCP server has none, and there is no way to repeat a group into a grid. This milestone adds the grid copy and exposes the layout commands as MCP tools, so a scene for a game sample can be laid out headless.
+**Status:** in progress (steps 1 and 2 done 2026-11-20). **Owner: the "Geliştirme rutini 3" thread.** The editor has align, distribute, snap, flip, match and duplicate-offset commands, but a person or an agent can only reach them from the editor shell; the MCP server has none, and there is no way to repeat a group into a grid. This milestone adds the grid copy and exposes the layout commands as MCP tools, so a scene for a game sample can be laid out headless.
 
 ## Steps
 
 | # | Step | State |
 |---|---|---|
 | 1 | `array_duplicate` in editor core: copy the selection into a columns x rows grid, one undo entry, refuses bad input and more than 4096 copies | done 2026-11-20: `array_duplicate.h/.cpp`, `test_array_duplicate.cpp` (grid positions, one undo entry, parent and child, refusals, limit, 200-seed fuzz against a model) |
-| 2 | MCP tools for align, distribute, snap, flip and match transform | open |
+| 2 | MCP tools `entity_align`, `entity_distribute`, `entity_snap`, `entity_flip` and `entity_match_transform` (entities by id or name, one undo step each) | done 2026-11-20: `tools_layout.cpp`, `test_mcp_layout.cpp`; transcript golden updated |
 | 3 | MCP tool for array duplicate | open |
 | 4 | Array duplicate entry in the editor shell's Edit menu | open |
 

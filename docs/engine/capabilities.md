@@ -393,6 +393,11 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `debug_lines` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
 | `debug_view` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
 | `asset_import` | `tools_import.cpp` | docs/user-guide/05-assets.md |
+| `entity_align` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_distribute` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_snap` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_flip` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_match_transform` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `procgen_run` | `tools_procgen.cpp` | docs/user-guide/28-procedural-levels.md |
 | `roads_info` | `tools_roads.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `roads_generate` | `tools_roads.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
