@@ -1,0 +1,1 @@
+- editor: new `array_duplicate` core command copies the selection into a columns x rows grid at a fixed step as one undo entry, refusing bad input and more than 4096 copies; the MCP tools and the Edit menu entry follow (M-LAYOUTTOOLS 1).
