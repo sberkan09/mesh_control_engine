@@ -1,0 +1,1 @@
+- editor: a fuzz now drives scene tabs through random open, switch, edit, save and close sequences (M-TABSFUZZ); no defect found.
