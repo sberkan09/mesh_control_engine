@@ -208,3 +208,25 @@ TEST_CASE("hierarchy tools: entity_move reorders and entity_batch_rename numbers
     CHECK(c.fails("entity_batch_rename", "{\"entities\":[" + id_s(a) + R"(],"pattern":""})").find("pattern") !=
           std::string::npos);
 }
+
+// M-STACKLINT 2: scene_find_stacked.
+TEST_CASE("scene_find_stacked reports an array with no step, and a delete of the copies clears it") {
+    const std::string root = layout_project("mcp_stacked");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    CHECK(c.ok("scene_find_stacked").v().get("groups").size() == 0);  // the demo scene is tidy
+    const int a = make(c, "Lamp", 3, 3);
+    auto r = c.ok("entity_array_duplicate",
+                  "{\"entities\":[" + std::to_string(a) + R"(],"columns":3})");  // no step: stacked
+    auto s = c.ok("scene_find_stacked");
+    REQUIRE(s.v().get("groups").size() == 1);
+    CHECK(s.v().get("groups").at(0).get("keep").as_number() == a);
+    CHECK(s.v().get("groups").at(0).get("copies").size() == 2);
+    CHECK(str(s.v().get("report")).find("Lamp") != std::string::npos);
+    for (u32 i = 0; i < 2; ++i)
+        c.ok("entity_delete",
+             "{\"entity\":" + std::to_string(static_cast<int>(r.v().get("ids").at(i).as_number())) + "}");
+    CHECK(c.ok("scene_find_stacked").v().get("groups").size() == 0);
+    CHECK(c.fails("scene_find_stacked", R"({"path":"scenes/missing.mcscene"})").find("missing") != std::string::npos);
+}

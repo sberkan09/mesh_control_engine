@@ -83,6 +83,9 @@ bool scene_lint_all(ToolCall& c);  // M-LINTALL 1
 // tools_scene_stats.cpp (M-SCENESTATS 3): what a scene holds at a glance.
 bool scene_stats(ToolCall& c);
 
+// tools_scene_stacked.cpp (M-STACKLINT 2): entities that are exact copies on one spot.
+bool scene_find_stacked(ToolCall& c);
+
 // tools_scene_find.cpp (M-SCENEFIND 3): the entities of a scene that match a question.
 bool scene_find(ToolCall& c);
 
