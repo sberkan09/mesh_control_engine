@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>  // DockBuilder (default layout)
 
+#include <algorithm>
 #include <cstdio>
 
 #include "imgui_platform.h"
@@ -10,6 +11,7 @@
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
 #include "mce/editor/align_entities.h"
+#include "mce/editor/array_duplicate.h"
 #include "mce/editor/batch_rename.h"
 #include "mce/editor/camera_bookmarks.h"
 #include "mce/editor/duplicate_offset.h"
@@ -22,9 +24,9 @@
 #include "mce/editor/reset_transform.h"
 #include "mce/editor/select_all.h"
 #include "mce/editor/select_related.h"
-#include "mce/editor/snap_entities.h"
 #include "mce/editor/selection_history.h"
 #include "mce/editor/selection_sets.h"
+#include "mce/editor/snap_entities.h"
 #include "mce/editor/unique_names.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
@@ -58,6 +60,9 @@ struct EditorShell::Impl {
     // Edit > Rename Selection (M-BATCHRENAME): the pattern box and the first number.
     char rename_pattern[64] = {};
     i32 rename_start = 1;
+    // Edit > Array duplicate (M-LAYOUTTOOLS 4): the grid size and the step between cells.
+    i32 array_columns = 3, array_rows = 1;
+    f32 array_dx = 1.0f, array_dy = 1.0f;
 };
 
 namespace {
@@ -101,6 +106,13 @@ void duplicate_stepped(EditorScene& scene, f32 dx, f32 dy) {
     Array<EntityId> ids;  // a copy: the edit below changes the selection
     for (EntityId id : scene.selection().items()) ids.push_back(id);
     duplicate_offset(scene, ids.span(), dx, dy);
+}
+
+// Edit > Array duplicate: the selection into a `columns` x `rows` grid (the copies are not selected).
+void array_duplicate_selection(EditorScene& scene, u32 columns, u32 rows, f32 dx, f32 dy) {
+    Array<EntityId> ids;  // a copy: the edit below changes the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    array_duplicate(scene, Span<const EntityId>(ids.data(), ids.size()), columns, rows, dx, dy);
 }
 
 // Edit > Match to anchor: `part` of the first selected entity goes onto the rest of the selection.
@@ -906,7 +918,8 @@ void EditorShell::draw_popups() {
                                            "Unsaved changes##open",
                                            "Recover unsaved changes",
                                            "Quick Open",
-                                           "Rename Selection"};
+                                           "Rename Selection",
+                                           "Array Duplicate"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
         popup_opened_ = true;
@@ -1058,6 +1071,40 @@ void EditorShell::draw_popups() {
             popup_ = Popup::None;  // a click outside closed it
             popup_opened_ = false;
         }
+    }
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Array Duplicate", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::IsWindowAppearing()) {
+            impl_->array_dx = view_.snap_step;  // a row to the right by default
+            impl_->array_dy = 0.0f;
+        }
+        ImGui::TextUnformatted("Copies the selection into a grid; the first cell is the originals");
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::InputInt("Columns", &impl_->array_columns);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::InputInt("Rows", &impl_->array_rows);
+        impl_->array_columns = std::clamp(impl_->array_columns, 1, 256);
+        impl_->array_rows = std::clamp(impl_->array_rows, 1, 256);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::DragFloat("Step X", &impl_->array_dx, 0.05f, -1000.0f, 1000.0f, "%.2f m");
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::DragFloat("Step Y", &impl_->array_dy, 0.05f, -1000.0f, 1000.0f, "%.2f m");
+        const usize cells = static_cast<usize>(impl_->array_columns) * static_cast<usize>(impl_->array_rows) - 1;
+        const usize copies = cells * scene().selection().items().size();
+        const bool valid = cells > 0 && copies > 0 && copies <= kMaxArrayCopies;
+        ImGui::TextDisabled("%zu copies", copies);
+        if (copies > kMaxArrayCopies) ImGui::TextDisabled("at most %zu", static_cast<usize>(kMaxArrayCopies));
+        ImGui::BeginDisabled(!valid);
+        if (ImGui::Button("Make copies")) {
+            array_duplicate_selection(scene(), static_cast<u32>(impl_->array_columns),
+                                      static_cast<u32>(impl_->array_rows), impl_->array_dx, impl_->array_dy);
+            close();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
+        ImGui::EndPopup();
     }
 
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
@@ -1277,6 +1324,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
         if (ImGui::MenuItem("Duplicate right", nullptr, false, sel)) duplicate_stepped(scene(), view_.snap_step, 0.0f);
         if (ImGui::MenuItem("Duplicate up", nullptr, false, sel)) duplicate_stepped(scene(), 0.0f, view_.snap_step);
+        if (ImGui::MenuItem("Array duplicate...", nullptr, false, sel)) popup_ = Popup::ArrayDuplicate;
         if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
         if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G", false, sel)) ungroup_selection(scene());
         ImGui::Separator();
