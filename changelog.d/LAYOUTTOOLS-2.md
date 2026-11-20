@@ -1,0 +1,1 @@
+- mcp: new tool `entity_array_duplicate` copies entities into a grid at a fixed step in one undo step (M-LAYOUTTOOLS 3).

@@ -108,6 +108,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `entity_snap` | `entities`, `step` (> 0) | rounds world x and y to a grid; returns `moved` |
 | | `entity_flip` | `entities`, `axis` | mirrors them across the middle of the group (one entity flips in place) |
 | | `entity_match_transform` | `entities`, `anchor`, `part` (`position`, `rotation`, `scale`) | copies the anchor's world position, rotation or scale |
+| | `entity_array_duplicate` | `entities`, `columns`, `rows?`, `dx?`, `dy?` | copies the group into a columns x rows grid at a fixed step (the first cell is the originals); returns `created` and the new ids; at most 4096 copies; one undo step |
 | | `scene_clear` | | every entity, one undo step; keeps GUID and path |
 | | `component_add` | `entity`, `component`, `value?` | |
 | | `component_remove` | `entity`, `component` | |

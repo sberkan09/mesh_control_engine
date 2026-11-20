@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mce/editor/align_entities.h"
+#include "mce/editor/array_duplicate.h"
 #include "mce/editor/flip_entities.h"
 #include "mce/editor/match_transform.h"
 #include "mce/editor/snap_entities.h"
@@ -114,6 +115,28 @@ bool entity_match_transform(ToolCall& c) {
     return true;
 }
 
+bool entity_array_duplicate(ToolCall& c) {
+    Array<editor::EntityId> ids;
+    u64 columns = 1, rows = 1;
+    if (!arg_entities(c, ids, 1) || !arg_uint(c, "columns", columns, 1, editor::kMaxArrayCopies + 1, true) ||
+        !arg_uint(c, "rows", rows, 1, editor::kMaxArrayCopies + 1, false))
+        return false;
+    const cook::JsonValue dx = arg(c, "dx"), dy = arg(c, "dy");
+    if ((dx.valid() && !dx.is_number()) || (dy.valid() && !dy.is_number()))
+        return arg_missing(c, "dx", "numbers (the step in world units)");
+    if (columns * rows < 2) return fail(c, "columns x rows must be at least 2 (cell 1,1 is the originals)");
+    Array<editor::EntityId> made;
+    const usize n = editor::array_duplicate(scene(c), Span<const editor::EntityId>(ids.data(), ids.size()),
+                                            static_cast<u32>(columns), static_cast<u32>(rows),
+                                            dx.valid() ? static_cast<f32>(dx.as_number()) : 0.0f,
+                                            dy.valid() ? static_cast<f32>(dy.as_number()) : 0.0f, &made);
+    if (n == 0) return fail(c, "nothing was copied: check the entities, a finite step, and at most 4096 copies in all");
+    c.out.begin_object().key("created").num_u(n).key("ids").begin_array();
+    for (editor::EntityId id : made) c.out.num_u(id);
+    c.out.end_array().end_object();
+    return true;
+}
+
 #define MCE_ENTITIES \
     R"j("entities":{"type":"array","items":{"type":["integer","string"]},"description":"Entity ids, or names when unique"})j"
 #define MCE_AXIS R"j("axis":{"type":"string","enum":["x","y"]})j"
@@ -153,6 +176,14 @@ const ToolDef kLayoutTools[] = {
      R"j({"type":"object","properties":{)j" MCE_ENTITIES
      R"j(,"anchor":{"type":["integer","string"],"description":"The entity to copy from"},"part":{"type":"string","enum":["position","rotation","scale"]}},"required":["entities","anchor","part"]})j",
      entity_match_transform},
+    {"entity_array_duplicate",
+     "Copy the entities into a grid in one call: 'columns' x 'rows' cells whose first cell is the originals, the copy "
+     "in "
+     "column i and row j at the original's world position plus (i * dx, j * dy). Copied parents keep their copied "
+     "children. At most 4096 copies in all. Returns created and the new ids, cell by cell. One undo step.",
+     R"j({"type":"object","properties":{)j" MCE_ENTITIES
+     R"j(,"columns":{"type":"integer","minimum":1},"rows":{"type":"integer","minimum":1,"default":1},"dx":{"type":"number","default":0},"dy":{"type":"number","default":0}},"required":["entities","columns"]})j",
+     entity_array_duplicate},
 };
 
 }  // namespace

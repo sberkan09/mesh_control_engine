@@ -105,3 +105,33 @@ TEST_CASE("layout tools name a bad argument and change nothing") {
     CHECK(pos(c, a, 0) == doctest::Approx(1.0));
     CHECK(pos(c, b, 0) == doctest::Approx(4.0));
 }
+
+TEST_CASE("entity_array_duplicate copies a group into a grid as one undo step") {
+    const std::string root = layout_project("mcp_layout_array");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const int a = make(c, "LA", 1, 2);
+    const double before = c.ok("scene_info").v().get("entities").as_number();
+    auto r = c.ok("entity_array_duplicate",
+                  "{\"entities\":[" + std::to_string(a) + R"(],"columns":3,"rows":2,"dx":10,"dy":-4})");
+    CHECK(r.v().get("created").as_number() == 5);
+    REQUIRE(r.v().get("ids").size() == 5);
+    CHECK(c.ok("scene_info").v().get("entities").as_number() == before + 5);
+    const int last = static_cast<int>(r.v().get("ids").at(4).as_number());  // column 2, row 1
+    CHECK(pos(c, last, 0) == doctest::Approx(21.0));
+    CHECK(pos(c, last, 1) == doctest::Approx(-2.0));
+    CHECK(pos(c, a, 0) == doctest::Approx(1.0));
+    c.ok("scene_undo");
+    CHECK(c.ok("scene_info").v().get("entities").as_number() == before);
+
+    CHECK(c.fails("entity_array_duplicate", "{\"entities\":[" + std::to_string(a) + R"(],"columns":1})")
+              .find("at least 2") != std::string::npos);
+    CHECK(c.fails("entity_array_duplicate", "{\"entities\":[" + std::to_string(a) + R"(],"columns":5000,"dx":1})")
+              .find("columns") != std::string::npos);
+    CHECK(c.fails("entity_array_duplicate", "{\"entities\":[" + std::to_string(a) + R"(],"columns":100,"rows":100})")
+              .find("4096") != std::string::npos);
+    CHECK(c.fails("entity_array_duplicate", "{\"entities\":[" + std::to_string(a) + R"(],"columns":2,"dx":"far"})")
+              .find("dx") != std::string::npos);
+    CHECK(c.ok("scene_info").v().get("entities").as_number() == before);
+}
