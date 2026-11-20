@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <random>
 
 #include "mce/ecs/transform.h"
 #include "mce/editor/orbit_camera.h"
@@ -258,4 +259,52 @@ TEST_CASE(
     inside.distance = 10.0f;
     CHECK(inside.resolve(walls.world()));
     CHECK(inside.effective < 1.0f);  // a pivot inside an ordinary box keeps the old stuck-at-the-minimum behaviour
+}
+
+TEST_CASE("orbit camera fuzz: any drag, wheel and framing keeps the camera finite and within its limits") {
+    for (u32 seed = 1; seed <= 200; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        const auto rnd = [&](f32 range) { return (static_cast<f32>(rng() % 20001) / 10000.0f - 1.0f) * range; };
+        OrbitCamera cam;
+        cam.target = {rnd(100.0f), rnd(100.0f), rnd(100.0f)};
+        for (u32 step = 0; step < 40; ++step) {
+            CAPTURE(step);
+            const f32 range = rng() % 4 == 0 ? 1e6f : 300.0f;  // an occasional wild gesture
+            switch (rng() % 5) {
+                case 0:
+                    cam.orbit({rnd(range), rnd(range)});
+                    break;
+                case 1:
+                    cam.pan({rnd(range), rnd(range)},
+                            rhi::Extent2D{static_cast<u32>(rng() % 3 == 0 ? 0 : 1 + rng() % 2000),
+                                          static_cast<u32>(rng() % 3 == 0 ? 0 : 1 + rng() % 2000)});
+                    break;
+                case 2:
+                    cam.dolly(rnd(range));
+                    break;
+                case 3: {
+                    const f32 e = rng() % 4 == 0 ? 1e7f : 50.0f;
+                    const vec3 a{rnd(e), rnd(e), rnd(e)}, b{rnd(e), rnd(e), rnd(e)};
+                    cam.frame(aabb3{min(a, b), max(a, b)});
+                    break;
+                }
+                default:
+                    cam.unresolved();
+                    break;
+            }
+            CHECK(std::isfinite(cam.target.x));
+            CHECK(std::isfinite(cam.target.y));
+            CHECK(std::isfinite(cam.target.z));
+            CHECK(std::isfinite(cam.yaw));
+            CHECK(std::fabs(cam.pitch) <= 1.5534f);
+            CHECK(cam.distance >= cam.min_distance);
+            CHECK(cam.distance <= cam.max_distance);
+            CHECK(cam.effective <= cam.max_distance);
+            const vec3 eye = cam.eye();
+            CHECK(std::isfinite(eye.x));
+            CHECK(std::isfinite(eye.y));
+            CHECK(std::isfinite(eye.z));
+        }
+    }
 }
