@@ -91,6 +91,7 @@ struct BrakeLight3D {
     f32 strobe_hz = 6.0f;     // strobe flashes per second
     f32 strobe_left = 0.0f;   // engine-written: seconds of strobing left
     f32 prev_speed = 0.0f;    // engine-written: |speed| of the parent car last tick
+    f32 soft_scale = 1.0f;    // share of `braking` shown for the lightest touch on the brake; 1: always full
 };
 MCE_COMPONENT(BrakeLight3D, (braking, Range{0, 100}, Help{"PointLight3D intensity while the parent car brakes"}),
               (idle, Range{0, 100}, Help{"intensity otherwise; 0 switches the lamp off"}),
@@ -100,7 +101,8 @@ MCE_COMPONENT(BrakeLight3D, (braking, Range{0, 100}, Help{"PointLight3D intensit
               brake_color, reverse_color,
               (strobe_decel, Range{0, 100}, Help{"braking at least this hard (m/s^2) strobes the lamp for a moment; 0: never"}),
               (strobe_hz, Range{1, 30}, Help{"strobe flashes per second"}),
-              (strobe_left, ReadOnly, Transient), (prev_speed, ReadOnly, Transient))
+              (strobe_left, ReadOnly, Transient), (prev_speed, ReadOnly, Transient),
+              (soft_scale, Range{0, 1}, Help{"brake light level at a feather touch of the brake, as a share of `braking`; it rises to full with the pedal; 1: always full"}))
 
 struct LightFlasher3D {
     math::Color color_a{1.0f, 0.05f, 0.04f, 1.0f};

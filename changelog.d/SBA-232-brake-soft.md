@@ -1,0 +1,1 @@
+- Brake light follows the pedal, M-BRAKESOFT (SBA-232): `BrakeLight3D::soft_scale` dims the lamp for a light touch of the brake. `docs/milestones/M-BRAKESOFT.md`.

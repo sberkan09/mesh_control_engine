@@ -1022,7 +1022,7 @@ def car_visuals(model):
     ents.append({"name": "Tail lamp", "components": {
         "ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.2, 2.0)),
         "PointLight3D": {"color": [1.0, 0.04, 0.02, 1], "intensity": 0, "radius": 4.5, "enabled": 0},
-        "BrakeLight3D": {"braking": 7.0, "reverse": 3.0, "headlight_idle": 1.5, "strobe_decel": 8}}})
+        "BrakeLight3D": {"braking": 7.0, "reverse": 3.0, "headlight_idle": 1.5, "strobe_decel": 8, "soft_scale": 0.5}}})
     # Turn signals: amber lamps at the corners that blink while the car steers toward their side (TurnSignal3D, M-TURNSIGNAL; the front
     # ones are M-FRONTSIGNAL). The car drives toward -z, so the front is z -2 and the rear z +2; "side" -1 is the car's left.
     for end, ez in (("", 2.0), ("front ", -2.0)):
