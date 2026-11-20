@@ -1,0 +1,1 @@
+- Rain no longer lights a night sky, M-WEATHERNIGHT (SBA-234, fix): the weather fog colour is dimmed to at most 1.25 times the base fog. `docs/milestones/M-WEATHERNIGHT.md`.
