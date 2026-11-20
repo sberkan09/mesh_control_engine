@@ -1,6 +1,7 @@
 // Hierarchy tools (M-HIERTOOLS step 1): reparent, rename, group, ungroup and reset the transform of entities of the
 // open scene. The same commands as the editor's Hierarchy and Edit menus, each one undo step (scene_undo).
 
+#include "mce/editor/batch_rename.h"
 #include "mce/editor/group_entities.h"
 #include "mce/editor/reset_transform.h"
 #include "tool_args.h"
@@ -32,6 +33,46 @@ bool entity_rename(ToolCall& c) {
     if (!arg_entity(c, "entity", id) || !arg_string(c, "name", name, true)) return false;
     if (name.empty()) return fail(c, "argument 'name' must not be empty");
     c.out.begin_object().key("changed").boolean(scene(c).rename_entity(id, name)).end_object();
+    return true;
+}
+
+bool entity_move(ToolCall& c) {
+    editor::EntityId id = editor::kNoEntity;
+    u64 index = 0;
+    if (!arg_entity(c, "entity", id) || !arg_uint(c, "index", index, 0, 1000000, true)) return false;
+    editor::EditorScene& s = scene(c);
+    const bool changed = s.move_entity(id, static_cast<usize>(index));
+    c.out.begin_object().key("changed").boolean(changed).key("index").num_i(s.doc().index_of(id)).end_object();
+    return true;
+}
+
+bool entity_batch_rename(ToolCall& c) {
+    Array<editor::EntityId> ids;
+    StringView pattern;
+    u64 first = 1;
+    if (!arg_entities(c, ids, 1) || !arg_string(c, "pattern", pattern, true) ||
+        !arg_uint(c, "first", first, 0, 1000000, false))
+        return false;
+    if (pattern.empty()) return fail(c, "argument 'pattern' must not be empty");
+    editor::EditorScene& s = scene(c);
+    Array<editor::EntityId> ordered;  // the numbers run in document order, like the editor's Rename selection
+    for (const editor::DocEntity& e : s.doc().entities())
+        for (editor::EntityId id : ids) {
+            if (e.id != id) continue;
+            ordered.push_back(id);
+            break;
+        }
+    u64 renamed = 0;
+    s.begin_edit("Rename entities");
+    u32 n = 0;
+    for (editor::EntityId id : ordered) {
+        const editor::DocEntity* e = s.doc().find(id);
+        if (e == nullptr) continue;
+        const FixedString<64> name = editor::batch_rename_expand(pattern, e->name.view(), n++, static_cast<u32>(first));
+        if (s.rename_entity(id, name.view())) ++renamed;
+    }
+    s.end_edit();
+    c.out.begin_object().key("renamed").num_u(renamed).end_object();
     return true;
 }
 
@@ -76,6 +117,24 @@ const ToolDef kHierarchyTools[] = {
     {"entity_rename", "Rename an entity. Returns changed (false: it already had that name). One undo step.",
      R"j({"type":"object","properties":{)j" MCE_ENT R"j(,"name":{"type":"string"}},"required":["entity","name"]})j",
      entity_rename},
+    {"entity_move",
+     "Move an entity to another position in the scene's entity order (0 = first; past the end: last). The order is "
+     "what "
+     "scene_list_entities shows and the Hierarchy panel draws; parents are not changed (use entity_set_parent). "
+     "Returns "
+     "changed and the new index. One undo step.",
+     R"j({"type":"object","properties":{)j" MCE_ENT
+     R"j(,"index":{"type":"integer","minimum":0}},"required":["entity","index"]})j",
+     entity_move},
+    {"entity_batch_rename",
+     "Rename several entities by a pattern: a run of # is the entity's number, zero-padded to the run's length "
+     "(\"Torch_##\" gives Torch_01, Torch_02, ...), and * is its current name. Numbers count from 'first' (default 1) "
+     "in scene "
+     "order, not in the order listed. Names are cut to 63 characters. Returns renamed (how many changed). One undo "
+     "step.",
+     R"j({"type":"object","properties":{)j" MCE_ENTS
+     R"j(,"pattern":{"type":"string"},"first":{"type":"integer","minimum":0,"default":1}},"required":["entities","pattern"]})j",
+     entity_batch_rename},
     {"entity_group",
      "Wrap entities in a new empty \"Group\" entity under the parent of the first one; the top-level ones move under "
      "it and "

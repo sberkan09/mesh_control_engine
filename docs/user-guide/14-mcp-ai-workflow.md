@@ -111,6 +111,8 @@ each result's `content[0].text` is the tool's JSON).
 | | `entity_array_duplicate` | `entities`, `columns`, `rows?`, `dx?`, `dy?` | copies the group into a columns x rows grid at a fixed step (the first cell is the originals); returns `created` and the new ids; at most 4096 copies; one undo step |
 | | `entity_set_parent` | `entity`, `parent?` (id, name or null: the scene root) | re-parents keeping the world place (the LocalTransform is recomputed); refuses a loop; `changed` is false when nothing differs |
 | | `entity_rename` | `entity`, `name` | one undo step |
+| | `entity_move` | `entity`, `index` | moves it to another position in the scene's entity order (0 = first; past the end: last); returns `changed` and the new `index` |
+| | `entity_batch_rename` | `entities`, `pattern` (`#` run = zero-padded number, `*` = current name), `first?` (default 1) | numbers run in scene order, not list order; returns `renamed`; one undo step |
 | | `entity_group`, `entity_ungroup` | `entities` | `entity_group` wraps them in a new "Group" entity (returns `group`); `entity_ungroup` moves each one's children up to its parent and deletes it (returns `freed`) |
 | | `entity_reset_transform` | `entities` | position 0, no rotation, scale 1, relative to the parent; returns `changed` |
 | | `scene_clear` | | every entity, one undo step; keeps GUID and path |
