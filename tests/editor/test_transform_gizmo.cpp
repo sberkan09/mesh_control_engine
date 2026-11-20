@@ -5,6 +5,8 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <random>
+#include <vector>
 
 #include "mce/ecs/transform.h"
 #include "mce/editor/editor_scene.h"
@@ -149,4 +151,134 @@ TEST_CASE("selection: Shift range select in document order and the viewport marq
     hit.clear();
     entities_in_rect(s, math::aabb2{{0.0f, 5.0f}, {20.0f, 6.0f}}, hit);
     CHECK(hit.empty());
+}
+
+namespace {
+
+// A random tree of entities (some turned and scaled) and a random selection of them.
+struct Forest {
+    EditorScene s;
+    std::vector<EntityId> all, pick;
+    void build(std::mt19937& rng, bool turned) {
+        for (u32 i = 0, n = 2 + static_cast<u32>(rng() % 6); i < n; ++i) {
+            const EntityId id = s.create_entity("E");
+            LocalTransform t;
+            t.position = {static_cast<f32>(rng() % 200) / 10.0f - 10.0f, static_cast<f32>(rng() % 200) / 10.0f - 10.0f,
+                          0.25f};
+            if (turned) {
+                t.rotation = rotation_z(static_cast<f32>(rng() % 628) / 100.0f);
+                const f32 sc = 0.5f + static_cast<f32>(rng() % 30) / 10.0f;
+                t.scale = {sc, sc, 1.0f};
+            }
+            s.set(id, t);
+            all.push_back(id);
+        }
+        for (u32 i = 0, k = static_cast<u32>(rng() % 5); i < k; ++i)
+            (void)s.set_parent(all[rng() % all.size()], all[rng() % all.size()]);
+        for (EntityId id : all)
+            if (rng() % 3 != 0) pick.push_back(id);
+        if (pick.empty()) pick.push_back(all[0]);
+        s.selection().set(pick[0]);
+        for (usize i = 1; i < pick.size(); ++i) s.selection().toggle(pick[i]);
+        s.clear_undo();
+    }
+};
+
+}  // namespace
+
+TEST_CASE("gizmo fuzz: a move drag shifts every selected entity by the drag, and cancel restores them") {
+    for (u32 seed = 1; seed <= 200; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        Forest f;
+        f.build(rng, true);
+        std::vector<math::vec3> before;
+        before.reserve(f.pick.size());
+        std::vector<LocalTransform> locals;
+        locals.reserve(f.pick.size());
+        for (EntityId id : f.pick) {
+            before.push_back(f.s.world_transform(id).position);
+            locals.push_back(*f.s.get<LocalTransform>(id));
+        }
+        math::vec2 pivot;
+        REQUIRE(TransformGizmo::pivot(f.s, pivot));
+        const math::vec2 d{static_cast<f32>(rng() % 200) / 10.0f - 10.0f,
+                           static_cast<f32>(rng() % 200) / 10.0f - 10.0f};
+        TransformGizmo g;
+        f.s.begin_edit("Move");
+        REQUIRE(g.begin(f.s, GizmoPart::XY, pivot));
+        g.update(f.s, pivot + d, 0.0f);
+        for (usize i = 0; i < f.pick.size(); ++i) {
+            const math::vec3 now = f.s.world_transform(f.pick[i]).position;
+            CHECK(close(now.x, before[i].x + d.x, 1e-3f));
+            CHECK(close(now.y, before[i].y + d.y, 1e-3f));
+            CHECK(close(now.z, before[i].z, 1e-3f));
+        }
+        g.cancel(f.s);
+        g.end();
+        f.s.end_edit();
+        for (usize i = 0; i < f.pick.size(); ++i) {
+            const LocalTransform& l = *f.s.get<LocalTransform>(f.pick[i]);
+            CHECK(close(l.position.x, locals[i].position.x, 1e-3f));
+            CHECK(close(l.position.y, locals[i].position.y, 1e-3f));
+        }
+    }
+}
+
+TEST_CASE("gizmo fuzz: a rotate drag turns every selected entity about the pivot") {
+    for (u32 seed = 1; seed <= 200; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        Forest f;
+        f.build(rng, true);
+        std::vector<math::vec3> before;
+        before.reserve(f.pick.size());
+        for (EntityId id : f.pick) before.push_back(f.s.world_transform(id).position);
+        math::vec2 pivot;
+        REQUIRE(TransformGizmo::pivot(f.s, pivot));
+        const f32 a = static_cast<f32>(rng() % 628) / 100.0f - 3.14f;
+        const math::vec2 grab = pivot + math::vec2{5.0f, 0.0f};
+        TransformGizmo g;
+        g.set_mode(GizmoMode::Rotate);
+        f.s.begin_edit("Rotate");
+        REQUIRE(g.begin(f.s, GizmoPart::Ring, grab));
+        g.update(f.s, pivot + math::vec2{5.0f * std::cos(a), 5.0f * std::sin(a)}, 0.0f);
+        g.end();
+        f.s.end_edit();
+        const f32 c = std::cos(g.angle()), sn = std::sin(g.angle());
+        for (usize i = 0; i < f.pick.size(); ++i) {
+            const math::vec3 now = f.s.world_transform(f.pick[i]).position;
+            const f32 rx = before[i].x - pivot.x, ry = before[i].y - pivot.y;
+            CHECK(close(now.x, pivot.x + rx * c - ry * sn, 2e-3f));
+            CHECK(close(now.y, pivot.y + rx * sn + ry * c, 2e-3f));
+        }
+    }
+}
+
+TEST_CASE("gizmo fuzz: a uniform scale drag scales every selected entity's offset from the pivot") {
+    for (u32 seed = 1; seed <= 200; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        Forest f;
+        f.build(rng, false);
+        std::vector<math::vec3> before;
+        before.reserve(f.pick.size());
+        for (EntityId id : f.pick) before.push_back(f.s.world_transform(id).position);
+        math::vec2 pivot;
+        REQUIRE(TransformGizmo::pivot(f.s, pivot));
+        const f32 ratio = 0.5f + static_cast<f32>(rng() % 30) / 10.0f;
+        TransformGizmo g;
+        g.set_mode(GizmoMode::Scale);
+        f.s.begin_edit("Scale");
+        REQUIRE(g.begin(f.s, GizmoPart::XY, pivot + math::vec2{4.0f, 0.0f}));
+        g.update(f.s, pivot + math::vec2{4.0f * ratio, 0.0f}, 0.0f);
+        g.end();
+        f.s.end_edit();
+        const f32 k = g.factor().x;
+        for (usize i = 0; i < f.pick.size(); ++i) {
+            const math::vec3 now = f.s.world_transform(f.pick[i]).position;
+            CHECK(close(now.x, pivot.x + (before[i].x - pivot.x) * k, 2e-3f));
+            CHECK(close(now.y, pivot.y + (before[i].y - pivot.y) * k, 2e-3f));
+        }
+    }
 }
