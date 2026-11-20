@@ -417,7 +417,8 @@
     },
     "TurnSignal3D": {
      "side": -1,
-     "intensity": 5.0
+     "intensity": 5.0,
+     "linger_s": 1.2
     }
    }
   },
@@ -447,7 +448,8 @@
     },
     "TurnSignal3D": {
      "side": 1,
-     "intensity": 5.0
+     "intensity": 5.0,
+     "linger_s": 1.2
     }
    }
   },
@@ -477,7 +479,8 @@
     },
     "TurnSignal3D": {
      "side": -1,
-     "intensity": 5.0
+     "intensity": 5.0,
+     "linger_s": 1.2
     }
    }
   },
@@ -507,7 +510,8 @@
     },
     "TurnSignal3D": {
      "side": 1,
-     "intensity": 5.0
+     "intensity": 5.0,
+     "linger_s": 1.2
     }
    }
   }

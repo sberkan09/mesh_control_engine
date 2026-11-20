@@ -22,7 +22,7 @@ static_assert(sizeof(VehicleHorn3D) == 48);
 static_assert(sizeof(VehicleLights3D) == 20);
 static_assert(sizeof(BrakeLight3D) == 72);
 static_assert(sizeof(LightFlasher3D) == 48);
-static_assert(sizeof(TurnSignal3D) == 36);
+static_assert(sizeof(TurnSignal3D) == 44);
 static_assert(sizeof(VehicleHazards3D) == 8);
 
 namespace {
@@ -140,7 +140,11 @@ void kit_vehicle_extras(Frame& f) {
         const VehicleHazards3D* hz = c ? w.try_get<VehicleHazards3D>(c->parent) : nullptr;
         const bool hazard = v && hz && hz->on;
         const bool active = hazard || (v && std::fabs(v->speed) > 0.5f && steer * static_cast<f32>(ts.side) > ts.threshold);
-        if (!active) {
+        if (active) {
+            ts.linger_left = hazard ? 0.0f : ts.linger_s;  // M-SIGNALLINGER: the indicator outlasts the turn
+        } else if (ts.linger_left > 0.0f) {
+            ts.linger_left -= f.dt;
+        } else {
             ts.t = 0.0f;
             pl.enabled = 0;
             return;

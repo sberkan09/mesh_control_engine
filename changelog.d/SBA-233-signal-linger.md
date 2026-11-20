@@ -1,0 +1,1 @@
+- Indicators linger, M-SIGNALLINGER (SBA-233): `TurnSignal3D::linger_s` keeps a turn signal blinking after the steering straightens. `docs/milestones/M-SIGNALLINGER.md`.
