@@ -347,6 +347,33 @@ TEST_CASE("vehicle extras: a turn signal blinks only while the car steers toward
     CHECK(lit() == 0);
 }
 
+TEST_CASE("vehicle extras: a turn signal keeps blinking for linger_s after the steering straightens") {
+    Scene s;
+    TurnSignal3D ts;
+    ts.side = 1;
+    ts.period_s = 0.2f;
+    ts.linger_s = 0.5f;
+    PointLight3D lamp;
+    lamp.enabled = 0;
+    const Entity e = s.w.spawn_with(at(0.8f, 0.6f, 1.9f), ChildOf{s.car}, lamp, ts);
+    const auto blinks = [&](u32 ticks) {  // ticks the lamp is lit
+        u32 on = 0;
+        for (u32 i = 0; i < ticks; ++i) {
+            s.run(1);
+            on += s.w.try_get<PointLight3D>(e)->enabled;
+        }
+        return on;
+    };
+    s.w.try_get_mut<Vehicle3D>(s.car)->steer = 0.8f;
+    s.w.try_get_mut<Vehicle3D>(s.car)->speed = 5.0f;
+    CHECK(blinks(5) > 0);
+    s.w.try_get_mut<Vehicle3D>(s.car)->steer = 0.0f;  // straight again
+    CHECK(blinks(24) > 0);  // ~0.4 s: still blinking
+    s.run(30);              // well past linger_s
+    CHECK(s.w.try_get<PointLight3D>(e)->enabled == 0);
+    CHECK(blinks(10) == 0);  // and stays dark
+}
+
 TEST_CASE("vehicle extras: the Hazard action toggles both signals blinking, standing still") {
     Scene s;
     s.w.add(s.car, VehicleHazards3D{});

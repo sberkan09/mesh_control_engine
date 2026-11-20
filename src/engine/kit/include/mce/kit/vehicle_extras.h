@@ -132,10 +132,14 @@ struct TurnSignal3D {
     f32 t = 0.0f;  // engine-written: seconds since the signal started
     i8 side = 1;   // -1 left, 1 right
     u8 pad_[3] = {};
+    f32 linger_s = 0.0f;       // keeps blinking this long after the steering straightens (like a real indicator); 0: stops at once
+    f32 linger_left = 0.0f;    // engine-written: seconds of lingering left
 };
 MCE_COMPONENT(TurnSignal3D, color, (intensity, Range{0, 100}), (period_s, Range{0.1f, 5}, Help{"one blink: on for half, off for half"}),
               (threshold, Range{0, 1}, Help{"how far the car steers toward `side` before it blinks"}), (t, ReadOnly, Transient),
-              (side, Range{-1, 1}, Help{"-1 left, 1 right"}))
+              (side, Range{-1, 1}, Help{"-1 left, 1 right"}),
+              (linger_s, Range{0, 10}, Help{"seconds it keeps blinking after the steering straightens; 0: stops at once"}),
+              (linger_left, ReadOnly, Transient))
 
 // Registers the components and adds the system. Idempotent.
 void install_vehicle_extras(World& world, asset::AssetSystem* assets);

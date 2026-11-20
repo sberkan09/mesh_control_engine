@@ -1030,7 +1030,7 @@ def car_visuals(model):
             ents.append({"name": label + " " + end + "signal", "components": {
                 "ChildOf": {"parent": "$0"}, "LocalTransform": tf((0.75 * side, -0.2, ez)),
                 "PointLight3D": {"color": [1.0, 0.55, 0.05, 1], "intensity": 0, "radius": 3.0, "enabled": 0},
-                "TurnSignal3D": {"side": side, "intensity": 5.0}}})
+                "TurnSignal3D": {"side": side, "intensity": 5.0, "linger_s": 1.2}}})
     radius = lay["radius"] * s
     fields.update(track=round((lay["front"][0] + lay["cx"]) * s, 3), front_axle=round(-lay["front"][2] * s, 3),
                   rear_axle=round(-lay["back"][2] * s, 3), wheel_radius=round(radius, 3), wheel_width=round(lay["width"] * s, 3),
