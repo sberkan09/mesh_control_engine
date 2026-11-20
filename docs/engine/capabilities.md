@@ -398,6 +398,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `entity_snap` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `entity_flip` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `entity_match_transform` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_array_duplicate` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `procgen_run` | `tools_procgen.cpp` | docs/user-guide/28-procedural-levels.md |
 | `roads_info` | `tools_roads.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `roads_generate` | `tools_roads.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
