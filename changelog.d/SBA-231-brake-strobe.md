@@ -1,0 +1,1 @@
+- Brake strobe, M-BRAKESTROBE (SBA-231): `BrakeLight3D::strobe_decel` strobes the tail lamp on a hard stop. `docs/milestones/M-BRAKESTROBE.md`.

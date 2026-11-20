@@ -20,7 +20,7 @@ namespace mce::kit {
 
 static_assert(sizeof(VehicleHorn3D) == 48);
 static_assert(sizeof(VehicleLights3D) == 20);
-static_assert(sizeof(BrakeLight3D) == 52);
+static_assert(sizeof(BrakeLight3D) == 68);
 static_assert(sizeof(LightFlasher3D) == 48);
 static_assert(sizeof(TurnSignal3D) == 36);
 static_assert(sizeof(VehicleHazards3D) == 8);
@@ -30,6 +30,7 @@ namespace {
 struct VehicleExtrasInstalled {};
 
 constexpr StringId kHorn{"Horn"};
+constexpr f32 kStrobeHold = 0.8f;  // s a lamp keeps strobing after a hard stop
 constexpr StringId kLights{"Lights"};
 constexpr StringId kHazard{"Hazard"};
 
@@ -104,7 +105,16 @@ void kit_vehicle_extras(Frame& f) {
         b.lit = braking ? 1 : reversing ? 2 : 0;
         const SpotLight3D* head = c && b.headlight_idle > 0.0f ? w.try_get<SpotLight3D>(c->parent) : nullptr;
         const bool headlights = head && head->enabled && head->intensity > 0.0f;
-        const f32 level = braking ? b.braking : reversing ? b.reverse : headlights ? b.headlight_idle : b.idle;
+        if (v) {  // M-BRAKESTROBE: a hard stop strobes the lamp
+            const f32 speed = std::fabs(v->speed);
+            if (braking && b.strobe_left <= 0.0f && b.strobe_decel > 0.0f && f.dt > 0.0f && (b.prev_speed - speed) / f.dt >= b.strobe_decel)
+                b.strobe_left = kStrobeHold;
+            b.prev_speed = speed;
+        }
+        const bool strobe_off = b.strobe_left > 0.0f && braking &&
+                                (static_cast<u32>(b.strobe_left * b.strobe_hz * 2.0f) & 1u) == 0u;
+        b.strobe_left = math::max(0.0f, b.strobe_left - f.dt);
+        const f32 level = strobe_off ? 0.0f : braking ? b.braking : reversing ? b.reverse : headlights ? b.headlight_idle : b.idle;
         pl.color = reversing ? b.reverse_color : b.brake_color;
         pl.intensity = level;
         pl.enabled = level > 0.0f ? 1u : 0u;

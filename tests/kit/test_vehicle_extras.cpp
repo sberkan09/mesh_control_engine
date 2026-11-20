@@ -181,6 +181,40 @@ TEST_CASE("vehicle extras: a tail lamp lights while its car brakes and shows `id
     CHECK(light().enabled == 0);
 }
 
+TEST_CASE("vehicle extras: a hard stop strobes the tail lamp, a gentle one does not") {
+    Scene s;
+    PointLight3D lamp;
+    BrakeLight3D b;
+    b.braking = 5.0f;
+    b.strobe_decel = 8.0f;
+    const Entity tail = s.w.spawn_with(at(0, 0.6f, 1.9f), ChildOf{s.car}, lamp, b);
+    const auto light = [&]() { return *s.w.try_get<PointLight3D>(tail); };
+    const auto speed = [&](f32 v) { s.w.try_get_mut<Vehicle3D>(s.car)->speed = v; };
+    // Count the ticks the braking lamp is dark while the car slows by `decel` m/s^2 for 10 ticks.
+    const auto dark_ticks = [&](f32 decel) {
+        f32 v = 20.0f;
+        speed(v);
+        s.w.try_get_mut<Vehicle3D>(s.car)->brake = 0.8f;
+        s.run(1);
+        u32 dark = 0;
+        for (u32 i = 0; i < 10; ++i) {
+            v -= decel * kDt;
+            speed(v);
+            s.run(1);
+            if (light().enabled == 0) ++dark;
+        }
+        return dark;
+    };
+    CHECK(dark_ticks(4.0f) == 0);  // gentle: steady
+    speed(0.0f);
+    s.w.try_get_mut<Vehicle3D>(s.car)->brake = 0.0f;
+    s.run(90);
+    CHECK(dark_ticks(12.0f) > 0);  // hard: strobing
+    s.run(90);  // the strobe times out; a steady held brake is lit again
+    CHECK(light().enabled == 1);
+    CHECK(light().intensity == doctest::Approx(5.0f));
+}
+
 TEST_CASE("vehicle extras: a tail lamp shows white in reverse unless the car brakes") {
     Scene s;
     PointLight3D lamp;

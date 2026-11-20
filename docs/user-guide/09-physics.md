@@ -415,7 +415,7 @@ the car). While the car brakes (its own `brake` or `handbrake`, the player's bra
 against the way it rolls) the lamp shows `braking` as its intensity in `brake_color`; in reverse (`Vehicle3D.gear` below 0) and
 not braking it shows `reverse` in `reverse_color` (0: not used); otherwise `idle` (0 switches it off). `headlight_idle`
 replaces `idle` while the car's own `SpotLight3D` headlight is on (0: not used), so a night car shows dim rear lamps. `lit` is 1 while
-braking, 2 while reversing. Every car of `samples/09_openworld` has one.
+braking, 2 while reversing. `strobe_decel` (m/s², 0: never; 8 in `samples/09_openworld`) makes the lamp strobe at `strobe_hz` for 0.8 s when the car brakes and sheds at least that much speed per second. Every car of `samples/09_openworld` has one.
 
 ### Hit marker
 
