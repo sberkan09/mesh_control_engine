@@ -87,13 +87,20 @@ struct BrakeLight3D {
     f32 headlight_idle = 0.0f;  // intensity when not braking or reversing and the parent's headlight is on; 0: not used
     math::Color brake_color{1.0f, 0.04f, 0.02f, 1.0f};
     math::Color reverse_color{1.0f, 0.95f, 0.85f, 1.0f};
+    f32 strobe_decel = 0.0f;  // m/s^2: braking at least this hard makes the lamp strobe (emergency stop signal); 0: never
+    f32 strobe_hz = 6.0f;     // strobe flashes per second
+    f32 strobe_left = 0.0f;   // engine-written: seconds of strobing left
+    f32 prev_speed = 0.0f;    // engine-written: |speed| of the parent car last tick
 };
 MCE_COMPONENT(BrakeLight3D, (braking, Range{0, 100}, Help{"PointLight3D intensity while the parent car brakes"}),
               (idle, Range{0, 100}, Help{"intensity otherwise; 0 switches the lamp off"}),
               (reverse, Range{0, 100}, Help{"intensity while the parent car is in reverse and not braking; 0: not used"}),
               (lit, ReadOnly, Transient),
               (headlight_idle, Range{0, 100}, Help{"intensity while the parent car's headlight is on and the lamp is otherwise idle; 0: not used"}),
-              brake_color, reverse_color)
+              brake_color, reverse_color,
+              (strobe_decel, Range{0, 100}, Help{"braking at least this hard (m/s^2) strobes the lamp for a moment; 0: never"}),
+              (strobe_hz, Range{1, 30}, Help{"strobe flashes per second"}),
+              (strobe_left, ReadOnly, Transient), (prev_speed, ReadOnly, Transient))
 
 struct LightFlasher3D {
     math::Color color_a{1.0f, 0.05f, 0.04f, 1.0f};

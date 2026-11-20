@@ -58226,7 +58226,8 @@
     "BrakeLight3D": {
      "braking": 7.0,
      "reverse": 3.0,
-     "headlight_idle": 1.5
+     "headlight_idle": 1.5,
+     "strobe_decel": 8
     }
    }
   },
@@ -58785,7 +58786,8 @@
     "BrakeLight3D": {
      "braking": 7.0,
      "reverse": 3.0,
-     "headlight_idle": 1.5
+     "headlight_idle": 1.5,
+     "strobe_decel": 8
     }
    }
   },
@@ -59344,7 +59346,8 @@
     "BrakeLight3D": {
      "braking": 7.0,
      "reverse": 3.0,
-     "headlight_idle": 1.5
+     "headlight_idle": 1.5,
+     "strobe_decel": 8
     }
    }
   },
@@ -60335,7 +60338,8 @@
     "BrakeLight3D": {
      "braking": 7.0,
      "reverse": 3.0,
-     "headlight_idle": 1.5
+     "headlight_idle": 1.5,
+     "strobe_decel": 8
     }
    }
   },
@@ -60891,7 +60895,8 @@
     "BrakeLight3D": {
      "braking": 7.0,
      "reverse": 3.0,
-     "headlight_idle": 1.5
+     "headlight_idle": 1.5,
+     "strobe_decel": 8
     }
    }
   },
@@ -61447,7 +61452,8 @@
     "BrakeLight3D": {
      "braking": 7.0,
      "reverse": 3.0,
-     "headlight_idle": 1.5
+     "headlight_idle": 1.5,
+     "strobe_decel": 8
     }
    }
   },
@@ -62003,7 +62009,8 @@
     "BrakeLight3D": {
      "braking": 7.0,
      "reverse": 3.0,
-     "headlight_idle": 1.5
+     "headlight_idle": 1.5,
+     "strobe_decel": 8
     }
    }
   },
