@@ -29,6 +29,7 @@ mce_add_test(test_editor UMBRELLA
         test_scene_lint.cpp
         test_scene_migrate.cpp
         test_scene_stats.cpp
+        test_stacked_entities.cpp
         test_scene_find.cpp
         test_recent_list.cpp
         test_asset_thumb.cpp

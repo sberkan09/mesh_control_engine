@@ -1,0 +1,1 @@
+- mcp: new tool `scene_find_stacked` lists entities that are exact copies of each other on one spot, such as an array duplicate with a step of zero (M-STACKLINT).
