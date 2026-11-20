@@ -54,6 +54,9 @@ Span<const ToolDef> views_tool_table();
 // tools_layout.cpp (M-LAYOUTTOOLS 2): entity_align, entity_distribute, entity_snap, entity_flip,
 // entity_match_transform.
 Span<const ToolDef> layout_tool_table();
+// tools_hierarchy.cpp (M-HIERTOOLS 1): entity_set_parent, entity_rename, entity_group, entity_ungroup,
+// entity_reset_transform.
+Span<const ToolDef> hierarchy_tool_table();
 // tools_terrain.cpp (M-TERRAIN 6): terrain_sculpt, terrain_paint, terrain_import, terrain_generate.
 Span<const ToolDef> terrain_tool_table();
 // tools_roads.cpp (M-OPENWORLD B1): roads_info, roads_generate.

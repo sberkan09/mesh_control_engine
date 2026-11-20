@@ -392,6 +392,11 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `bt_trace` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `debug_lines` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
 | `debug_view` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
+| `entity_set_parent` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_rename` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_group` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_ungroup` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `entity_reset_transform` | `tools_hierarchy.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_import` | `tools_import.cpp` | docs/user-guide/05-assets.md |
 | `entity_align` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `entity_distribute` | `tools_layout.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

@@ -31,7 +31,8 @@ int make(Client& c, const char* name, double x, double y) {
 
 double pos(Client& c, int id, u32 axis) {
     auto e = c.ok("scene_get_entity", "{\"entity\":" + std::to_string(id) + "}");
-    return e.v().get("components").get("LocalTransform").get("position").at(axis).as_number();
+    const cook::JsonValue p = e.v().get("components").get("LocalTransform").get("position");
+    return p.valid() ? p.at(axis).as_number() : 0.0;  // a default position is left out of the entity's JSON
 }
 
 }  // namespace
@@ -134,4 +135,46 @@ TEST_CASE("entity_array_duplicate copies a group into a grid as one undo step") 
     CHECK(c.fails("entity_array_duplicate", "{\"entities\":[" + std::to_string(a) + R"(],"columns":2,"dx":"far"})")
               .find("dx") != std::string::npos);
     CHECK(c.ok("scene_info").v().get("entities").as_number() == before);
+}
+
+// M-HIERTOOLS 1: entity_set_parent, entity_rename, entity_group, entity_ungroup, entity_reset_transform.
+TEST_CASE("hierarchy tools: reparent keeps the world place, group and ungroup undo, reset and rename work") {
+    const std::string root = layout_project("mcp_hier");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const int p = make(c, "HP", 10, 0), a = make(c, "HA", 3, 4), b = make(c, "HB", 5, 6);
+    auto id_s = [](int v) { return std::to_string(v); };
+
+    CHECK(c.ok("entity_set_parent", "{\"entity\":" + id_s(a) + ",\"parent\":" + id_s(p) + "}")
+              .v()
+              .get("changed")
+              .as_bool());
+    CHECK(pos(c, a, 0) == doctest::Approx(-7.0));  // local: the world x of 3 under a parent at 10
+    CHECK_FALSE(
+        c.ok("entity_set_parent", "{\"entity\":" + id_s(a) + ",\"parent\":\"HP\"}").v().get("changed").as_bool());
+    CHECK(c.fails("entity_set_parent", "{\"entity\":" + id_s(p) + ",\"parent\":" + id_s(a) + "}")
+              .find("itself or of one of its own") != std::string::npos);
+    CHECK(c.ok("entity_set_parent", "{\"entity\":" + id_s(a) + "}").v().get("changed").as_bool());  // back to the root
+    CHECK(pos(c, a, 0) == doctest::Approx(3.0));
+
+    CHECK(c.ok("entity_rename", "{\"entity\":" + id_s(b) + R"(,"name":"Renamed"})").v().get("changed").as_bool());
+    CHECK(str(c.ok("scene_get_entity", R"({"entity":"Renamed"})").v().get("name")) == "Renamed");
+    CHECK(c.fails("entity_rename", "{\"entity\":" + id_s(b) + R"(,"name":""})").find("name") != std::string::npos);
+
+    const double before = c.ok("scene_info").v().get("entities").as_number();
+    auto g = c.ok("entity_group", "{\"entities\":[" + id_s(a) + "," + id_s(b) + "]}");
+    const int group = static_cast<int>(g.v().get("group").as_number());
+    CHECK(c.ok("scene_info").v().get("entities").as_number() == before + 1);
+    auto un = c.ok("entity_ungroup", "{\"entities\":[" + id_s(group) + "]}");
+    CHECK(un.v().get("freed").size() == 2);
+    CHECK(c.ok("scene_info").v().get("entities").as_number() == before);
+    CHECK(pos(c, a, 0) == doctest::Approx(3.0));
+
+    CHECK(c.ok("entity_reset_transform", "{\"entities\":[" + id_s(a) + "," + id_s(b) + "]}")
+              .v()
+              .get("changed")
+              .as_number() == 2);
+    CHECK(pos(c, a, 0) == doctest::Approx(0.0));
+    CHECK(c.fails("entity_group", R"({"entities":[]})").find("entities") != std::string::npos);
 }

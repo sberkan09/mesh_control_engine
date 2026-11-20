@@ -1,0 +1,1 @@
+- mcp: new tools `entity_set_parent`, `entity_rename`, `entity_group`, `entity_ungroup` and `entity_reset_transform` build and reshape a hierarchy headless (M-HIERTOOLS 1).
