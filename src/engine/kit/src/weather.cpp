@@ -155,7 +155,11 @@ void kind_target(const KindEnv& k, const f32* b, f32* t) {
         const f32 l = luma(b + base);
         for (u32 i = 0; i < 3; ++i) t[base + i] = lerpf(b[base + i], l, k.amb_desat) * k.amb_mul * k.amb_tint[i];
     }
-    for (u32 i = 0; i < 3; ++i) t[kFogC + i] = lerpf(b[kFogC + i], k.fog_to[i], k.fog_mix);
+    // M-WEATHERNIGHT: the kind's fog colour is a daylight grey; at night (a dark base fog) it is dimmed so that rain does not
+    // light the sky up. It is never brighter than 1.25 times the base fog, so a day keeps the colour it always had.
+    const f32 to_luma = luma(k.fog_to), base_luma = luma(b + kFogC);
+    const f32 fog_scale = to_luma > 0.0f ? std::min(1.0f, 1.25f * base_luma / to_luma) : 1.0f;
+    for (u32 i = 0; i < 3; ++i) t[kFogC + i] = lerpf(b[kFogC + i], k.fog_to[i] * fog_scale, k.fog_mix);
 }
 
 bool same_bits(f32 a, f32 b) { return std::bit_cast<u32>(a) == std::bit_cast<u32>(b); }
