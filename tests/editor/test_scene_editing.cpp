@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -804,4 +805,117 @@ TEST_CASE("UC-C rehearsal: new scene -> author -> save -> cook --pack -> the pla
     platform::Process none;
     const StringView missing[] = {"/nonexistent/mce_player"};
     CHECK_FALSE(none.start(Span<const StringView>(missing, 1)));
+}
+
+// Found by the fuzz below: the pick key was signed, so a sprite on a layer below zero outranked one on layer zero or
+// above.
+TEST_CASE("pick_entity picks the higher layer over a lower one, negative layers included") {
+    EditorScene s;
+    const auto sprite = [&](const char* name, i16 layer) {
+        const EntityId id = s.create_entity(name);
+        s.add_component(id, refl::type_of<kit::Sprite>());
+        kit::Sprite sp = *s.get<kit::Sprite>(id);
+        sp.layer = layer;
+        s.set(id, sp);
+        return id;
+    };
+    const EntityId back = sprite("Back", -1);
+    const EntityId mid = sprite("Mid", 0);
+    const EntityId front = sprite("Front", 2);
+    CHECK(pick_entity(s, {0.0f, 0.0f}) == front);
+    s.destroy_entity(front);
+    CHECK(pick_entity(s, {0.0f, 0.0f}) == mid);
+    s.destroy_entity(mid);
+    CHECK(pick_entity(s, {0.0f, 0.0f}) == back);
+}
+
+TEST_CASE("viewport2d fuzz: picking, marquee and camera agree with a brute-force model") {
+    const auto close = [](f32 a, f32 b, f32 eps) { return std::fabs(a - b) <= eps; };
+    for (u32 seed = 1; seed <= 200; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        const auto rnd = [&](f32 range) { return (static_cast<f32>(rng() % 20001) / 10000.0f - 1.0f) * range; };
+        EditorScene s;
+        std::vector<EntityId> all;
+        for (u32 i = 0, n = 1 + static_cast<u32>(rng() % 10); i < n; ++i) {
+            const EntityId id = s.create_entity("E");
+            LocalTransform t;
+            t.position = {rnd(6.0f), rnd(6.0f), 0.0f};
+            t.rotation = rotation_z(rnd(3.0f));
+            t.scale = {0.5f + static_cast<f32>(rng() % 20) / 10.0f, 0.5f + static_cast<f32>(rng() % 20) / 10.0f, 1.0f};
+            s.set(id, t);
+            if (rng() % 2 == 0) {
+                s.add_component(id, refl::type_of<kit::Sprite>());
+                kit::Sprite sp = *s.get<kit::Sprite>(id);
+                sp.layer = static_cast<i16>(static_cast<i32>(rng() % 7) - 3);
+                sp.order = static_cast<i32>(rng() % 5) - 2;
+                sp.size = {0.5f + static_cast<f32>(rng() % 30) / 10.0f, 0.5f + static_cast<f32>(rng() % 30) / 10.0f};
+                s.set(id, sp);
+            }
+            all.push_back(id);
+        }
+        // Picking: the pick contains the point, and no containing entity is drawn above it.
+        for (u32 probe = 0; probe < 12; ++probe) {
+            const math::vec2 p{rnd(8.0f), rnd(8.0f)};
+            const EntityId got = pick_entity(s, p);
+            EntityId best = kNoEntity;
+            i32 best_layer = 0, best_order = 0;
+            for (EntityId id : all) {
+                math::vec2 q[4];
+                if (!entity_quad(s, id, q) || !point_in_quad(q, p)) continue;
+                const kit::Sprite* sp = s.get<kit::Sprite>(id);
+                const i32 layer = sp ? sp->layer : 0, order = sp ? sp->order : 0;
+                if (best == kNoEntity || layer > best_layer || (layer == best_layer && order >= best_order)) {
+                    best = id;
+                    best_layer = layer;
+                    best_order = order;
+                }
+            }
+            CHECK(got == best);
+        }
+        // Marquee: the same set as the brute-force overlap test, in document order.
+        const math::vec2 a{rnd(8.0f), rnd(8.0f)}, b{rnd(8.0f), rnd(8.0f)};
+        const math::aabb2 rect{math::min(a, b), math::max(a, b)};
+        Array<EntityId> in_rect;
+        entities_in_rect(s, rect, in_rect);
+        usize k = 0;
+        for (EntityId id : all) {
+            math::vec2 q[4];
+            REQUIRE(entity_quad(s, id, q));
+            math::aabb2 box{q[0], q[0]};
+            for (const math::vec2& v : q) {
+                box.min = math::min(box.min, v);
+                box.max = math::max(box.max, v);
+            }
+            if (!box.overlaps(rect)) continue;
+            REQUIRE(k < in_rect.size());
+            CHECK(in_rect[k] == id);
+            ++k;
+        }
+        CHECK(k == in_rect.size());
+        // The camera: pixels and world round-trip, a zoom keeps the point under the cursor fixed and in range.
+        const rhi::Extent2D size{static_cast<u32>(100 + rng() % 1900), static_cast<u32>(100 + rng() % 1000)};
+        EditorCamera2D cam;
+        cam.center = {rnd(10.0f), rnd(10.0f)};
+        cam.zoom = 0.1f + static_cast<f32>(rng() % 100) / 10.0f;
+        const math::vec2 px{rnd(500.0f) + 500.0f, rnd(300.0f) + 300.0f};
+        const math::vec2 back = cam.world_to_screen(cam.screen_to_world(px, size), size);
+        CHECK(close(back.x, px.x, 1e-2f));
+        CHECK(close(back.y, px.y, 1e-2f));
+        const math::vec2 under = cam.screen_to_world(px, size);
+        cam.zoom_at(px, size, 0.01f + static_cast<f32>(rng() % 400) / 100.0f);
+        CHECK(cam.zoom >= 1.0f / 64.0f - 1e-6f);
+        CHECK(cam.zoom <= 64.0f + 1e-3f);
+        const math::vec2 after = cam.screen_to_world(px, size);
+        CHECK(close(after.x, under.x, 1e-2f));
+        CHECK(close(after.y, under.y, 1e-2f));
+        // Framing a box puts all of it inside the viewport.
+        const math::aabb2 box{math::min(a, b), math::max(a, b)};
+        cam.frame(box, size);
+        const math::vec2 lo = cam.world_to_screen(box.min, size), hi = cam.world_to_screen(box.max, size);
+        CHECK(lo.x >= -1.0f);
+        CHECK(hi.x <= static_cast<f32>(size.width) + 1.0f);
+        CHECK(hi.y >= -1.0f);
+        CHECK(lo.y <= static_cast<f32>(size.height) + 1.0f);
+    }
 }

@@ -125,7 +125,7 @@ void entities_in_rect(const EditorScene& scene, const aabb2& rect, Array<EntityI
 
 EntityId pick_entity(const EditorScene& scene, vec2 world) {
     EntityId best = kNoEntity;
-    i64 best_key = 0;
+    u64 best_key = 0;
     const Span<const DocEntity> ents = scene.doc().entities();
     for (usize i = 0; i < ents.size(); ++i) {
         vec2 q[4];
@@ -138,9 +138,11 @@ EntityId pick_entity(const EditorScene& scene, vec2 world) {
             layer = l->layer;
             order = l->order;
         }
-        // layer (16 bits) | order (24 bits, clamped like the sort key) | file index (24 bits)
+        // layer (16 bits) | order (24 bits, clamped like the sort key) | file index (24 bits). Unsigned: with 16 layer
+        // bits the top bit is used, and a signed key made layers below zero outrank the others.
         order = clamp<i64>(order, -(1 << 23), (1 << 23) - 1);
-        const i64 key = ((layer + 32768) << 48) | ((order + (1 << 23)) << 24) | static_cast<i64>(i & 0xFFFFFF);
+        const u64 key = (static_cast<u64>(layer + 32768) << 48) | (static_cast<u64>(order + (1 << 23)) << 24) |
+                        static_cast<u64>(i & 0xFFFFFF);
         if (best == kNoEntity || key > best_key) {
             best = ents[i].id;
             best_key = key;
