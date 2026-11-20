@@ -1,0 +1,1 @@
+- editor: clicking in the 2D viewport now picks the top-most sprite when layers go below zero; before, a sprite on a negative layer was picked over one on layer 0 or above (found by a new fuzz, M-LASTFUZZ).
