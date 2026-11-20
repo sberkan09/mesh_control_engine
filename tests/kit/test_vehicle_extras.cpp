@@ -301,3 +301,28 @@ TEST_CASE("vehicle extras: the Hazard action toggles both signals blinking, stan
     CHECK(lit(le) == 0);
     CHECK(lit(re) == 0);
 }
+
+TEST_CASE("vehicle extras: a hard enough crash switches the hazards on by itself") {
+    Scene s;
+    s.w.add(s.car, VehicleHazards3D{{}, {}, 0.0f});
+    const auto on = [&]() { return s.w.try_get<VehicleHazards3D>(s.car)->on; };
+    const auto hit = [&](Entity other, f32 speed) {
+        ContactBegin3D c;
+        c.a = other;
+        c.b = s.car;
+        c.approach_speed = speed;
+        EventAccess(s.w).push(c);
+        s.run(2);
+    };
+    const Entity wall = s.w.spawn_with(at(5, 0, 0));
+    hit(wall, 20.0f);
+    CHECK(on() == 0);  // crash_speed 0: never
+    s.w.try_get_mut<VehicleHazards3D>(s.car)->crash_speed = 8.0f;
+    hit(wall, 3.0f);
+    CHECK(on() == 0);  // a bump
+    hit(s.rider, 20.0f);
+    hit(wall, 20.0f);
+    CHECK(on() == 1);  // a crash
+    s.run(1, "Hazard");
+    CHECK(on() == 0);  // the driver can still switch them off
+}

@@ -1089,7 +1089,7 @@ def car_entities(model, traffic):
         # The driver's horn (G, stick press) and headlights (L, D-pad right): kit_vehicle_extras.
         root["VehicleHorn3D"] = {"clip": "guid:" + audio_guid("horn"), "gain_db": -4, "attenuation_id": 1}
         root["VehicleLights3D"] = {}
-        root["VehicleHazards3D"] = {}
+        root["VehicleHazards3D"] = {"crash_speed": 8}
     # The model's front faces +z, the car drives toward -z; the body and the four wheels are separate models (M-WHEELSPIN).
     visuals, fields = car_visuals(model)
     root["Vehicle3D"].update(fields)

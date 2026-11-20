@@ -21,7 +21,8 @@
 //                    siren's `min_level`) and is dark otherwise.
 //
 //   VehicleHazards3D on a car: the Hazard action (the driver) toggles `on`; the car's TurnSignal3D lamps then blink together (both
-//                    sides, standing or rolling) until it is toggled off.
+//                    sides, standing or rolling) until it is toggled off. With `crash_speed` above 0 a collision at least that
+//                    hard (ContactBegin3D) switches it on by itself.
 //
 //   TurnSignal3D     on a child lamp entity of a car (a ChildOf the car, with a PointLight3D): while the car steers toward `side`
 //                    (-1 left, 1 right) by more than `threshold` (-1..1; its own `steer`, or the player's Move.x) and rolls faster
@@ -106,8 +107,10 @@ MCE_COMPONENT(LightFlasher3D, color_a, color_b, (intensity, Range{0, 100}), (per
 struct VehicleHazards3D {
     u8 on = 0;
     u8 pad_[3] = {};
+    f32 crash_speed = 0.0f;  // m/s: a hit at least this hard switches the hazards on by itself; 0: never
 };
-MCE_COMPONENT(VehicleHazards3D, (on, Save, Range{0, 1}, Help{"1: the hazard lights blink (the Hazard action toggles it for the driver)"}))
+MCE_COMPONENT(VehicleHazards3D, (on, Save, Range{0, 1}, Help{"1: the hazard lights blink (the Hazard action toggles it for the driver)"}),
+              (crash_speed, Range{0, 100}, Help{"m/s: a collision this hard (ContactBegin3D approach speed) turns the hazards on; 0: never"}))
 
 struct TurnSignal3D {
     math::Color color{1.0f, 0.55f, 0.05f, 1.0f};
