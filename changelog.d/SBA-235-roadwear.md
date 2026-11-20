@@ -1,0 +1,1 @@
+- Worn asphalt texture, M-ROADWEAR (SBA-235, content): lighter weathered road with patches and sealed cracks in the open-world sample. `docs/milestones/M-ROADWEAR.md`.

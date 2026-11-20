@@ -50,9 +50,17 @@ def asphalt():
     rng = np.random.default_rng(31)
     coarse, mid, fine = fractal(rng, 1.6), fractal(rng, 1.1), fractal(rng, 0.2)
     grains = (fine > 0.93) * 0.18 - (fine < 0.05) * 0.06      # lighter stones, a few dark pits
-    v = 0.17 + 0.07 * (coarse - 0.5) + 0.05 * (mid - 0.5) + grains
-    cracks = np.abs(fractal(rng, 2.2) - 0.5) < 0.0025
-    v = np.where(cracks, v * 0.78, v)
+    # Worn road: lighter weathered surface, large sun-bleached and oil-dark patches, patched
+    # (resurfaced) blotches with a hard edge, and sealed cracks that read darker.
+    wear, patch_f = fractal(rng, 3.0), fractal(rng, 2.0)
+    v = 0.26 + 0.07 * (coarse - 0.5) + 0.05 * (mid - 0.5) + grains
+    v = v * (1.0 + 0.35 * (wear - 0.5))
+    patched = patch_f > 0.62
+    v = np.where(patched, v * 0.80, v)
+    edge = np.abs(patch_f - 0.62) < 0.006
+    v = np.where(edge, v * 0.65, v)
+    cracks = np.abs(fractal(rng, 2.2) - 0.5) < 0.0035
+    v = np.where(cracks, v * 0.62, v)
     color = np.stack([v * 1.00, v * 1.01, v * 1.05], -1)
     return color, normal_map(0.6 * mid + 0.4 * fine - 0.5 * cracks, 2.5)
 
