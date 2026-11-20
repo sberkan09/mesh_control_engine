@@ -1,0 +1,1 @@
+- editor: fuzz tests for the transform gizmo's move, rotate and scale drags over random hierarchies (M-GIZMOFUZZ); no defect found.
