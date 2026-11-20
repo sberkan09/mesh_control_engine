@@ -1088,7 +1088,7 @@ def car_entities(model, traffic):
         root["VehicleSeat3D"]["transition"] = 0.35   # the rider glides in and out instead of snapping (M-SEATMOVE)
         # The driver's horn (G, stick press) and headlights (L, D-pad right): kit_vehicle_extras.
         root["VehicleHorn3D"] = {"clip": "guid:" + audio_guid("horn"), "gain_db": -4, "attenuation_id": 1}
-        root["VehicleLights3D"] = {}
+        root["VehicleLights3D"] = {"flash_s": 0.25}
         root["VehicleHazards3D"] = {"crash_speed": 8}
     # The model's front faces +z, the car drives toward -z; the body and the four wheels are separate models (M-WHEELSPIN).
     visuals, fields = car_visuals(model)
