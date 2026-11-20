@@ -92,6 +92,22 @@ TEST_CASE("weather_env: rain at full intensity equals the formula, half intensit
     CHECK(half.ambient_sky.y == doctest::Approx((base.ambient_sky.y + full.ambient_sky.y) * 0.5f));
 }
 
+TEST_CASE("weather_env: rain at night does not light the fog up (M-WEATHERNIGHT)") {
+    Wev x(WeatherKind::Rain);
+    x.env().fog_color = {0.02f, 0.02f, 0.04f};  // a night's fog
+    const f32 night = luma(x.env().fog_color);
+    x.run(1800);
+    REQUIRE(x.wx().intensity == 1.0f);
+    const f32 rainy = luma(x.env().fog_color);
+    CHECK(rainy < 1.25f * night + 1e-4f);  // never brighter than 1.25 times the base (the old rain target was a 0.5 grey)
+    CHECK(rainy > 0.0f);
+    // A day keeps the colour it had: the default fog is bright enough that the daylight grey is not dimmed.
+    Wev d(WeatherKind::Rain);
+    const Environment3D base = d.env();
+    d.run(1800);
+    CHECK(d.env().fog_color.x == doctest::Approx(base.fog_color.x + (0.50f - base.fog_color.x) * 0.6f));
+}
+
 TEST_CASE("weather_env: with a DayCycle at noon the weather stacks on the cycle's values") {
     Wev ref(WeatherKind::Clear, false, true);
     ref.run(1);
