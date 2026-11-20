@@ -20,7 +20,7 @@ namespace mce::kit {
 
 static_assert(sizeof(VehicleHorn3D) == 48);
 static_assert(sizeof(VehicleLights3D) == 20);
-static_assert(sizeof(BrakeLight3D) == 68);
+static_assert(sizeof(BrakeLight3D) == 72);
 static_assert(sizeof(LightFlasher3D) == 48);
 static_assert(sizeof(TurnSignal3D) == 36);
 static_assert(sizeof(VehicleHazards3D) == 8);
@@ -42,18 +42,21 @@ bool player_drives(World& w, Entity car) {
     return r && r->use_input == 1 && r->seated == 1 && r->vehicle == car;
 }
 
-// True while the car brakes: the same inputs kit3d_vehicles feeds the wheels (its own brake and handbrake, the player's brake
-// trigger and handbrake key, the throttle against the way it rolls).
-bool car_braking(const Vehicle3D& v, const input::InputState* in) {
+// How hard the car brakes, 0..1: the same inputs kit3d_vehicles feeds the wheels (its own brake and handbrake, the player's
+// brake trigger and handbrake key, the throttle against the way it rolls counts as full).
+f32 car_brake_pressure(const Vehicle3D& v, const input::InputState* in) {
     f32 throttle = v.throttle, brake = v.brake, handbrake = v.handbrake;
     if (v.use_input && in) {
         throttle = in->move.y;
         brake = math::max(brake, in->trigger_l);
         if (in->jump_held) handbrake = 1.0f;
     }
-    if (throttle * v.speed < 0.0f && std::fabs(v.speed) > 1.0f) return true;
-    return brake > 0.05f || handbrake > 0.05f;
+    if (throttle * v.speed < 0.0f && std::fabs(v.speed) > 1.0f) return 1.0f;
+    return math::clamp(math::max(brake, handbrake), 0.0f, 1.0f);
 }
+
+// True while the car brakes.
+bool car_braking(const Vehicle3D& v, const input::InputState* in) { return car_brake_pressure(v, in) > 0.05f; }
 
 void kit_vehicle_extras(Frame& f) {
     World& w = f.world();
@@ -114,7 +117,9 @@ void kit_vehicle_extras(Frame& f) {
         const bool strobe_off = b.strobe_left > 0.0f && braking &&
                                 (static_cast<u32>(b.strobe_left * b.strobe_hz * 2.0f) & 1u) == 0u;
         b.strobe_left = math::max(0.0f, b.strobe_left - f.dt);
-        const f32 level = strobe_off ? 0.0f : braking ? b.braking : reversing ? b.reverse : headlights ? b.headlight_idle : b.idle;
+        // M-BRAKESOFT: a light touch on the pedal glows dimmer than a full press
+        const f32 braking_level = braking ? b.braking * (b.soft_scale + (1.0f - b.soft_scale) * car_brake_pressure(*v, in)) : 0.0f;
+        const f32 level = strobe_off ? 0.0f : braking ? braking_level : reversing ? b.reverse : headlights ? b.headlight_idle : b.idle;
         pl.color = reversing ? b.reverse_color : b.brake_color;
         pl.intensity = level;
         pl.enabled = level > 0.0f ? 1u : 0u;

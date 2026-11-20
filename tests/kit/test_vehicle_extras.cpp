@@ -215,6 +215,25 @@ TEST_CASE("vehicle extras: a hard stop strobes the tail lamp, a gentle one does 
     CHECK(light().intensity == doctest::Approx(5.0f));
 }
 
+TEST_CASE("vehicle extras: a light touch on the brake glows dimmer than a full press") {
+    Scene s;
+    PointLight3D lamp;
+    BrakeLight3D b;
+    b.braking = 5.0f;
+    b.soft_scale = 0.4f;
+    const Entity tail = s.w.spawn_with(at(0, 0.6f, 1.9f), ChildOf{s.car}, lamp, b);
+    const auto level = [&](f32 brake) {
+        s.w.try_get_mut<Vehicle3D>(s.car)->brake = brake;
+        s.run(1);
+        return s.w.try_get<PointLight3D>(tail)->intensity;
+    };
+    CHECK(level(0.5f) == doctest::Approx(5.0f * (0.4f + 0.6f * 0.5f)));
+    CHECK(level(1.0f) == doctest::Approx(5.0f));
+    CHECK(level(0.1f) == doctest::Approx(5.0f * (0.4f + 0.6f * 0.1f)));
+    s.w.try_get_mut<BrakeLight3D>(tail)->soft_scale = 1.0f;  // the default: always full
+    CHECK(level(0.1f) == doctest::Approx(5.0f));
+}
+
 TEST_CASE("vehicle extras: a tail lamp shows white in reverse unless the car brakes") {
     Scene s;
     PointLight3D lamp;

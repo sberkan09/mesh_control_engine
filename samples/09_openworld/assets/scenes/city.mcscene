@@ -58227,7 +58227,8 @@
      "braking": 7.0,
      "reverse": 3.0,
      "headlight_idle": 1.5,
-     "strobe_decel": 8
+     "strobe_decel": 8,
+     "soft_scale": 0.5
     }
    }
   },
@@ -58787,7 +58788,8 @@
      "braking": 7.0,
      "reverse": 3.0,
      "headlight_idle": 1.5,
-     "strobe_decel": 8
+     "strobe_decel": 8,
+     "soft_scale": 0.5
     }
    }
   },
@@ -59347,7 +59349,8 @@
      "braking": 7.0,
      "reverse": 3.0,
      "headlight_idle": 1.5,
-     "strobe_decel": 8
+     "strobe_decel": 8,
+     "soft_scale": 0.5
     }
    }
   },
@@ -60339,7 +60342,8 @@
      "braking": 7.0,
      "reverse": 3.0,
      "headlight_idle": 1.5,
-     "strobe_decel": 8
+     "strobe_decel": 8,
+     "soft_scale": 0.5
     }
    }
   },
@@ -60896,7 +60900,8 @@
      "braking": 7.0,
      "reverse": 3.0,
      "headlight_idle": 1.5,
-     "strobe_decel": 8
+     "strobe_decel": 8,
+     "soft_scale": 0.5
     }
    }
   },
@@ -61453,7 +61458,8 @@
      "braking": 7.0,
      "reverse": 3.0,
      "headlight_idle": 1.5,
-     "strobe_decel": 8
+     "strobe_decel": 8,
+     "soft_scale": 0.5
     }
    }
   },
@@ -62010,7 +62016,8 @@
      "braking": 7.0,
      "reverse": 3.0,
      "headlight_idle": 1.5,
-     "strobe_decel": 8
+     "strobe_decel": 8,
+     "soft_scale": 0.5
     }
    }
   },
