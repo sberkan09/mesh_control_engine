@@ -86,8 +86,17 @@ def grass():
     rng = np.random.default_rng(4)
     patch, blades = fractal(rng, 1.8), fractal(rng, 0.5)
     streak = np.roll(blades, 1, 0) * 0.5 + blades * 0.5
-    g = 0.22 + 0.14 * (patch - 0.5) + 0.12 * (streak - 0.5)
+    # Lawn, not carpet: sun-dried yellow patches and bare worn spots break up the flat green, with
+    # a lighter blade tip variation.
+    dry, bare = fractal(rng, 2.6), fractal(rng, 1.3)
+    g = 0.27 + 0.16 * (patch - 0.5) + 0.14 * (streak - 0.5)
+    dryness = np.clip((dry - 0.52) * 4.0, 0.0, 1.0)
     color = np.stack([0.60 * g + 0.04, g + 0.07, 0.28 * g + 0.01], -1)
+    dried = np.stack([g * 0.95 + 0.10, g * 0.85 + 0.07, g * 0.30 + 0.01], -1)
+    color = color * (1 - dryness[..., None]) + dried * dryness[..., None]
+    soil = np.stack([g * 0.9 + 0.08, g * 0.7 + 0.05, g * 0.45 + 0.03], -1)
+    worn = np.clip((bare - 0.66) * 6.0, 0.0, 1.0)
+    color = color * (1 - worn[..., None]) + soil * worn[..., None]
     return color, normal_map(0.5 * streak + 0.5 * patch, 1.6)
 
 

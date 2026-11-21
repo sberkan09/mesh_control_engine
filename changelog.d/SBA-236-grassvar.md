@@ -1,0 +1,1 @@
+- Lawn variation, M-GRASSVAR (SBA-236, content): dry patches and worn spots on the open-world grass texture. `docs/milestones/M-GRASSVAR.md`.
