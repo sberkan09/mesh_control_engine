@@ -1,0 +1,1 @@
+- editor: Edit > Radial duplicate... copies the selection around a centre point as a ring or an arc (M-RADIAL).

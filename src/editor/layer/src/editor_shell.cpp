@@ -21,6 +21,7 @@
 #include "mce/editor/jitter_entities.h"
 #include "mce/editor/match_transform.h"
 #include "mce/editor/quick_open.h"
+#include "mce/editor/radial_duplicate.h"
 #include "mce/editor/recent_list.h"
 #include "mce/editor/reset_transform.h"
 #include "mce/editor/select_all.h"
@@ -66,6 +67,8 @@ struct EditorShell::Impl {
     f32 array_dx = 1.0f, array_dy = 1.0f;
     // Edit > Randomize (M-SCATTER 3): the ranges and the seed of the variation.
     JitterParams jitter{0.5f, 0.5f, 15.0f, 0.9f, 1.1f, 1};
+    // Edit > Radial duplicate (M-RADIAL 3): the ring's size, centre and span.
+    RadialParams radial;
 };
 
 namespace {
@@ -123,6 +126,13 @@ void jitter_selection(EditorScene& scene, const JitterParams& p) {
     Array<EntityId> ids;  // a copy: the edit below changes the scene
     for (EntityId id : scene.selection().items()) ids.push_back(id);
     jitter_entities(scene, Span<const EntityId>(ids.data(), ids.size()), p);
+}
+
+// Edit > Radial duplicate: copies of the selection around the centre in `p`.
+void radial_selection(EditorScene& scene, const RadialParams& p) {
+    Array<EntityId> ids;  // a copy: the edit below changes the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    radial_duplicate(scene, Span<const EntityId>(ids.data(), ids.size()), p);
 }
 
 // Edit > Match to anchor: `part` of the first selected entity goes onto the rest of the selection.
@@ -930,7 +940,8 @@ void EditorShell::draw_popups() {
                                            "Quick Open",
                                            "Rename Selection",
                                            "Array Duplicate",
-                                           "Randomize"};
+                                           "Randomize",
+                                           "Radial Duplicate"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
         popup_opened_ = true;
@@ -1143,6 +1154,33 @@ void EditorShell::draw_popups() {
         ImGui::BeginDisabled(!jitter_params_valid(j));
         if (ImGui::Button("Apply")) {
             jitter_selection(scene(), j);
+            close();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
+        ImGui::EndPopup();
+    }
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Radial Duplicate", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        RadialParams& r = impl_->radial;
+        ImGui::TextUnformatted("Copies the selection around a centre point");
+        const f32 w = ImGui::GetFontSize() * 6.0f;
+        i32 count = static_cast<i32>(r.count);
+        ImGui::SetNextItemWidth(w);
+        if (ImGui::InputInt("Groups in all", &count))
+            r.count = static_cast<u32>(std::clamp<i32>(count, 2, static_cast<i32>(kMaxRadialCopies) + 1));
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Centre X", &r.center_x, 0.05f, -1000000.0f, 1000000.0f, "%.2f m");
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Centre Y", &r.center_y, 0.05f, -1000000.0f, 1000000.0f, "%.2f m");
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Span", &r.total_degrees, 0.5f, 1.0f, 3600.0f, "%.1f deg");
+        ImGui::Checkbox("Turn the copies", &r.turn);
+        ImGui::BeginDisabled(!radial_params_valid(r));
+        if (ImGui::Button("Apply")) {
+            radial_selection(scene(), r);
             close();
         }
         ImGui::EndDisabled();
@@ -1369,6 +1407,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Duplicate right", nullptr, false, sel)) duplicate_stepped(scene(), view_.snap_step, 0.0f);
         if (ImGui::MenuItem("Duplicate up", nullptr, false, sel)) duplicate_stepped(scene(), 0.0f, view_.snap_step);
         if (ImGui::MenuItem("Array duplicate...", nullptr, false, sel)) popup_ = Popup::ArrayDuplicate;
+        if (ImGui::MenuItem("Radial duplicate...", nullptr, false, sel)) popup_ = Popup::RadialDuplicate;
         if (ImGui::MenuItem("Randomize...", nullptr, false, sel)) popup_ = Popup::Randomize;
         if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
         if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G", false, sel)) ungroup_selection(scene());
