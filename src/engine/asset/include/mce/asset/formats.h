@@ -333,11 +333,14 @@ enum : u32 {
     OcclusionOnly = 1u << 5,
     // M-TRANSLUCENT 41a: two quantized factors, 0..255 for 0..1 (accessors in mce/asset/material_translucency.h): bits 8..15 the
     // translucency (light through a thin surface), bits 16..23 the diffuse wrap. 0, 0 (every material cooked before) is off.
-    // Bits 6, 7 and 24..31 stay free.
+    // M-HEADLIGHT 1: bits 24..31 the retro-reflection (reflective road paint under headlights), 0..255 for 0..1 (accessors in
+    // mce/asset/material_retro.h); 0 (every material cooked before) is off. Bits 6 and 7 stay free.
     TranslucencyShift = 8,
     TranslucencyMask = 0xFFu << 8,
     WrapShift = 16,
     WrapMask = 0xFFu << 16,
+    RetroShift = 24,
+    RetroMask = 0xFFu << RetroShift,
 };
 }
 

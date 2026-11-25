@@ -102,6 +102,15 @@ TEST_CASE("MaterialForm: translucency and wrap round trip through the text, defa
     REQUIRE(material_form_from_text(out.view(), again, err));
     CHECK(again.translucency == doctest::Approx(0.5f));
     CHECK(again.wrap == doctest::Approx(0.25f));
+
+    // M-HEADLIGHT 1: retro_reflect rides the same way, and a default is not written.
+    CHECK(plain.view().find("retro_reflect") == StringView::npos);
+    f.retro_reflect = 0.75f;
+    cook::String with_retro;
+    REQUIRE(material_form_to_text(kGold, f, with_retro, err));
+    MaterialForm back;
+    REQUIRE(material_form_from_text(with_retro.view(), back, err));
+    CHECK(back.retro_reflect == doctest::Approx(0.75f));
 }
 
 TEST_CASE("save_material_form: the cook checks the text first; a refused save leaves the file alone") {

@@ -130,6 +130,7 @@ private:
             c |= ImGui::SliderFloat("IOR", &f.ior, 1.0f, 3.0f);
             c |= ImGui::SliderFloat("Translucency", &f.translucency, 0.0f, 1.0f);
             c |= ImGui::SliderFloat("Wrap", &f.wrap, 0.0f, 1.0f);
+            c |= ImGui::SliderFloat("Retro-reflection", &f.retro_reflect, 0.0f, 1.0f);
             c |= ImGui::SliderFloat("Height scale", &f.height_scale, 0.0f, 0.5f);
         }
         if (ImGui::CollapsingHeader("Textures", ImGuiTreeNodeFlags_DefaultOpen))

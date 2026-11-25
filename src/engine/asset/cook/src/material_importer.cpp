@@ -13,6 +13,8 @@
 //   "transmission": 0..1, "ior": 1..3 (default 1.5),
 //   (M-TRANSLUCENT 41c, 0 = off) "translucency": 0..1 (light through a thin surface), "wrap": 0..1 (wrap lighting); both are
 //   quantized to 8 bits into the material's flags word (mce/asset/material_translucency.h),
+//   (M-HEADLIGHT 1, 0 = off) "retro_reflect": 0..1 (reflective paint: light thrown back toward its source), quantized to 8 bits
+//   into the flags word (mce/asset/material_retro.h),
 //   (M-VISUAL3 2, parallax occlusion mapping, 0 = off) "height_scale": 0..0.5 (depth in texture repeats),
 //   "parallax_steps": [min, max] (4..64, march steps looking straight on and at a grazing angle),
 //   "textures": { "base_color": "guid:<uuid>", "normal": ..., "metallic_roughness": ..., "emissive": ...,
@@ -23,6 +25,7 @@
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
+#include "mce/asset/material_retro.h"
 #include "mce/asset/material_translucency.h"
 
 namespace mce::cook {
@@ -94,7 +97,7 @@ public:
         if (!detail::check_keys(doc, {"format", "version", "guid", "name", "base_color", "metallic", "roughness", "emissive", "alpha_mode",
                                       "alpha_cutoff", "double_sided", "unlit", "uv_scale", "textures", "clearcoat",
                                       "clearcoat_roughness", "sheen_color", "sheen_roughness", "anisotropy", "anisotropy_rotation",
-                                      "transmission", "ior", "height_scale", "parallax_steps", "translucency", "wrap"},
+                                      "transmission", "ior", "height_scale", "parallax_steps", "translucency", "wrap", "retro_reflect"},
                                 file, kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -185,6 +188,9 @@ public:
         ranged("translucency", 0, 1, translucency);
         ranged("wrap", 0, 1, wrap);
         asset::set_material_translucency(m, translucency, wrap);
+        f32 retro = 0.0f;
+        ranged("retro_reflect", 0, 1, retro);
+        asset::set_material_retro(m, retro);
         e.set_height(height);
         // Height is data, not color: an sRGB import (the texture default) would be uploaded as sRGB and bend the depth.
         if (ChunkType ht = ChunkType::Manifest; !height.is_null() && in.lookup && in.lookup->type_of(height, ht) && ht == ChunkType::Texture) {
