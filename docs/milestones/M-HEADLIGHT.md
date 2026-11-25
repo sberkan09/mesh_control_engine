@@ -14,3 +14,5 @@ Owner: rutin 2 (M-VISUAL). Step 3 of [M-PAINTWEAR](M-PAINTWEAR.md).
 3. Vehicle headlights in the open-world sample as spot lights for the check.
 
 **Check.** Night junction frame with and without the term.
+
+**Step 2 (shader).** `ObjectU` gains a last `vec4 o_retro` (24 vec4, still one 512-byte ring slot; older members keep their offsets). In the Forward+ local-light loop of `kMeshFS`, behind a uniform branch `o_retro.x > 0`, a spot or point light adds `retro * 3 * pow(max(dot(v, l), 0), 24) * max(dot(n, l), 0) * diffuse * light` : bright when the eye sits on the line to the light (a headlight), nothing when it does not. Material factor 0 skips the branch, so every existing frame is unchanged (`test_render_gl` passes in full). The sun is not a headlight and is not touched.

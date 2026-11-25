@@ -8,6 +8,8 @@
 
 #include <doctest/doctest.h>
 
+#include "mce/asset/material_retro.h"
+
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -1176,6 +1178,78 @@ TEST_CASE("render3d_gl: a shadowed spot light leaves the floor behind the box da
     CHECK(behind_on.luma() < behind_off.luma() / 3);       // the box's shadow
     CHECK(std::abs(lit_on.luma() - lit_off.luma()) <= 2);  // open floor: no acne
     CHECK(std::abs(face_on.luma() - face_off.luma()) <= 2);  // the box's lit face
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+// ---- reflective paint (M-HEADLIGHT 2) -----------------------------------------------------------------
+
+namespace {
+
+// Mesh 1 again (generation `gen`): the fixture's box with `retro` (0..1) in its flags word.
+void upload_retro_box(Fixture3D& f, u32 gen, f32 retro) {
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.center = {0, 0.5f, 0};
+    b.half = {0.5f, 0.5f, 0.5f};
+    b.color[0] = b.color[1] = b.color[2] = 0.5f;
+    b.uvs = true;
+    asset::MaterialChunk m{};
+    asset::set_material_retro(m, retro);
+    b.flags = m.flags;
+    box.add_box(b);
+    box.submeshes.back().material.roughness = 0.8f;
+    REQUIRE(f.renderer.meshes().upload(1, gen, box.build().span()).has_value());
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: reflective paint throws a spot light back at an eye on its axis; a light off the axis and a plain material do not change") {
+    Fixture3D f;
+    f.render(0.0f, false);  // fixes the camera
+    const vec3 eye = f.camera.position;
+    const vec3 aim = {0.0f, 0.5f, 0.0f};
+    PointLight head;  // a headlight: at the eye, pointing at the box
+    head.position = eye;
+    head.direction = normalize(aim - eye);
+    head.radius = 30.0f;
+    head.intensity = 20.0f;
+    head.spot_inner = math::radians(30.0f);
+    head.spot_outer = math::radians(40.0f);
+    PointLight side = head;  // the same light well off the eye's axis
+    side.position = {-4.0f, 3.0f, 0.0f};
+    side.direction = normalize(aim - side.position);
+    const PointLight* current = &head;
+    const auto scene = [&](Scene3D& s) { local_lit(s, false, Span<const PointLight>(current, 1)); };
+    const vec3 probe = {0.0f, 1.0f, 0.0f};  // the box's top, seen from the camera's side
+
+    u32 gen = 2;
+    upload_retro_box(f, gen++, 0.0f);
+    f.render(0.0f, false, scene);
+    const Array<u8> plain = f.pixels;
+    const Rgb plain_head = f.at_world(probe);
+
+    upload_retro_box(f, gen++, 1.0f);
+    f.render(0.0f, false, scene);
+    const Rgb retro_head = f.at_world(probe);
+    INFO("headlight: plain " << plain_head.luma() << " -> reflective " << retro_head.luma());
+    CHECK(retro_head.luma() > plain_head.luma() + 10);
+
+    current = &side;
+    upload_retro_box(f, gen++, 0.0f);
+    f.render(0.0f, false, scene);
+    const Rgb plain_side = f.at_world(probe);
+    upload_retro_box(f, gen++, 1.0f);
+    f.render(0.0f, false, scene);
+    const Rgb retro_side = f.at_world(probe);
+    INFO("light off the axis: plain " << plain_side.luma() << " -> reflective " << retro_side.luma());
+    CHECK(std::abs(retro_side.luma() - plain_side.luma()) <= 3);
+
+    // Factor 0 is exactly the box without the bits: a second plain upload draws the same pixels.
+    current = &head;
+    upload_retro_box(f, gen++, 0.0f);
+    f.render(0.0f, false, scene);
+    CHECK(differing_bytes(plain, f.pixels) == 0);
     CHECK(f.device->validation_error_count() == 0);
 }
 

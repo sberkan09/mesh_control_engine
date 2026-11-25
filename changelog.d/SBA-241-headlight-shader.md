@@ -1,0 +1,1 @@
+- Open-world sample prep: materials with `retro_reflect` > 0 (reflective paint) now brighten under a local light whose axis meets the eye (M-HEADLIGHT step 2, SBA-241). A material without it, and every existing golden, draws as before. `docs/milestones/M-HEADLIGHT.md`.

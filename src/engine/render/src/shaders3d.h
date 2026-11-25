@@ -129,6 +129,7 @@ layout(std140, binding = 3) uniform ObjectU {
     vec4 o_sheen;      // rgb sheen color, w its alpha (roughness², at least 0.0078)
     vec4 o_ext;        // x: any of the lobes above on, y: index of refraction (0 = 1.5), z: transmission
     vec4 o_pom;        // M-VISUAL3 2: x parallax height scale (texture repeats; 0 = off), y/z min/max march steps, w fade-out view depth (m)
+    vec4 o_retro;      // M-HEADLIGHT 2: x retro-reflection factor of reflective paint (0 = off)
 };
 )"
 // clang-format on
@@ -1373,6 +1374,10 @@ void main() {
                 float side = (gl_FrontFacing ? 1.0 : -1.0) * (thin && tr > 0.0 && dot(n, ld) < 0.0 ? -1.0 : 1.0);
                 att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * side, ld);
                 if (att <= 0.0) continue;
+            }
+            if (o_retro.x > 0.0) {  // M-HEADLIGHT 2: reflective paint throws a local light back at its source (uniform branch)
+                float back = pow(max(dot(v, ld), 0.0), 24.0);  // eye on the light's axis: the headlight case
+                color += o_retro.x * 3.0 * back * max(dot(n, ld), 0.0) * diffuse * (cookied ? L.color.rgb * att * lc : L.color.rgb * att);
             }
             if (thin) {
                 vec3 E = cookied ? L.color.rgb * att * lc : L.color.rgb * att;

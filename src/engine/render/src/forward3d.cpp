@@ -24,6 +24,7 @@
 #include "mce/render/ssr_blur.h"
 #include "mce/render/sun_shafts.h"
 #include "mce/render/translucency.h"
+#include "mce/asset/material_retro.h"
 #include "mce/render/underwater.h"
 #include "mce/render/water_optics.h"
 #include "shaders3d.h"
@@ -285,12 +286,14 @@ struct ObjectU {
     vec4 sheen;     // rgb color, w alpha
     vec4 ext;       // x: lobes on, y: ior (0 = 1.5), z: transmission
     vec4 pom;       // M-VISUAL3 2 (parallax_uniforms): height scale, min and max march steps, fade-out view depth
+    vec4 retro;     // M-HEADLIGHT 2: x retro-reflection factor (reflective paint under a local light; 0 = off)
 };
-// M-TRANSLUCENT 41d: o_skin.w carries the draw's translucency_object value (t8 + 256 * w8, 0 = off); the block keeps its
-// 23 vec4 (368 bytes, one 512-byte ring slot per draw) and its member order (MCE_GLSL_OBJECT_U).
-static_assert(sizeof(ObjectU) == 23 * 16, "ObjectU: 23 vec4 as MCE_GLSL_OBJECT_U");
-static_assert(offsetof(ObjectU, skin) == 17 * 16 && offsetof(ObjectU, inst) == 18 * 16 && offsetof(ObjectU, pom) == 22 * 16,
-              "ObjectU: o_skin after o_dequant, o_pom last, as MCE_GLSL_OBJECT_U");
+// M-TRANSLUCENT 41d: o_skin.w carries the draw's translucency_object value (t8 + 256 * w8, 0 = off); the block is
+// 24 vec4 since M-HEADLIGHT 2 (384 bytes, one 512-byte ring slot per draw), o_retro last, the older members in place (MCE_GLSL_OBJECT_U).
+static_assert(sizeof(ObjectU) == 24 * 16, "ObjectU: 24 vec4 as MCE_GLSL_OBJECT_U");
+static_assert(offsetof(ObjectU, skin) == 17 * 16 && offsetof(ObjectU, inst) == 18 * 16 && offsetof(ObjectU, pom) == 22 * 16 &&
+                  offsetof(ObjectU, retro) == 23 * 16,
+              "ObjectU: o_skin after o_dequant, o_pom then o_retro last, as MCE_GLSL_OBJECT_U");
 
 // A parallax material's march in ObjectU's terms; all zero (the shader skips it) for any other draw.
 void parallax_uniforms(const MaterialOverride* m, const ParallaxSettings& p, ObjectU& ou) {
@@ -3856,6 +3859,7 @@ u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<c
                    (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                    (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
         parallax_uniforms(terrain ? nullptr : inst.material, scene.parallax(), ou);
+        ou.retro = {terrain ? 0.0f : asset::material_retro(mat), 0.0f, 0.0f, 0.0f};
         ou.dequant = d.dequant;
         ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
         // M-TRANSLUCENT 41d: the material's translucency and wrap, or exactly 0 (off, unlit, the tier, r.translucency,
@@ -4107,6 +4111,7 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
             for (u32 i = 0; i < 8; ++i) ou.dequant.c[i / 4][i % 4] = extra[i];
             ou.inst = batch_wind(b);
             parallax_uniforms(b.material, scene.parallax(), ou);
+            ou.retro = {asset::material_retro(mat), 0.0f, 0.0f, 0.0f};
             material_ext_uniforms(b.material ? b.material->ext : sm.material_ext, ou);
             // M-TRANSLUCENT 41d: as draw_meshes (a translucent leaf batch glows as its single draws do).
             const f32 thin = translucency_object(mat.flags, (mat.flags & asset::MaterialFlags::Unlit) != 0, tier, desc_.translucency);
