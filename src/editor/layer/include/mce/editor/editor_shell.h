@@ -277,7 +277,8 @@ private:
         QuickOpen,
         BatchRename,
         ArrayDuplicate,
-        Randomize
+        Randomize,
+        RadialDuplicate
     };
     Popup popup_ = Popup::None;
     bool popup_opened_ = false;
