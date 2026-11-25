@@ -1,0 +1,1 @@
+- editor: Edit > Randomize... gives the selection a random move, turn and size within ranges, with a repeatable seed (M-SCATTER).

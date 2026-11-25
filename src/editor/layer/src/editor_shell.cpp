@@ -18,6 +18,7 @@
 #include "mce/editor/entity_path.h"
 #include "mce/editor/flip_entities.h"
 #include "mce/editor/group_entities.h"
+#include "mce/editor/jitter_entities.h"
 #include "mce/editor/match_transform.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
@@ -63,6 +64,8 @@ struct EditorShell::Impl {
     // Edit > Array duplicate (M-LAYOUTTOOLS 4): the grid size and the step between cells.
     i32 array_columns = 3, array_rows = 1;
     f32 array_dx = 1.0f, array_dy = 1.0f;
+    // Edit > Randomize (M-SCATTER 3): the ranges and the seed of the variation.
+    JitterParams jitter{0.5f, 0.5f, 15.0f, 0.9f, 1.1f, 1};
 };
 
 namespace {
@@ -113,6 +116,13 @@ void array_duplicate_selection(EditorScene& scene, u32 columns, u32 rows, f32 dx
     Array<EntityId> ids;  // a copy: the edit below changes the scene
     for (EntityId id : scene.selection().items()) ids.push_back(id);
     array_duplicate(scene, Span<const EntityId>(ids.data(), ids.size()), columns, rows, dx, dy);
+}
+
+// Edit > Randomize: the variation `p` on the selection.
+void jitter_selection(EditorScene& scene, const JitterParams& p) {
+    Array<EntityId> ids;  // a copy: the edit below changes the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    jitter_entities(scene, Span<const EntityId>(ids.data(), ids.size()), p);
 }
 
 // Edit > Match to anchor: `part` of the first selected entity goes onto the rest of the selection.
@@ -919,7 +929,8 @@ void EditorShell::draw_popups() {
                                            "Recover unsaved changes",
                                            "Quick Open",
                                            "Rename Selection",
-                                           "Array Duplicate"};
+                                           "Array Duplicate",
+                                           "Randomize"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
         popup_opened_ = true;
@@ -1099,6 +1110,39 @@ void EditorShell::draw_popups() {
         if (ImGui::Button("Make copies")) {
             array_duplicate_selection(scene(), static_cast<u32>(impl_->array_columns),
                                       static_cast<u32>(impl_->array_rows), impl_->array_dx, impl_->array_dy);
+            close();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
+        ImGui::EndPopup();
+    }
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Randomize", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        JitterParams& j = impl_->jitter;
+        ImGui::TextUnformatted("Moves, turns and resizes each selected entity by a random amount");
+        const f32 w = ImGui::GetFontSize() * 6.0f;
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Move X up to", &j.move_x, 0.05f, 0.0f, 1000.0f, "%.2f m");
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Move Y up to", &j.move_y, 0.05f, 0.0f, 1000.0f, "%.2f m");
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Turn up to", &j.rotate_degrees, 0.5f, 0.0f, 360.0f, "%.1f deg");
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Size from", &j.scale_min, 0.01f, 0.01f, 100.0f, "x%.2f");
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Size to", &j.scale_max, 0.01f, 0.01f, 100.0f, "x%.2f");
+        j.scale_max = std::max(j.scale_max, j.scale_min);
+        i32 seed = static_cast<i32>(j.seed);
+        ImGui::SetNextItemWidth(w);
+        if (ImGui::InputInt("Seed", &seed)) j.seed = static_cast<u32>(std::max(seed, 0));
+        ImGui::SameLine();
+        if (ImGui::Button("New seed"))
+            j.seed = (j.seed * 1664525u + 1013904223u) & 0x7FFFFFFFu;  // the same seed repeats
+        ImGui::BeginDisabled(!jitter_params_valid(j));
+        if (ImGui::Button("Apply")) {
+            jitter_selection(scene(), j);
             close();
         }
         ImGui::EndDisabled();
@@ -1325,6 +1369,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Duplicate right", nullptr, false, sel)) duplicate_stepped(scene(), view_.snap_step, 0.0f);
         if (ImGui::MenuItem("Duplicate up", nullptr, false, sel)) duplicate_stepped(scene(), 0.0f, view_.snap_step);
         if (ImGui::MenuItem("Array duplicate...", nullptr, false, sel)) popup_ = Popup::ArrayDuplicate;
+        if (ImGui::MenuItem("Randomize...", nullptr, false, sel)) popup_ = Popup::Randomize;
         if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
         if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G", false, sel)) ungroup_selection(scene());
         ImGui::Separator();
