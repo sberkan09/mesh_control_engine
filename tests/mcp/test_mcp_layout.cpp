@@ -188,6 +188,32 @@ TEST_CASE("entity_radial_duplicate rings a group around a centre and is one undo
               .find("total_degrees") != std::string::npos);
 }
 
+// M-GROUPXFORM 2: entity_transform_group.
+TEST_CASE("entity_transform_group turns a pair about its middle and is one undo step") {
+    const std::string root = layout_project("mcp_layout_xform");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const int a = make(c, "GA", 0, 0), b = make(c, "GB", 4, 0);
+    const std::string both = "[" + std::to_string(a) + "," + std::to_string(b) + "]";
+    CHECK(
+        c.ok("entity_transform_group", "{\"entities\":" + both + R"(,"degrees":90})").v().get("changed").as_number() ==
+        2);
+    CHECK(pos(c, a, 0) == doctest::Approx(2.0).epsilon(1e-3));
+    CHECK(pos(c, a, 1) == doctest::Approx(-2.0).epsilon(1e-3));
+    c.ok("scene_undo");
+    CHECK(pos(c, a, 0) == doctest::Approx(0.0));
+    CHECK(pos(c, b, 0) == doctest::Approx(4.0));
+    c.ok("entity_transform_group", "{\"entities\":" + both + R"(,"scale":2,"pivot_x":0,"pivot_y":0})");
+    CHECK(pos(c, b, 0) == doctest::Approx(8.0).epsilon(1e-3));
+
+    CHECK(c.ok("entity_transform_group", "{\"entities\":" + both + "}").v().get("changed").as_number() == 0);
+    CHECK(c.fails("entity_transform_group", "{\"entities\":" + both + R"(,"scale":0})").find("scale") !=
+          std::string::npos);
+    CHECK(c.fails("entity_transform_group", "{\"entities\":" + both + R"(,"degrees":"x"})").find("degrees") !=
+          std::string::npos);
+}
+
 // M-HIERTOOLS 1: entity_set_parent, entity_rename, entity_group, entity_ungroup, entity_reset_transform.
 TEST_CASE("hierarchy tools: reparent keeps the world place, group and ungroup undo, reset and rename work") {
     const std::string root = layout_project("mcp_hier");
