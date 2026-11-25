@@ -16,11 +16,11 @@
   0,
   0
  ],
- "alpha_mode": "opaque",
+ "alpha_mode": "mask",
  "alpha_cutoff": 0.5,
  "double_sided": false,
  "unlit": false,
  "textures": {
-  "base_color": "guid:8dc4d8dc-0321-597f-991a-1b26014a76b6"
+  "base_color": "guid:0f6f5cfb-6805-5b03-b7c1-d656cdb809e5"
  }
 }

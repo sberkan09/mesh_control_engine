@@ -1,0 +1,1 @@
+- Open-world sample: chips in the road-marking paint are now real holes (alpha-masked paint texture), so the road shows through. Data only.
