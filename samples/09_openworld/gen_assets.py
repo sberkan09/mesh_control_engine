@@ -573,6 +573,7 @@ SURFACES = {"asphalt": (4.0, [1.0, 1.0, 1.0, 1.0], 0.92), "paving": (2.4, [1.0, 
             "grass": (8.0, [0.85, 0.9, 0.8, 1.0], 0.95), "concrete": (4.0, [1.0, 1.0, 1.0, 1.0], 0.9)}
 PAINT = {"marking_white": [0.92, 0.92, 0.88, 1.0], "marking_yellow": [0.95, 0.74, 0.12, 1.0]}
 G_MAT = {name: guid("materials/%s.mcmat" % name) for name in list(SURFACES) + list(PAINT)}
+PAINT_UV_M = 3.0     # the worn-paint texture repeats every 3 m
 PAINT_H = 0.03       # paint is a 3 cm slab on the road, so it never fights the road for the depth buffer
 ROAD_TOP = 0.14
 SIDEWALK_TOP = 0.2
@@ -643,10 +644,12 @@ def surface_assets():
         write("materials/%s.mcmat" % name, {"format": "mce-material", "version": 1, "guid": G_MAT[name], "name": name, "base_color": tint,
                                             "metallic": 0.0, "roughness": rough, "emissive": [0, 0, 0], "alpha_mode": "opaque",
                                             "alpha_cutoff": 0.5, "double_sided": False, "unlit": False, "textures": textures})
+    wear_rel = "textures/paintwear_color.jpg"
+    write(wear_rel + ".mceasset", {"guid": guid(wear_rel), "importer": "texture", "importer_version": 1, "settings": {}})
     for name, color in PAINT.items():
         write("materials/%s.mcmat" % name, {"format": "mce-material", "version": 1, "guid": G_MAT[name], "name": name, "base_color": color,
                                             "metallic": 0.0, "roughness": 0.6, "emissive": [0, 0, 0], "alpha_mode": "opaque",
-                                            "alpha_cutoff": 0.5, "double_sided": False, "unlit": False, "textures": {}})
+                                            "alpha_cutoff": 0.5, "double_sided": False, "unlit": False, "textures": {"base_color": "guid:" + guid(wear_rel)}})
 
 
 FACES = [  # normal, four corners (counter-clockwise seen from outside)
@@ -732,7 +735,7 @@ def slab(sx, sy, sz, material):
 
 
 def paint(key, boxes, colour):
-    g = surface_mesh(key, boxes, None)
+    g = surface_mesh(key, boxes, PAINT_UV_M)
     return {"mesh": "guid:" + g, "material": "guid:" + G_MAT[colour], "cast_shadows": 0}
 
 

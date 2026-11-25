@@ -1,0 +1,1 @@
+- Worn road markings, M-PAINTWEAR step 1 (SBA-237, content): lane lines and crosswalks get a tiling wear texture (duller zones and chips) in the open-world sample. `docs/milestones/M-PAINTWEAR.md`.

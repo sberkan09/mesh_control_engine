@@ -41,8 +41,10 @@ def normal_map(height, strength):
 def save(name, color, normal):
     os.makedirs(OUT, exist_ok=True)
     c = (np.clip(color, 0, 1) * 255 + 0.5).astype(np.uint8)
-    n = (np.clip(normal, 0, 1) * 255 + 0.5).astype(np.uint8)
     Image.fromarray(c).save(os.path.join(OUT, name + "_color.jpg"), quality=90, subsampling=0)
+    if normal is None:                                   # colour-only texture (the worn-paint multiplier)
+        return
+    n = (np.clip(normal, 0, 1) * 255 + 0.5).astype(np.uint8)
     Image.fromarray(n).save(os.path.join(OUT, name + "_normal.jpg"), quality=92, subsampling=0)
 
 
@@ -63,6 +65,19 @@ def asphalt():
     v = np.where(cracks, v * 0.62, v)
     color = np.stack([v * 1.00, v * 1.01, v * 1.05], -1)
     return color, normal_map(0.6 * mid + 0.4 * fine - 0.5 * cracks, 2.5)
+
+
+def paintwear():
+    """Road-marking wear: a multiplier for the paint colour. Mostly near 1, with a coarse fade where tyres ran and small
+    chipped specks where the asphalt shows through (darker, never black, because the paint colour multiplies it)."""
+    rng = np.random.default_rng(52)
+    fade, speck, fine = fractal(rng, 2.4), fractal(rng, 0.6), fractal(rng, 0.15)
+    worn = fade > np.quantile(fade, 0.55)                # about 45 % of the tile is the tyre-worn, duller paint
+    v = np.where(worn, 0.68, 0.90)
+    chips = (speck > np.quantile(speck, 0.93)) | (fine > np.quantile(fine, 0.985))
+    v = np.where(chips, v * 0.45, v)
+    color = np.stack([v, v, v], -1)
+    return color, None
 
 
 def paving():
@@ -109,6 +124,6 @@ def concrete():
 
 
 if __name__ == "__main__":
-    for name, make in (("asphalt", asphalt), ("paving", paving), ("grass", grass), ("concrete", concrete)):
+    for name, make in (("asphalt", asphalt), ("paintwear", paintwear), ("paving", paving), ("grass", grass), ("concrete", concrete)):
         save(name, *make())
         print("wrote", name)

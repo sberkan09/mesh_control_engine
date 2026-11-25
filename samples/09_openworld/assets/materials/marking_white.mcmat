@@ -20,5 +20,7 @@
  "alpha_cutoff": 0.5,
  "double_sided": false,
  "unlit": false,
- "textures": {}
+ "textures": {
+  "base_color": "guid:8dc4d8dc-0321-597f-991a-1b26014a76b6"
+ }
 }
