@@ -340,7 +340,7 @@ enum : u32 {
     WrapShift = 16,
     WrapMask = 0xFFu << 16,
     RetroShift = 24,
-    RetroMask = 0xFFu << 24,
+    RetroMask = 0xFFu << RetroShift,
 };
 }
 
