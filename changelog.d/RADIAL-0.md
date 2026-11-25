@@ -1,0 +1,1 @@
+- editor: radial_duplicate and the MCP tool entity_radial_duplicate copy a group around a centre point, as a ring or an arc, in one undo step (M-RADIAL).

@@ -164,6 +164,30 @@ TEST_CASE("entity_jitter varies a group within its ranges, repeats per seed and 
     CHECK(c.fails("entity_jitter", "{\"entities\":" + both + R"(,"seed":"x"})").find("seed") != std::string::npos);
 }
 
+// M-RADIAL 2: entity_radial_duplicate.
+TEST_CASE("entity_radial_duplicate rings a group around a centre and is one undo step") {
+    const std::string root = layout_project("mcp_layout_radial");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const int a = make(c, "RA", 5, 0);
+    const std::string one = "[" + std::to_string(a) + "]";
+    auto r = c.ok("entity_radial_duplicate", "{\"entities\":" + one + R"(,"count":4})");
+    CHECK(r.v().get("created").as_number() == 3);
+    const int first = static_cast<int>(r.v().get("ids").at(0).as_number());
+    CHECK(pos(c, first, 0) == doctest::Approx(0.0).epsilon(1e-3));
+    CHECK(pos(c, first, 1) == doctest::Approx(5.0).epsilon(1e-3));
+    c.ok("scene_undo");
+    CHECK(c.fails("scene_get_entity", "{\"entity\":" + std::to_string(first) + "}").size() > 0);
+
+    CHECK(c.fails("entity_radial_duplicate", "{\"entities\":" + one + R"(,"count":1})").find("count") !=
+          std::string::npos);
+    CHECK(c.fails("entity_radial_duplicate", "{\"entities\":" + one + R"(,"count":3,"turn":"x"})").find("turn") !=
+          std::string::npos);
+    CHECK(c.fails("entity_radial_duplicate", "{\"entities\":" + one + R"(,"count":3,"total_degrees":0})")
+              .find("total_degrees") != std::string::npos);
+}
+
 // M-HIERTOOLS 1: entity_set_parent, entity_rename, entity_group, entity_ungroup, entity_reset_transform.
 TEST_CASE("hierarchy tools: reparent keeps the world place, group and ungroup undo, reset and rename work") {
     const std::string root = layout_project("mcp_hier");

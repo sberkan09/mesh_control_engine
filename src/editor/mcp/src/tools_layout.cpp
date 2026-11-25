@@ -8,6 +8,7 @@
 #include "mce/editor/flip_entities.h"
 #include "mce/editor/jitter_entities.h"
 #include "mce/editor/match_transform.h"
+#include "mce/editor/radial_duplicate.h"
 #include "mce/editor/snap_entities.h"
 #include "tool_args.h"
 #include "tools_agent.h"
@@ -151,6 +152,29 @@ bool arg_range(ToolCall& c, const char* key, f32& out, f64 lo, f64 hi) {
     return true;
 }
 
+bool entity_radial_duplicate(ToolCall& c) {
+    Array<editor::EntityId> ids;
+    editor::RadialParams p;
+    u64 count = 0;
+    if (!arg_entities(c, ids, 1) || !arg_uint(c, "count", count, 2, editor::kMaxRadialCopies + 1, true) ||
+        !arg_range(c, "center_x", p.center_x, -1.0e6, 1.0e6) || !arg_range(c, "center_y", p.center_y, -1.0e6, 1.0e6) ||
+        !arg_range(c, "total_degrees", p.total_degrees, 0.001, 3600.0))
+        return false;
+    p.count = static_cast<u32>(count);
+    const cook::JsonValue turn = arg(c, "turn");
+    if (turn.valid() && !turn.is_null()) {
+        if (!turn.is_bool()) return arg_missing(c, "turn", "true or false");
+        p.turn = turn.as_bool();
+    }
+    Array<editor::EntityId> made;
+    const usize n = editor::radial_duplicate(scene(c), Span<const editor::EntityId>(ids.data(), ids.size()), p, &made);
+    if (n == 0) return fail(c, "nothing was copied: check the entities and at most 4096 copies in all");
+    c.out.begin_object().key("created").num_u(n).key("ids").begin_array();
+    for (editor::EntityId id : made) c.out.num_u(id);
+    c.out.end_array().end_object();
+    return true;
+}
+
 bool entity_jitter(ToolCall& c) {
     Array<editor::EntityId> ids;
     editor::JitterParams p;
@@ -215,6 +239,15 @@ const ToolDef kLayoutTools[] = {
      R"j({"type":"object","properties":{)j" MCE_ENTITIES
      R"j(,"columns":{"type":"integer","minimum":1},"rows":{"type":"integer","minimum":1,"default":1},"dx":{"type":"number","default":0},"dy":{"type":"number","default":0}},"required":["entities","columns"]})j",
      entity_array_duplicate},
+    {"entity_radial_duplicate",
+     "Copy the entities around a centre point in one call: 'count' groups in all, the originals included, copy k "
+     "turned about (center_x, center_y) by k steps counter-clockwise. With total_degrees 360 (default) the ring "
+     "closes; "
+     "less spreads the groups over an arc, both ends filled. 'turn' (default true) also turns the copies to face out. "
+     "At most 4096 copies in all. Returns created and the new ids, copy by copy. One undo step.",
+     R"j({"type":"object","properties":{)j" MCE_ENTITIES
+     R"j(,"count":{"type":"integer","minimum":2},"center_x":{"type":"number","default":0},"center_y":{"type":"number","default":0},"total_degrees":{"type":"number","exclusiveMinimum":0,"maximum":3600,"default":360},"turn":{"type":"boolean","default":true}},"required":["entities","count"]})j",
+     entity_radial_duplicate},
     {"entity_jitter",
      "Give the entities a random variation, the same for the same seed: each moves by up to move_x / move_y world "
      "units, turns by up to rotate_degrees about z and is scaled by a factor between scale_min and scale_max (all "
