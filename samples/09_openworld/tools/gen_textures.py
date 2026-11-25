@@ -38,10 +38,14 @@ def normal_map(height, strength):
     return n * 0.5 + 0.5
 
 
-def save(name, color, normal):
+def save(name, color, normal, alpha=None):
     os.makedirs(OUT, exist_ok=True)
     c = (np.clip(color, 0, 1) * 255 + 0.5).astype(np.uint8)
-    Image.fromarray(c).save(os.path.join(OUT, name + "_color.jpg"), quality=90, subsampling=0)
+    if alpha is not None:                                # a cut-out colour map needs a real alpha channel: PNG
+        a = (np.clip(alpha, 0, 1) * 255 + 0.5).astype(np.uint8)
+        Image.fromarray(np.dstack([c, a])).save(os.path.join(OUT, name + "_color.png"))
+    else:
+        Image.fromarray(c).save(os.path.join(OUT, name + "_color.jpg"), quality=90, subsampling=0)
     if normal is None:                                   # colour-only texture (the worn-paint multiplier)
         return
     n = (np.clip(normal, 0, 1) * 255 + 0.5).astype(np.uint8)
@@ -75,9 +79,8 @@ def paintwear():
     worn = fade > np.quantile(fade, 0.55)                # about 45 % of the tile is the tyre-worn, duller paint
     v = np.where(worn, 0.68, 0.90)
     chips = (speck > np.quantile(speck, 0.93)) | (fine > np.quantile(fine, 0.985))
-    v = np.where(chips, v * 0.45, v)
     color = np.stack([v, v, v], -1)
-    return color, None
+    return color, None, (~chips).astype(np.float32)     # alpha 0 in the chips: the material cuts the paint out there
 
 
 def paving():

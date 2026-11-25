@@ -644,11 +644,11 @@ def surface_assets():
         write("materials/%s.mcmat" % name, {"format": "mce-material", "version": 1, "guid": G_MAT[name], "name": name, "base_color": tint,
                                             "metallic": 0.0, "roughness": rough, "emissive": [0, 0, 0], "alpha_mode": "opaque",
                                             "alpha_cutoff": 0.5, "double_sided": False, "unlit": False, "textures": textures})
-    wear_rel = "textures/paintwear_color.jpg"
+    wear_rel = "textures/paintwear_color.png"
     write(wear_rel + ".mceasset", {"guid": guid(wear_rel), "importer": "texture", "importer_version": 1, "settings": {}})
     for name, color in PAINT.items():
         write("materials/%s.mcmat" % name, {"format": "mce-material", "version": 1, "guid": G_MAT[name], "name": name, "base_color": color,
-                                            "metallic": 0.0, "roughness": 0.6, "emissive": [0, 0, 0], "alpha_mode": "opaque",
+                                            "metallic": 0.0, "roughness": 0.6, "emissive": [0, 0, 0], "alpha_mode": "mask",
                                             "alpha_cutoff": 0.5, "double_sided": False, "unlit": False, "textures": {"base_color": "guid:" + guid(wear_rel)}})
 
 
