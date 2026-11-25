@@ -1,0 +1,1 @@
+- editor core, mcp: new tool `entity_jitter` gives the selected entities a bounded, repeatable random move, turn and size (M-SCATTER).

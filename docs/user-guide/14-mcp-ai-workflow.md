@@ -109,6 +109,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `entity_flip` | `entities`, `axis` | mirrors them across the middle of the group (one entity flips in place) |
 | | `entity_match_transform` | `entities`, `anchor`, `part` (`position`, `rotation`, `scale`) | copies the anchor's world position, rotation or scale |
 | | `entity_array_duplicate` | `entities`, `columns`, `rows?`, `dx?`, `dy?` | copies the group into a columns x rows grid at a fixed step (the first cell is the originals); returns `created` and the new ids; at most 4096 copies; one undo step |
+| | `entity_jitter` | `entities`, `move_x?`, `move_y?`, `rotate_degrees?`, `scale_min?`, `scale_max?`, `seed?` | gives each entity a random variation: a world move, a turn about z and a size factor, each within its range; the same seed gives the same result; returns `changed`; one undo step |
 | | `entity_set_parent` | `entity`, `parent?` (id, name or null: the scene root) | re-parents keeping the world place (the LocalTransform is recomputed); refuses a loop; `changed` is false when nothing differs |
 | | `entity_rename` | `entity`, `name` | one undo step |
 | | `entity_move` | `entity`, `index` | moves it to another position in the scene's entity order (0 = first; past the end: last); returns `changed` and the new `index` |

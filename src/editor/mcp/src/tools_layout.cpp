@@ -1,11 +1,12 @@
-// Layout tools (M-LAYOUTTOOLS step 2): align, distribute, snap, flip and match the transforms of several entities of
-// the open scene. The same commands as the editor's Edit menu, each one undo step (scene_undo).
+// Layout tools (M-LAYOUTTOOLS step 2, M-SCATTER 2): align, distribute, snap, flip, match and jitter the transforms of
+// several entities of the open scene. The same commands as the editor's Edit menu, each one undo step (scene_undo).
 
 #include <cmath>
 
 #include "mce/editor/align_entities.h"
 #include "mce/editor/array_duplicate.h"
 #include "mce/editor/flip_entities.h"
+#include "mce/editor/jitter_entities.h"
 #include "mce/editor/match_transform.h"
 #include "mce/editor/snap_entities.h"
 #include "tool_args.h"
@@ -135,6 +136,38 @@ bool entity_array_duplicate(ToolCall& c) {
     return true;
 }
 
+// An optional number argument `key` in [lo, hi]; `out` keeps its value when absent.
+bool arg_range(ToolCall& c, const char* key, f32& out, f64 lo, f64 hi) {
+    const cook::JsonValue v = arg(c, key);
+    if (!v.valid() || v.is_null()) return true;
+    if (!v.is_number() || !(v.as_number() >= lo) || !(v.as_number() <= hi)) {
+        c.error += "argument '";
+        c.error += key;
+        c.error += "' must be a number from ";
+        cook::appendf(c.error, "%g to %g", lo, hi);
+        return false;
+    }
+    out = static_cast<f32>(v.as_number());
+    return true;
+}
+
+bool entity_jitter(ToolCall& c) {
+    Array<editor::EntityId> ids;
+    editor::JitterParams p;
+    u64 seed = 1;
+    if (!arg_entities(c, ids, 1) || !arg_range(c, "move_x", p.move_x, 0.0, 1.0e6) ||
+        !arg_range(c, "move_y", p.move_y, 0.0, 1.0e6) ||
+        !arg_range(c, "rotate_degrees", p.rotate_degrees, 0.0, 360.0) ||
+        !arg_range(c, "scale_min", p.scale_min, 0.001, 1000.0) ||
+        !arg_range(c, "scale_max", p.scale_max, 0.001, 1000.0) || !arg_uint(c, "seed", seed, 0, 0xFFFFFFFFull, false))
+        return false;
+    p.seed = static_cast<u32>(seed);
+    if (!editor::jitter_params_valid(p)) return fail(c, "scale_min must not be above scale_max");
+    const usize n = editor::jitter_entities(scene(c), Span<const editor::EntityId>(ids.data(), ids.size()), p);
+    c.out.begin_object().key("changed").num_u(n).end_object();
+    return true;
+}
+
 #define MCE_ENTITIES \
     R"j("entities":{"type":"array","items":{"type":["integer","string"]},"description":"Entity ids, or names when unique"})j"
 #define MCE_AXIS R"j("axis":{"type":"string","enum":["x","y"]})j"
@@ -182,6 +215,13 @@ const ToolDef kLayoutTools[] = {
      R"j({"type":"object","properties":{)j" MCE_ENTITIES
      R"j(,"columns":{"type":"integer","minimum":1},"rows":{"type":"integer","minimum":1,"default":1},"dx":{"type":"number","default":0},"dy":{"type":"number","default":0}},"required":["entities","columns"]})j",
      entity_array_duplicate},
+    {"entity_jitter",
+     "Give the entities a random variation, the same for the same seed: each moves by up to move_x / move_y world "
+     "units, turns by up to rotate_degrees about z and is scaled by a factor between scale_min and scale_max (all "
+     "default to no change). Returns changed (how many entities). One undo step.",
+     R"j({"type":"object","properties":{)j" MCE_ENTITIES
+     R"j(,"move_x":{"type":"number","minimum":0,"default":0},"move_y":{"type":"number","minimum":0,"default":0},"rotate_degrees":{"type":"number","minimum":0,"maximum":360,"default":0},"scale_min":{"type":"number","exclusiveMinimum":0,"default":1},"scale_max":{"type":"number","exclusiveMinimum":0,"default":1},"seed":{"type":"integer","minimum":0,"default":1}},"required":["entities"]})j",
+     entity_jitter},
 };
 
 }  // namespace

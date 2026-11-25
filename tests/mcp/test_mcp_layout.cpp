@@ -137,6 +137,33 @@ TEST_CASE("entity_array_duplicate copies a group into a grid as one undo step") 
     CHECK(c.ok("scene_info").v().get("entities").as_number() == before);
 }
 
+// M-SCATTER 2: entity_jitter.
+TEST_CASE("entity_jitter varies a group within its ranges, repeats per seed and is one undo step") {
+    const std::string root = layout_project("mcp_layout_jitter");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const int a = make(c, "JA", 10, 20);
+    const int b = make(c, "JB", 30, 40);
+    const std::string both = "[" + std::to_string(a) + "," + std::to_string(b) + "]";
+    auto r = c.ok("entity_jitter", "{\"entities\":" + both + R"(,"move_x":2,"move_y":1,"seed":5})");
+    CHECK(r.v().get("changed").as_number() == 2);
+    const double ax = pos(c, a, 0), ay = pos(c, a, 1);
+    CHECK(std::fabs(ax - 10.0) <= 2.0 + 1e-4);
+    CHECK(std::fabs(ay - 20.0) <= 1.0 + 1e-4);
+    CHECK((ax != 10.0 || ay != 20.0));
+    c.ok("scene_undo");
+    CHECK(pos(c, a, 0) == doctest::Approx(10.0));
+    CHECK(pos(c, b, 1) == doctest::Approx(40.0));
+    c.ok("entity_jitter", "{\"entities\":" + both + R"(,"move_x":2,"move_y":1,"seed":5})");
+    CHECK(pos(c, a, 0) == doctest::Approx(ax));  // the same seed gives the same place
+
+    CHECK(c.fails("entity_jitter", "{\"entities\":" + both + R"(,"scale_min":2,"scale_max":1})").find("scale_min") !=
+          std::string::npos);
+    CHECK(c.fails("entity_jitter", "{\"entities\":" + both + R"(,"move_x":-1})").find("move_x") != std::string::npos);
+    CHECK(c.fails("entity_jitter", "{\"entities\":" + both + R"(,"seed":"x"})").find("seed") != std::string::npos);
+}
+
 // M-HIERTOOLS 1: entity_set_parent, entity_rename, entity_group, entity_ungroup, entity_reset_transform.
 TEST_CASE("hierarchy tools: reparent keeps the world place, group and ungroup undo, reset and rename work") {
     const std::string root = layout_project("mcp_hier");
