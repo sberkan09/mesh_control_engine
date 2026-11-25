@@ -1,0 +1,1 @@
+- Open-world sample: lane lines and crosswalks are reflective paint (`retro_reflect` 0.8 white, 0.6 yellow, M-HEADLIGHT step 3, SBA-242): a car's headlights light them up from the driver's seat at night. Data only. `docs/milestones/M-HEADLIGHT.md`.
