@@ -1,1 +1,1 @@
-- Planned visual milestones M-WETROAD and M-HEADLIGHT (docs only): wet roads and reflective road paint under headlights, follow-ups of M-PAINTWEAR.
+- Planned visual milestone M-HEADLIGHT (docs only): reflective road paint under headlights, step 3 of M-PAINTWEAR. ROADMAP rows for M-ROADWEAR, M-GRASSVAR, M-PAINTWEAR and M-HEADLIGHT.

@@ -11,7 +11,7 @@ worn road.
    the asphalt shows through. The two marking materials get it as `base_color`; the paint meshes get world-metre UVs (3 m tile).
 2. (done, data only: the material format already has `alpha_mode: mask`) `paintwear_color.png` carries an alpha channel that is 0 in
    the chips; both marking materials use `alpha_mode: mask`, cutoff 0.5, so the road shows through the chips. No code change.
-   A roughness map for a wet sheen waits for a wet-road feature to exist.
+   Wet paint needs no step of its own: `WetSurfaces` already wets the open-world roads.
 3. (later) Reflective-paint behaviour at night under headlights.
 
 **Check.** Junction frame after step 2: `/mnt/project-files/notes/paintwear2-zoom.png` (chips cut out of the yellow line).
