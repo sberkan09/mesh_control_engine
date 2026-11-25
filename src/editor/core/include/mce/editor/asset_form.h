@@ -31,6 +31,7 @@ struct MaterialForm {
     f32 ior = 1.5f;
     f32 translucency = 0;  // M-TRANSLUCENT: thin-surface diffuse transmission, 0..1
     f32 wrap = 0;          // M-TRANSLUCENT: wrap lighting, 0..1
+    f32 retro_reflect = 0;  // M-HEADLIGHT: reflective paint, 0..1
     f32 height_scale = 0;
     // "guid:<uuid>" per slot, empty = none.
     static constexpr u32 kSlots = 5;

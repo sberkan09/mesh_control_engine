@@ -1,0 +1,1 @@
+- Material format: an optional `retro_reflect` key (0..1, M-HEADLIGHT step 1, SBA-240) stores a reflective-paint factor in bits 24..31 of the material flags; 0 or absent is unchanged. No shader term yet. `docs/milestones/M-HEADLIGHT.md`.

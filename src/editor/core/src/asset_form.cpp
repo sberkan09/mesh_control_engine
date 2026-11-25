@@ -68,6 +68,7 @@ void owned_members(const MaterialForm& f, Array<Owned>& out) {
     num("ior", f.ior, d.ior);
     num("translucency", f.translucency, d.translucency);
     num("wrap", f.wrap, d.wrap);
+    num("retro_reflect", f.retro_reflect, d.retro_reflect);
     num("height_scale", f.height_scale, d.height_scale);
     cook::String tex("{");
     bool any = false;
@@ -140,6 +141,7 @@ bool material_form_from_text(StringView text, MaterialForm& out, cook::String& e
     number("ior", f.ior);
     number("translucency", f.translucency);
     number("wrap", f.wrap);
+    number("retro_reflect", f.retro_reflect);
     number("height_scale", f.height_scale);
     if (const cook::JsonValue m = root.get("alpha_mode"); m.valid() && m.is_string())
         for (int i = 0; i < 3; ++i)

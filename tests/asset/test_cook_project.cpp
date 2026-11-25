@@ -9,6 +9,7 @@
 
 #include "cook_test_util.h"
 #include "mce/asset/asset_system.h"
+#include "mce/asset/material_retro.h"
 #include "mce/asset/material_translucency.h"
 #include "mce/asset/xxhash.h"
 #include "mce/cook/cook.h"
@@ -990,6 +991,47 @@ TEST_CASE("material: translucency and wrap cook into the flags word; a plain mat
         const CookReport bad = svc.cook(root.c_str(), CookOptions{});
         CHECK(!bad.ok());
         CHECK(report_for(bad, kMatGuid)->status == AssetStatus::Failed);
+        CHECK(diag_text(bad).find("must be within [0, 1]") != std::string::npos);
+    }
+}
+
+TEST_CASE("material: retro_reflect cooks into flags bits 24..31 beside translucency; a plain material keeps 0; bad ranges fail") {
+    const std::string root = make_project("cook_material_retro");
+    const std::string head = std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid;
+    auto cooked_chunk = [&](MaterialChunk& out) {
+        CookService cs;
+        const CookReport rep = cs.cook(root.c_str(), CookOptions{});
+        REQUIRE(rep.ok());
+        AssetSystem as;
+        const std::string cooked = root + "/cooked";
+        const StringView roots[] = {StringView(cooked.c_str())};
+        REQUIRE(as.mount(Span<const StringView>(roots, 1)).has_value());
+        auto mh = as.load_sync<Material>(G(kMatGuid));
+        REQUIRE(mh);
+        const Span<const byte> payload = as.resolve(mh.value());
+        REQUIRE(MaterialChunk::read(payload));
+        out = *MaterialChunk::read(payload).value();
+        as.release(AnyHandle(mh.value()));
+    };
+    write_file(root + "/assets/materials/hero.mcmat", head + R"(", "alpha_mode": "mask", "translucency": 0.5, "retro_reflect": 0.8 })");
+    MaterialChunk m{};
+    cooked_chunk(m);
+    CHECK(material_retro(m) == doctest::Approx(0.8f).epsilon(0.005));
+    CHECK(material_translucency(m) == doctest::Approx(0.5f).epsilon(0.005));
+    CHECK((m.flags & MaterialFlags::AlphaMask) != 0u);
+
+    // Without the key bits 24..31 stay zero: the chunk is what it was before M-HEADLIGHT.
+    write_file(root + "/assets/materials/hero.mcmat", head + R"(", "alpha_mode": "mask" })");
+    MaterialChunk plain{};
+    cooked_chunk(plain);
+    CHECK(material_retro(plain) == 0.0f);
+    CHECK((plain.flags & MaterialFlags::RetroMask) == 0u);
+
+    CookService svc;
+    for (const char* body : {R"(", "retro_reflect": 1.5 })", R"(", "retro_reflect": -0.1 })"}) {
+        write_file(root + "/assets/materials/hero.mcmat", head + body);
+        const CookReport bad = svc.cook(root.c_str(), CookOptions{});
+        CHECK(!bad.ok());
         CHECK(diag_text(bad).find("must be within [0, 1]") != std::string::npos);
     }
 }
