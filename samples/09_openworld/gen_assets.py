@@ -572,6 +572,7 @@ PARK = (0.16, 0.38, 0.17)
 SURFACES = {"asphalt": (4.0, [1.0, 1.0, 1.0, 1.0], 0.92), "paving": (2.4, [1.0, 0.98, 0.94, 1.0], 0.85),
             "grass": (8.0, [0.85, 0.9, 0.8, 1.0], 0.95), "concrete": (4.0, [1.0, 1.0, 1.0, 1.0], 0.9)}
 PAINT = {"marking_white": [0.92, 0.92, 0.88, 1.0], "marking_yellow": [0.95, 0.74, 0.12, 1.0]}
+PAINT_RETRO = {"marking_white": 0.8, "marking_yellow": 0.6}   # M-HEADLIGHT 3: glass-bead paint throws a car's headlights back
 G_MAT = {name: guid("materials/%s.mcmat" % name) for name in list(SURFACES) + list(PAINT)}
 PAINT_UV_M = 3.0     # the worn-paint texture repeats every 3 m
 PAINT_H = 0.03       # paint is a 3 cm slab on the road, so it never fights the road for the depth buffer
@@ -648,7 +649,7 @@ def surface_assets():
     write(wear_rel + ".mceasset", {"guid": guid(wear_rel), "importer": "texture", "importer_version": 1, "settings": {}})
     for name, color in PAINT.items():
         write("materials/%s.mcmat" % name, {"format": "mce-material", "version": 1, "guid": G_MAT[name], "name": name, "base_color": color,
-                                            "metallic": 0.0, "roughness": 0.6, "emissive": [0, 0, 0], "alpha_mode": "mask",
+                                            "retro_reflect": PAINT_RETRO[name], "metallic": 0.0, "roughness": 0.6, "emissive": [0, 0, 0], "alpha_mode": "mask",
                                             "alpha_cutoff": 0.5, "double_sided": False, "unlit": False, "textures": {"base_color": "guid:" + guid(wear_rel)}})
 
 

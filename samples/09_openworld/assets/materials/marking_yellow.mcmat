@@ -9,6 +9,7 @@
   0.12,
   1.0
  ],
+ "retro_reflect": 0.6,
  "metallic": 0.0,
  "roughness": 0.6,
  "emissive": [
