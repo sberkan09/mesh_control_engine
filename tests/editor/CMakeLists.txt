@@ -23,6 +23,7 @@ mce_add_test(test_editor UMBRELLA
         test_flip_entities.cpp
         test_jitter_entities.cpp
         test_radial_duplicate.cpp
+        test_transform_group.cpp
         test_snap_entities.cpp
         test_array_duplicate.cpp
         test_duplicate_offset.cpp

@@ -10,6 +10,7 @@
 #include "mce/editor/match_transform.h"
 #include "mce/editor/radial_duplicate.h"
 #include "mce/editor/snap_entities.h"
+#include "mce/editor/transform_group.h"
 #include "tool_args.h"
 #include "tools_agent.h"
 
@@ -175,6 +176,19 @@ bool entity_radial_duplicate(ToolCall& c) {
     return true;
 }
 
+bool entity_transform_group(ToolCall& c) {
+    Array<editor::EntityId> ids;
+    editor::GroupTransformParams p;
+    if (!arg_entities(c, ids, 1) || !arg_range(c, "degrees", p.degrees, -3600.0, 3600.0) ||
+        !arg_range(c, "scale", p.scale, 0.001, 1000.0) || !arg_range(c, "pivot_x", p.pivot_x, -1.0e6, 1.0e6) ||
+        !arg_range(c, "pivot_y", p.pivot_y, -1.0e6, 1.0e6))
+        return false;
+    p.use_pivot = arg(c, "pivot_x").valid() || arg(c, "pivot_y").valid();
+    const usize n = editor::transform_group(scene(c), Span<const editor::EntityId>(ids.data(), ids.size()), p);
+    c.out.begin_object().key("changed").num_u(n).end_object();
+    return true;
+}
+
 bool entity_jitter(ToolCall& c) {
     Array<editor::EntityId> ids;
     editor::JitterParams p;
@@ -248,6 +262,14 @@ const ToolDef kLayoutTools[] = {
      R"j({"type":"object","properties":{)j" MCE_ENTITIES
      R"j(,"count":{"type":"integer","minimum":2},"center_x":{"type":"number","default":0},"center_y":{"type":"number","default":0},"total_degrees":{"type":"number","exclusiveMinimum":0,"maximum":3600,"default":360},"turn":{"type":"boolean","default":true}},"required":["entities","count"]})j",
      entity_radial_duplicate},
+    {"entity_transform_group",
+     "Turn and resize the entities as one body about a pivot: each moves to pivot + scale * rotation(degrees, "
+     "counter-clockwise) * (its place - pivot), turns by the same angle and has its scale multiplied by 'scale'. The "
+     "pivot is the middle of the group unless pivot_x / pivot_y are given (the other defaults to 0). Returns changed "
+     "(how many entities; 0 when degrees is 0 and scale is 1). One undo step.",
+     R"j({"type":"object","properties":{)j" MCE_ENTITIES
+     R"j(,"degrees":{"type":"number","default":0},"scale":{"type":"number","exclusiveMinimum":0,"default":1},"pivot_x":{"type":"number"},"pivot_y":{"type":"number"}},"required":["entities"]})j",
+     entity_transform_group},
     {"entity_jitter",
      "Give the entities a random variation, the same for the same seed: each moves by up to move_x / move_y world "
      "units, turns by up to rotate_degrees about z and is scaled by a factor between scale_min and scale_max (all "

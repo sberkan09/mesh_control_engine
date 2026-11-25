@@ -1,0 +1,1 @@
+- editor: transform_group and the MCP tool entity_transform_group turn and resize a selection as one body about a pivot, in one undo step (M-GROUPXFORM).
