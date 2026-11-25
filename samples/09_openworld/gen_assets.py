@@ -1191,7 +1191,8 @@ def prefabs():
 
 # --- day and night, sky, street lamps, weather (M-OPENWORLD E6) ---------------------------------------------
 
-START_HOUR = 9.0      # the game starts on a morning
+NIGHT_SHOT = bool(os.environ.get("MCE_NIGHT_SHOT"))   # M-NIGHTSHOT: capture-only variant, never committed (tools/night_shot.sh)
+START_HOUR = 22.0 if NIGHT_SHOT else 9.0      # the game starts on a morning
 DAY_SECONDS = 720     # twelve real minutes for 24 hours
 WEATHER_SEED = 55     # the first ten weather picks (150 s each) are clear, rain, clear, storm, overcast ... and none is snow
 
@@ -1414,7 +1415,7 @@ def scene():
             "BulletHole3D": {"size": 0.25, "depth": 0.3, "life": 25, "fade": 5},
         })
     # The player, on the sidewalk of the middle avenue, with the car to take two steps away.
-    player_start = (-60.0, 0.95, -10.0)
+    player_start = (-62.0, 0.95, 2.2) if NIGHT_SHOT else (-60.0, 0.95, -10.0)
     player = s.add("Player", {
         "LocalTransform": tf(player_start),
         "CharacterController3D": {"radius": 0.3, "half_height": 0.6, "speed": 5.5, "use_input": True, "sprint_multiplier": 1.7,
@@ -1500,7 +1501,7 @@ def scene():
     s.ents[player]["components"]["Weapon3D"]["aim_from"] = s.ref(cam)
 
     # Parked cars on the avenue's sidewalk (walkers turn round at them): take the first one.
-    for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
+    for n, (x, z, yaw) in enumerate(((-56.0, 2.2, math.pi / 2) if NIGHT_SHOT else (-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
         comps = {c: v for c, v in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[0]["components"].items()}
         comps["LocalTransform"] = tf((x, 0.9, z), None, yaw)
         if n > 0:
