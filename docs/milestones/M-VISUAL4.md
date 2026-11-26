@@ -5,7 +5,7 @@ Added 2026-11-26, owner: the M-VISUAL routine 2 thread, from the audit `assessme
 | # | Step | State |
 |---|---|---|
 | 1 | Grass tufts over the park lawns with the existing `Foliage3D` (no new component, no engine change; see the section below) | done 2026-11-26 |
-| 2 | Life density at the first frame (spawner density, start view) | planned |
+| 2 | Life density at the first frame (spawner density, start view) | done 2026-11-26, no change: measured, the 12-frame capture predates the spawners; after 150 frames (`notes/life-150.png`) the avenue has cars and walkers (24 cars / 70 walkers allowed). Spawners fill over the first seconds, which the headless capture length hid |
 | 3 | Street decal variety (manholes, patches, posters) with the existing decal system | planned |
 | 4 | Headlight beam demo: fog on and a side camera in the open-world sample (`NIGHT=beam` capture) | planned |
 | 5 | Window interior mapping (shader, render core) | planned |
