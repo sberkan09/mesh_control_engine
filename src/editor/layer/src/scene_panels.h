@@ -42,6 +42,10 @@ inline constexpr const char* kSequencePanel = "Sequence";
 // The Mixer panel (mixer_panel.cpp): the scene's bus effects, reverb units, limiter and ducks (M-MIXEDIT).
 void add_mixer_panel(EditorShell& shell);
 inline constexpr const char* kMixerPanel = "Mixer";
+// The Layout panel (layout_panel.cpp): align, space, snap, flip, copy in a grid or a ring, turn and resize as one body
+// and randomize the selection, with a live read-out of where it sits (M-LAYOUTPANEL).
+void add_layout_panel(EditorShell& shell);
+inline constexpr const char* kLayoutPanel = "Layout";
 // The Strings panel (strings_panel.cpp): every locale's string table as one key by locale grid.
 void add_strings_panel(EditorShell& shell);
 inline constexpr const char* kStringsPanel = "Strings";
