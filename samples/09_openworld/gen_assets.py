@@ -740,6 +740,20 @@ def paint(key, boxes, colour):
     return {"mesh": "guid:" + g, "material": "guid:" + G_MAT[colour], "cast_shadows": 0}
 
 
+def grass_cover(scene, name, cx, cz, hw, hd, seed):
+    """M-VISUAL4 1: instanced grass tufts over a park lawn (Foliage3D: GPU-culled, wind-swayed). A tuft is five thin upright blades in one mesh;
+    the lawn's top is y = 0.1. About 1 tuft per m2, culled past 45 m, so a park costs nothing when it is out of sight."""
+    blades = [(0.00, 0.14, 0.00, 0.03, 0.28, 0.03), (0.05, 0.10, 0.03, 0.025, 0.20, 0.025), (-0.05, 0.12, 0.02, 0.025, 0.24, 0.025),
+              (0.02, 0.09, -0.05, 0.025, 0.18, 0.025), (-0.03, 0.11, -0.04, 0.025, 0.22, 0.025)]
+    g = surface_mesh("tuft_grass", blades, SURFACES["grass"][0])
+    count = int(4 * hw * hd * 1.0)
+    scene.add(name + " grass", {"LocalTransform": tf((cx, 0.1, cz)),
+                                "Foliage3D": {"mesh": "guid:" + g, "material": "guid:" + G_MAT["grass"], "tint": [0.55, 0.85, 0.4, 1],
+                                              "tint_variation": [0.7, 0.8, 0.55, 1], "half_extents": [round(hw, 2), round(hd, 2)], "count": count,
+                                              "seed": seed, "scale_min": 1.0, "scale_max": 2.0, "wind_amplitude": 0.06, "wind_frequency": 0.7,
+                                              "wind_height": 0.3, "wind_gust": 0.3, "wind_flutter": 0.01, "cull_distance": 45, "cast_shadows": 0}})
+
+
 def dashes(x0, x1, z, width, on=3.0, off=6.0):
     x = x0
     while x + on <= x1 + 1e-6:
@@ -935,6 +949,7 @@ def buildings(scene, rng):
                             scene.add(name + " bush %d" % t, {"LocalTransform": tf((cx + rng.uniform(-lw / 3, lw / 3), 0.1, cz + rng.uniform(-ld / 3, ld / 3)),
                                                                                     (1.2, 1.2, 1.2), rng.uniform(0, 6.28)),
                                                               "MeshRef": model_mesh("bush")})
+                        grass_cover(scene, name, cx, cz, (lw - 6) / 2 - 0.5, (ld - 6) / 2 - 0.5, 1000 + i * 100 + j * 10 + a * 3 + b)
                         scene.add(name + " bench", {"LocalTransform": tf((cx, 0.1, cz + ld / 2 - 5), yaw=math.pi), "MeshRef": model_mesh("bench")})
                         continue
                     w, d = (lw - 8) * rng.uniform(0.7, 1.0), (ld - 8) * rng.uniform(0.7, 1.0)
