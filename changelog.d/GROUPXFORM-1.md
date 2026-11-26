@@ -1,0 +1,1 @@
+- editor: Edit > Turn and resize... turns and resizes the selection as one body about its middle or a chosen pivot (M-GROUPXFORM).

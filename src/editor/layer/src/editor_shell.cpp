@@ -29,6 +29,7 @@
 #include "mce/editor/selection_history.h"
 #include "mce/editor/selection_sets.h"
 #include "mce/editor/snap_entities.h"
+#include "mce/editor/transform_group.h"
 #include "mce/editor/unique_names.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
@@ -69,6 +70,8 @@ struct EditorShell::Impl {
     JitterParams jitter{0.5f, 0.5f, 15.0f, 0.9f, 1.1f, 1};
     // Edit > Radial duplicate (M-RADIAL 3): the ring's size, centre and span.
     RadialParams radial;
+    // Edit > Turn and resize (M-GROUPXFORM 3): the angle, the size factor and an optional pivot.
+    GroupTransformParams group_xform{15.0f, 1.0f, false, 0.0f, 0.0f};
 };
 
 namespace {
@@ -133,6 +136,13 @@ void radial_selection(EditorScene& scene, const RadialParams& p) {
     Array<EntityId> ids;  // a copy: the edit below changes the scene
     for (EntityId id : scene.selection().items()) ids.push_back(id);
     radial_duplicate(scene, Span<const EntityId>(ids.data(), ids.size()), p);
+}
+
+// Edit > Turn and resize: the selection as one body, by `p`.
+void group_transform_selection(EditorScene& scene, const GroupTransformParams& p) {
+    Array<EntityId> ids;  // a copy: the edit below changes the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    transform_group(scene, Span<const EntityId>(ids.data(), ids.size()), p);
 }
 
 // Edit > Match to anchor: `part` of the first selected entity goes onto the rest of the selection.
@@ -941,7 +951,8 @@ void EditorShell::draw_popups() {
                                            "Rename Selection",
                                            "Array Duplicate",
                                            "Randomize",
-                                           "Radial Duplicate"};
+                                           "Radial Duplicate",
+                                           "Turn and Resize"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
         popup_opened_ = true;
@@ -1190,6 +1201,33 @@ void EditorShell::draw_popups() {
     }
 
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Turn and Resize", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        GroupTransformParams& g = impl_->group_xform;
+        ImGui::TextUnformatted("Turns and resizes the selection as one body about a pivot");
+        const f32 w = ImGui::GetFontSize() * 6.0f;
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Turn", &g.degrees, 0.5f, -3600.0f, 3600.0f, "%.1f deg");
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Size", &g.scale, 0.01f, 0.001f, 1000.0f, "x%.2f");
+        ImGui::Checkbox("Pivot at a point (else the middle of the group)", &g.use_pivot);
+        ImGui::BeginDisabled(!g.use_pivot);
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Pivot X", &g.pivot_x, 0.05f, -1000000.0f, 1000000.0f, "%.2f m");
+        ImGui::SetNextItemWidth(w);
+        ImGui::DragFloat("Pivot Y", &g.pivot_y, 0.05f, -1000000.0f, 1000000.0f, "%.2f m");
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(!group_transform_valid(g));
+        if (ImGui::Button("Apply")) {
+            group_transform_selection(scene(), g);
+            close();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
+        ImGui::EndPopup();
+    }
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("Rename Selection", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (ImGui::IsWindowAppearing()) {
             std::snprintf(impl_->rename_pattern, sizeof impl_->rename_pattern, "%s", "*_##");
@@ -1408,6 +1446,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Duplicate up", nullptr, false, sel)) duplicate_stepped(scene(), 0.0f, view_.snap_step);
         if (ImGui::MenuItem("Array duplicate...", nullptr, false, sel)) popup_ = Popup::ArrayDuplicate;
         if (ImGui::MenuItem("Radial duplicate...", nullptr, false, sel)) popup_ = Popup::RadialDuplicate;
+        if (ImGui::MenuItem("Turn and resize...", nullptr, false, sel)) popup_ = Popup::TurnResize;
         if (ImGui::MenuItem("Randomize...", nullptr, false, sel)) popup_ = Popup::Randomize;
         if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
         if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G", false, sel)) ungroup_selection(scene());

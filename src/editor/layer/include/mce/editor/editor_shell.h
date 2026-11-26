@@ -278,7 +278,8 @@ private:
         BatchRename,
         ArrayDuplicate,
         Randomize,
-        RadialDuplicate
+        RadialDuplicate,
+        TurnResize
     };
     Popup popup_ = Popup::None;
     bool popup_opened_ = false;
