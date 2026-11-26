@@ -1377,7 +1377,9 @@ void main() {
             }
             if (o_retro.x > 0.0) {  // M-HEADLIGHT 2: reflective paint throws a local light back at its source (uniform branch)
                 float back = pow(max(dot(v, ld), 0.0), 24.0);  // eye on the light's axis: the headlight case
-                color += o_retro.x * 3.0 * back * max(dot(n, ld), 0.0) * diffuse * (cookied ? L.color.rgb * att * lc : L.color.rgb * att);
+                // M-WETRETRO: a water film over the glass beads scatters the return, so a wet road throws back up to 60% less (p_wet.x 0 = dry, unchanged)
+                float retro = o_retro.x * (1.0 - 0.6 * min(p_wet.x, 1.0));
+                color += retro * 3.0 * back * max(dot(n, ld), 0.0) * diffuse * (cookied ? L.color.rgb * att * lc : L.color.rgb * att);
             }
             if (thin) {
                 vec3 E = cookied ? L.color.rgb * att * lc : L.color.rgb * att;
