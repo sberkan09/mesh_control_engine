@@ -580,6 +580,83 @@ ROAD_TOP = 0.14
 SIDEWALK_TOP = 0.2
 
 
+G_MANHOLE = guid("textures/manhole.png")
+G_PATCH = guid("textures/asphalt_patch.png")
+
+
+def _png_rgba(size, pixel):
+    rows = []
+    for y in range(size):
+        row = bytearray([0])
+        for x in range(size):
+            row.extend(pixel((x + 0.5) / size * 2 - 1, (y + 0.5) / size * 2 - 1))
+        rows.append(bytes(row))
+
+    def chunk(tag, data):
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
+
+
+def street_decal_textures():
+    """textures/manhole.png and textures/asphalt_patch.png (M-VISUAL4 3): 64 x 64 RGBA decals. A manhole cover is a dark iron disc with a rim, two
+    rings and a grid of ribs; a patch is a darker, slightly warmer rectangle of fresh asphalt with a bright tar seam at its edge."""
+    def manhole(u, v):
+        r = math.hypot(u, v)
+        if r > 0.92:
+            return bytes([0, 0, 0, 0])
+        rim = 1.0 if r > 0.8 else 0.0
+        ring = 1.0 if abs(r - 0.55) < 0.05 or abs(r - 0.3) < 0.04 else 0.0
+        rib = 1.0 if (abs(((u * 6) % 1.0) - 0.5) < 0.12 or abs(((v * 6) % 1.0) - 0.5) < 0.12) and r < 0.8 else 0.0
+        shade = 0.16 + 0.14 * max(rim, ring) - 0.05 * rib
+        a = 0.97 if r < 0.88 else 0.6
+        return bytes([int(shade * 255), int(shade * 255 * 0.96), int(shade * 255 * 0.9), int(a * 255)])
+
+    def patch(u, v):
+        edge = max(abs(u), abs(v))
+        if edge > 0.97:
+            return bytes([0, 0, 0, 0])
+        seam = 1.0 if edge > 0.9 else 0.0
+        shade = 0.035 + 0.05 * seam + 0.012 * math.sin(u * 40) * math.sin(v * 37)
+        a = 0.85 if seam < 0.5 else 0.7
+        return bytes([int(shade * 255 * 1.1), int(shade * 255), int(shade * 255 * 0.9), int(a * 255)])
+
+    for name, g, fn in (("manhole", G_MANHOLE, manhole), ("asphalt_patch", G_PATCH, patch)):
+        write_bytes("textures/%s.png" % name, _png_rgba(64, fn))
+        write("textures/%s.png.mceasset" % name, {"guid": g, "importer": "texture", "importer_version": 1, "settings": {"srgb": True}})
+
+
+def street_decals(scene, node_half):
+    """Manhole covers and asphalt patches on the roads (M-VISUAL4 3), from a private generator so no other random sequence moves. Added after
+    everything else so the older entities keep their order. Each road gets three covers and two patches in its lanes, away from the junctions."""
+    count = 0
+    for r in road_list():
+        kind, i, j = r
+        a, b = road_ends(r)
+        (ax, az), (bx, bz) = node_pos(*a), node_pos(*b)
+        h = road_half_width(r)
+        rng = random.Random(9100 + 37 * i + 11 * j + (0 if kind == "x" else 5))
+        cx, cz = (ax + bx) / 2, (az + bz) / 2
+        span = SPACING / 2 - max(node_half[a], node_half[b]) - 12
+        for n in range(5):
+            lx = rng.uniform(-span, span)
+            lz = rng.choice((-1, 1)) * rng.uniform(0.25, 0.7) * h
+            x, z = (cx + lx, cz + lz) if kind == "x" else (cx - lz, cz + lx)
+            yaw = rng.uniform(0, 6.28)
+            if n < 3:
+                tex, size = G_MANHOLE, [0.9, 0.4, 0.9]
+            else:
+                tex, size = G_PATCH, [rng.uniform(1.6, 3.2), 0.4, rng.uniform(1.4, 2.6)]
+                yaw = 0.0 if kind == "x" else math.pi / 2
+            scene.add("Street decal %s %d" % (road_name(r), n), {
+                "LocalTransform": tf((x, ROAD_TOP + 0.1, z), None, yaw),
+                "Decal3D": {"texture": "guid:" + tex, "size": size, "roughness": 0.55 if tex == G_MANHOLE else 0.85,
+                            "metallic": 0.5 if tex == G_MANHOLE else 0.0}})
+            count += 1
+    return count
+
+
 def bullet_hole_texture():
     """textures/bullet_hole.png (M-SHOTMARKS): a 64 x 64 RGBA decal, a dark core, a soft scorched ring, alpha as coverage."""
     size = 64
@@ -1584,6 +1661,7 @@ def scene():
                                        "probes_z": GI_PROBES[2], "probes_per_frame": 32, "intensity": 1.0},
                         "GiVisibility3D": {"relocate": 1, "follow_camera": 1}})
     signal_heads(s, node_half)
+    street_decals(s, node_half)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
 
@@ -1790,6 +1868,7 @@ models()
 surface_assets()
 color_grade_lut()
 bullet_hole_texture()
+street_decal_textures()
 lamp_material()
 signal_material()
 tracer_material()
