@@ -9,7 +9,7 @@ Added 2026-11-26, owner: the M-VISUAL routine 2 thread, from the audit `assessme
 | 3 | Street decal variety (manhole covers, asphalt patches) with the existing `Decal3D` | done 2026-11-26 (data only; posters left out) |
 | 4 | Headlight beam demo: fog on and a side camera in the open-world sample (`NIGHT=beam` capture) | done 2026-11-26, capture-only (`tools/night_shot.sh`, `volumetric_fog` on, side camera); the beam shows as a lit cone from the parked car (`notes/headbeam-demo.png`). The committed scene is unchanged |
 | 5 | Window interior mapping (shader, render core) | planned |
-| 6 | Per-instance tree tone variation | planned |
+| 6 | Per-instance tree tone variation | done 2026-11-26 (data only: each tree's `MeshRef.tint` from a position hash, brightness 0.8..1.12 with a warm/cool lean; no rng draw, so layouts stay; `notes/treetone-after.png`) |
 
 ## Step 1 design: `GroundCover3D` (2026-11-26)
 

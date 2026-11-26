@@ -903,6 +903,17 @@ def city_surface(scene):
     return node_half
 
 
+def tree_mesh(model, x, z):
+    """M-VISUAL4 6: a tree's MeshRef with its own tone. A hash of the position (not the rng, so no layout shifts) picks a brightness
+    0.8..1.12 and a warm/cool lean, so a row of one species is no longer one colour."""
+    h = math.sin(x * 12.9898 + z * 78.233) * 43758.5453
+    a, b = h - math.floor(h), math.sin(x * 4.1414 + z * 9.2653) * 0.5 + 0.5
+    v = 0.8 + 0.32 * a
+    m = model_mesh(model)
+    m["tint"] = [round(v * (0.95 + 0.1 * b), 3), round(v, 3), round(v * (1.05 - 0.1 * b), 3), 1.0]
+    return m
+
+
 def canopy(scene, name, model, x, y0, z, sc):
     """A camera-only collider over a tree's crown (layer 15, mask 0: nothing collides with it, default queries skip it), so the follow
     camera's spring arm stops at the leaves. y0 is where the tree's foot stands, sc its scale."""
@@ -931,7 +942,7 @@ def street_furniture(scene, rng, node_half):
                 model = "tree_oak" if rng.random() < 0.65 else "tree_pine"
                 sc = rng.uniform(0.7, 0.95)
                 scene.add("Street tree %s %+d %d" % (road_name(r), side, count),
-                          {"LocalTransform": tf((x, SIDEWALK_TOP, z), (sc, sc, sc), rng.uniform(0, 2 * math.pi)), "MeshRef": model_mesh(model)})
+                          {"LocalTransform": tf((x, SIDEWALK_TOP, z), (sc, sc, sc), rng.uniform(0, 2 * math.pi)), "MeshRef": tree_mesh(model, x, z)})
                 canopy(scene, "Street tree %s %+d %d" % (road_name(r), side, count), model, x, SIDEWALK_TOP, z, sc)
                 count += 1
                 lx += rng.uniform(26, 34)
@@ -1006,7 +1017,7 @@ def buildings(scene, rng):
                             e = scene.add(name + " tree %d" % t, {"LocalTransform": tf((tx, 1.5, tz)), "BoxCollider3D": {"half": [0.25, 1.5, 0.25]}})
                             scene.add(name + " tree %d mesh" % t, {"ChildOf": {"parent": scene.ref(e)},
                                                                    "LocalTransform": tf((0, -1.5, 0), (sc, sc, sc), rng.uniform(0, 6.28)),
-                                                                   "MeshRef": model_mesh(model)})
+                                                                   "MeshRef": tree_mesh(model, tx, tz)})
                             canopy(scene, name + " tree %d" % t, model, tx, 0.0, tz, sc)
                         for t in range(2):
                             scene.add(name + " bush %d" % t, {"LocalTransform": tf((cx + rng.uniform(-lw / 3, lw / 3), 0.1, cz + rng.uniform(-ld / 3, ld / 3)),
@@ -1040,7 +1051,7 @@ def buildings(scene, rng):
                     lot_yaw = rng.uniform(0, 6.28)  # drawn before the model, as the dict literal did
                     lot_tree = "tree_oak" if rng.random() < 0.6 else "tree_pine"
                     scene.add(name + " tree", {"LocalTransform": tf((tx, 0.0, tz), (sc, sc, sc), lot_yaw),
-                                               "MeshRef": model_mesh(lot_tree)})
+                                               "MeshRef": tree_mesh(lot_tree, tx, tz)})
                     canopy(scene, name + " tree", lot_tree, tx, 0.0, tz, sc)
                     count += 1
     return count
