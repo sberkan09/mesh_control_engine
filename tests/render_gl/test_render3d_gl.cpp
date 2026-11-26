@@ -1253,6 +1253,50 @@ TEST_CASE("render3d_gl: reflective paint throws a spot light back at an eye on i
     CHECK(f.device->validation_error_count() == 0);
 }
 
+TEST_CASE("render3d_gl: a wet road throws a headlight back less than a dry one (M-WETRETRO)") {
+    Fixture3D f;
+    f.render(0.0f, false);
+    const vec3 eye = f.camera.position;
+    const vec3 aim = {0.0f, 0.5f, 0.0f};
+    PointLight head;
+    head.position = eye;
+    head.direction = normalize(aim - eye);
+    head.radius = 30.0f;
+    head.intensity = 20.0f;
+    head.spot_inner = math::radians(30.0f);
+    head.spot_outer = math::radians(40.0f);
+    f32 wetness = 0.0f;
+    const auto scene = [&](Scene3D& s) {
+        local_lit(s, false, Span<const PointLight>(&head, 1));
+        WetSurfaces w;
+        w.wetness = wetness;
+        w.darken = 0.0f;  // isolate the retro scale: apply_wet's albedo loss would halve the gain on its own
+        w.puddles_enabled = false;
+        s.set_wet_surfaces(w);
+    };
+    const vec3 probe = {0.0f, 1.0f, 0.0f};
+    const auto gain = [&](f32 wet, u32& gen) -> int {
+        wetness = wet;
+        upload_retro_box(f, gen++, 0.0f);
+        f.render(0.0f, false, scene);
+        const int plain = f.at_world(probe).luma();
+        upload_retro_box(f, gen++, 1.0f);
+        f.render(0.0f, false, scene);
+        return f.at_world(probe).luma() - plain;  // what the reflective paint adds at this wetness
+    };
+    u32 gen = 2;
+    const int dry = gain(0.0f, gen);
+    const int wet = gain(1.0f, gen);
+    INFO("retro gain: dry " << dry << ", wet " << wet);
+    CHECK(dry > 10);
+    CHECK(wet > 0);
+    // With darken 0 only the new scale separates the two gains (without it they are equal). 40% of the return remains in linear light;
+    // the tonemapper compresses the dry highlight more, so the measured ratio is a little higher: accept 30%..70%.
+    CHECK(wet * 10 > dry * 3);
+    CHECK(wet * 10 < dry * 7);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
 TEST_CASE("render3d_gl: a shadowed point light casts through its cube faces without acne at the seams") {
     Fixture3D f;
     bool shadows = false;
