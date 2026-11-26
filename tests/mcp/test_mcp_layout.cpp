@@ -214,6 +214,24 @@ TEST_CASE("entity_transform_group turns a pair about its middle and is one undo 
           std::string::npos);
 }
 
+// M-MEASURE 2: entity_bounds.
+TEST_CASE("entity_bounds measures a group without changing the scene") {
+    const std::string root = layout_project("mcp_layout_bounds");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    const int a = make(c, "BA", -1, 2), b = make(c, "BB", 5, 6);
+    const std::string both = "[" + std::to_string(a) + "," + std::to_string(b) + "]";
+    auto r = c.ok("entity_bounds", "{\"entities\":" + both + "}");
+    CHECK(r.v().get("count").as_number() == 2);
+    CHECK(r.v().get("min_x").as_number() == doctest::Approx(-1.0));
+    CHECK(r.v().get("center_y").as_number() == doctest::Approx(4.0));
+    CHECK(r.v().get("width").as_number() == doctest::Approx(6.0));
+    CHECK(r.v().get("diagonal").as_number() == doctest::Approx(std::sqrt(52.0)));
+    CHECK(pos(c, a, 0) == doctest::Approx(-1.0));
+    CHECK(c.fails("entity_bounds", R"({"entities":[]})").find("entities") != std::string::npos);
+}
+
 // M-HIERTOOLS 1: entity_set_parent, entity_rename, entity_group, entity_ungroup, entity_reset_transform.
 TEST_CASE("hierarchy tools: reparent keeps the world place, group and ungroup undo, reset and rename work") {
     const std::string root = layout_project("mcp_hier");

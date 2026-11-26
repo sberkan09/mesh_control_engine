@@ -1,0 +1,1 @@
+- editor: group_bounds and the read-only MCP tool entity_bounds report the world box, middle, size and diagonal of a group of entities (M-MEASURE).

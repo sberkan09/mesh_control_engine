@@ -6,6 +6,7 @@
 #include "mce/editor/align_entities.h"
 #include "mce/editor/array_duplicate.h"
 #include "mce/editor/flip_entities.h"
+#include "mce/editor/group_bounds.h"
 #include "mce/editor/jitter_entities.h"
 #include "mce/editor/match_transform.h"
 #include "mce/editor/radial_duplicate.h"
@@ -189,6 +190,31 @@ bool entity_transform_group(ToolCall& c) {
     return true;
 }
 
+bool entity_bounds(ToolCall& c) {
+    Array<editor::EntityId> ids;
+    if (!arg_entities(c, ids, 1)) return false;
+    const editor::GroupBounds g = editor::group_bounds(scene(c), Span<const editor::EntityId>(ids.data(), ids.size()));
+    if (g.count == 0) return fail(c, "none of the entities has a transform");
+    c.out.begin_object().key("count").num_u(g.count);
+    c.out.key("min_x")
+        .num_f(static_cast<f64>(g.min_x))
+        .key("min_y")
+        .num_f(static_cast<f64>(g.min_y))
+        .key("max_x")
+        .num_f(static_cast<f64>(g.max_x))
+        .key("max_y")
+        .num_f(static_cast<f64>(g.max_y));
+    c.out.key("center_x").num_f(static_cast<f64>(g.center_x)).key("center_y").num_f(static_cast<f64>(g.center_y));
+    c.out.key("width")
+        .num_f(static_cast<f64>(g.width))
+        .key("height")
+        .num_f(static_cast<f64>(g.height))
+        .key("diagonal")
+        .num_f(static_cast<f64>(g.diagonal))
+        .end_object();
+    return true;
+}
+
 bool entity_jitter(ToolCall& c) {
     Array<editor::EntityId> ids;
     editor::JitterParams p;
@@ -270,6 +296,11 @@ const ToolDef kLayoutTools[] = {
      R"j({"type":"object","properties":{)j" MCE_ENTITIES
      R"j(,"degrees":{"type":"number","default":0},"scale":{"type":"number","exclusiveMinimum":0,"default":1},"pivot_x":{"type":"number"},"pivot_y":{"type":"number"}},"required":["entities"]})j",
      entity_transform_group},
+    {"entity_bounds",
+     "Measure where the entities sit in the world (read-only, no undo entry): the box around their world X and Y "
+     "(min_x, min_y, max_x, max_y), its middle (center_x, center_y), width, height and diagonal, and how many "
+     "entities were measured. Fails when none of them has a transform.",
+     R"j({"type":"object","properties":{)j" MCE_ENTITIES R"j(},"required":["entities"]})j", entity_bounds},
     {"entity_jitter",
      "Give the entities a random variation, the same for the same seed: each moves by up to move_x / move_y world "
      "units, turns by up to rotate_degrees about z and is scaled by a factor between scale_min and scale_max (all "

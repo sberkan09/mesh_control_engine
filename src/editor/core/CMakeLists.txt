@@ -32,6 +32,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/flip_entities.cpp
         src/jitter_entities.cpp
         src/radial_duplicate.cpp
+        src/group_bounds.cpp
         src/transform_group.cpp
         src/snap_entities.cpp
         src/array_duplicate.cpp
