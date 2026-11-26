@@ -74526,6 +74526,5566 @@
      ]
     }
    }
+  },
+  {
+   "id": 2975,
+   "name": "Street decal x0_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -476.277,
+      0.24,
+      -498.813
+     ],
+     "rotation": [
+      0,
+      0.92702,
+      0,
+      0.37501
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2976,
+   "name": "Street decal x0_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -291.222,
+      0.24,
+      -498.243
+     ],
+     "rotation": [
+      0,
+      0.99904,
+      0,
+      -0.04387
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2977,
+   "name": "Street decal x0_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -274.282,
+      0.24,
+      -498.832
+     ],
+     "rotation": [
+      0,
+      0.84788,
+      0,
+      0.53018
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2978,
+   "name": "Street decal x0_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -403.435,
+      0.24,
+      -501.555
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.2441483606728747,
+      0.4,
+      2.10261542032428
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2979,
+   "name": "Street decal x0_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -450.334,
+      0.24,
+      -501.648
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.1096398915595,
+      0.4,
+      2.571845317812011
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2980,
+   "name": "Street decal x1_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -125.517,
+      0.24,
+      -501.708
+     ],
+     "rotation": [
+      0,
+      0.09863,
+      0,
+      -0.99512
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2981,
+   "name": "Street decal x1_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -86.846,
+      0.24,
+      -498.354
+     ],
+     "rotation": [
+      0,
+      0.75661,
+      0,
+      0.65386
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2982,
+   "name": "Street decal x1_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -91.234,
+      0.24,
+      -497.71
+     ],
+     "rotation": [
+      0,
+      0.92199,
+      0,
+      -0.38721
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2983,
+   "name": "Street decal x1_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -198.025,
+      0.24,
+      -501.676
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.4709579852307373,
+      0.4,
+      1.57026346024764
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2984,
+   "name": "Street decal x1_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -168.743,
+      0.24,
+      -501.246
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.9599116722741177,
+      0.4,
+      1.8727489739541823
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2985,
+   "name": "Street decal x2_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      127.26,
+      0.24,
+      -498.267
+     ],
+     "rotation": [
+      0,
+      0.8208,
+      0,
+      -0.57121
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2986,
+   "name": "Street decal x2_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      63.234,
+      0.24,
+      -498.993
+     ],
+     "rotation": [
+      0,
+      0.02774,
+      0,
+      -0.99962
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2987,
+   "name": "Street decal x2_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      178.792,
+      0.24,
+      -498.062
+     ],
+     "rotation": [
+      0,
+      0.19477,
+      0,
+      -0.98085
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2988,
+   "name": "Street decal x2_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      76.296,
+      0.24,
+      -498.407
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.3624463321704123,
+      0.4,
+      1.6459283802934686
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2989,
+   "name": "Street decal x2_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      90.979,
+      0.24,
+      -498.879
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.9313026403148985,
+      0.4,
+      2.186458561254383
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2990,
+   "name": "Street decal x3_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      405.022,
+      0.24,
+      -502.161
+     ],
+     "rotation": [
+      0,
+      0.74146,
+      0,
+      -0.671
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2991,
+   "name": "Street decal x3_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      414.103,
+      0.24,
+      -498.639
+     ],
+     "rotation": [
+      0,
+      0.4972,
+      0,
+      -0.86763
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2992,
+   "name": "Street decal x3_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      370.889,
+      0.24,
+      -497.769
+     ],
+     "rotation": [
+      0,
+      0.58279,
+      0,
+      -0.81262
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2993,
+   "name": "Street decal x3_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      351.119,
+      0.24,
+      -501.642
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8048437282953045,
+      0.4,
+      1.4552147866289715
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2994,
+   "name": "Street decal x3_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      395.811,
+      0.24,
+      -497.576
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.01423621167533,
+      0.4,
+      2.401046514189245
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2995,
+   "name": "Street decal x0_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -328.691,
+      0.24,
+      -248.681
+     ],
+     "rotation": [
+      0,
+      0.20575,
+      0,
+      -0.9786
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2996,
+   "name": "Street decal x0_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -404.306,
+      0.24,
+      -251.955
+     ],
+     "rotation": [
+      0,
+      0.22276,
+      0,
+      0.97487
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2997,
+   "name": "Street decal x0_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -314.72,
+      0.24,
+      -248.995
+     ],
+     "rotation": [
+      0,
+      0.96787,
+      0,
+      -0.25144
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 2998,
+   "name": "Street decal x0_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -357.079,
+      0.24,
+      -247.695
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.6806678538225106,
+      0.4,
+      1.9344164953246508
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 2999,
+   "name": "Street decal x0_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -358.341,
+      0.24,
+      -248.114
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.4848948246673035,
+      0.4,
+      1.8978893576524618
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3000,
+   "name": "Street decal x1_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -42.049,
+      0.24,
+      -252.435
+     ],
+     "rotation": [
+      0,
+      0.57435,
+      0,
+      0.81861
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3001,
+   "name": "Street decal x1_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -173.013,
+      0.24,
+      -251.084
+     ],
+     "rotation": [
+      0,
+      0.23459,
+      0,
+      -0.97209
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3002,
+   "name": "Street decal x1_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -158.133,
+      0.24,
+      -248.83
+     ],
+     "rotation": [
+      0,
+      0.99746,
+      0,
+      0.07124
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3003,
+   "name": "Street decal x1_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -23.433,
+      0.24,
+      -247.615
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.082556018451909,
+      0.4,
+      1.883184660145333
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3004,
+   "name": "Street decal x1_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -180.747,
+      0.24,
+      -248.165
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.6064223239263105,
+      0.4,
+      2.4813346014857984
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3005,
+   "name": "Street decal x2_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      181.769,
+      0.24,
+      -251.911
+     ],
+     "rotation": [
+      0,
+      0.37706,
+      0,
+      -0.92619
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3006,
+   "name": "Street decal x2_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      33.655,
+      0.24,
+      -252.294
+     ],
+     "rotation": [
+      0,
+      0.82548,
+      0,
+      0.56444
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3007,
+   "name": "Street decal x2_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      40.048,
+      0.24,
+      -251.779
+     ],
+     "rotation": [
+      0,
+      0.98626,
+      0,
+      0.1652
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3008,
+   "name": "Street decal x2_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      132.532,
+      0.24,
+      -251.738
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8287413053481236,
+      0.4,
+      2.4659776198312713
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3009,
+   "name": "Street decal x2_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      140.694,
+      0.24,
+      -248.309
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.550241369921198,
+      0.4,
+      2.01086849553647
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3010,
+   "name": "Street decal x3_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      395.299,
+      0.24,
+      -252.225
+     ],
+     "rotation": [
+      0,
+      0.55426,
+      0,
+      0.83234
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3011,
+   "name": "Street decal x3_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      368.419,
+      0.24,
+      -247.616
+     ],
+     "rotation": [
+      0,
+      0.4344,
+      0,
+      -0.90072
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3012,
+   "name": "Street decal x3_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      429.125,
+      0.24,
+      -251.188
+     ],
+     "rotation": [
+      0,
+      0.76023,
+      0,
+      0.64966
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3013,
+   "name": "Street decal x3_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      307.742,
+      0.24,
+      -248.977
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8451413426404448,
+      0.4,
+      1.8356245462770369
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3014,
+   "name": "Street decal x3_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      429.233,
+      0.24,
+      -252.339
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.782276211657955,
+      0.4,
+      2.0013921809473576
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3015,
+   "name": "Street decal x0_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -341.94,
+      0.24,
+      -2.35
+     ],
+     "rotation": [
+      0,
+      0.16151,
+      0,
+      -0.98687
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3016,
+   "name": "Street decal x0_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -402.77,
+      0.24,
+      -4.835
+     ],
+     "rotation": [
+      0,
+      0.81109,
+      0,
+      -0.58492
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3017,
+   "name": "Street decal x0_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -474.806,
+      0.24,
+      -3.913
+     ],
+     "rotation": [
+      0,
+      0.99955,
+      0,
+      -0.03016
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3018,
+   "name": "Street decal x0_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -319.493,
+      0.24,
+      3.745
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.1427584890934153,
+      0.4,
+      1.9116295103139769
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3019,
+   "name": "Street decal x0_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -430.556,
+      0.24,
+      -1.971
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.0525594997233165,
+      0.4,
+      2.3466044688700127
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3020,
+   "name": "Street decal x1_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -213.575,
+      0.24,
+      -2.43
+     ],
+     "rotation": [
+      0,
+      0.87433,
+      0,
+      -0.48534
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3021,
+   "name": "Street decal x1_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -215.569,
+      0.24,
+      2.466
+     ],
+     "rotation": [
+      0,
+      0.73224,
+      0,
+      0.68105
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3022,
+   "name": "Street decal x1_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -191.84,
+      0.24,
+      -2.745
+     ],
+     "rotation": [
+      0,
+      0.96627,
+      0,
+      -0.25753
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3023,
+   "name": "Street decal x1_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -191.022,
+      0.24,
+      4.521
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.061883100855043,
+      0.4,
+      2.482444122387297
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3024,
+   "name": "Street decal x1_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -70.084,
+      0.24,
+      -3.898
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.6320408444919703,
+      0.4,
+      1.571061737832054
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3025,
+   "name": "Street decal x2_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      177.508,
+      0.24,
+      -3.621
+     ],
+     "rotation": [
+      0,
+      0.94382,
+      0,
+      0.33045
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3026,
+   "name": "Street decal x2_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      86.488,
+      0.24,
+      4.82
+     ],
+     "rotation": [
+      0,
+      0.08381,
+      0,
+      0.99648
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3027,
+   "name": "Street decal x2_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      112.915,
+      0.24,
+      -2.017
+     ],
+     "rotation": [
+      0,
+      0.11273,
+      0,
+      -0.99363
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3028,
+   "name": "Street decal x2_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      73.565,
+      0.24,
+      2.232
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.0639185369606894,
+      0.4,
+      1.8513974013816503
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3029,
+   "name": "Street decal x2_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      52.602,
+      0.24,
+      -4.624
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.310410674919022,
+      0.4,
+      1.8797473378537128
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3030,
+   "name": "Street decal x3_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      360.187,
+      0.24,
+      -4.761
+     ],
+     "rotation": [
+      0,
+      0.06613,
+      0,
+      0.99781
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3031,
+   "name": "Street decal x3_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      383.131,
+      0.24,
+      2.081
+     ],
+     "rotation": [
+      0,
+      0.58882,
+      0,
+      -0.80826
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3032,
+   "name": "Street decal x3_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      365.829,
+      0.24,
+      4.435
+     ],
+     "rotation": [
+      0,
+      0.74212,
+      0,
+      -0.67026
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3033,
+   "name": "Street decal x3_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      464.098,
+      0.24,
+      4.076
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.277663242400365,
+      0.4,
+      1.5742033059469902
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3034,
+   "name": "Street decal x3_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      413.72,
+      0.24,
+      -4.887
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8970881463457934,
+      0.4,
+      2.5571749398135992
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3035,
+   "name": "Street decal x0_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -412.632,
+      0.24,
+      252.062
+     ],
+     "rotation": [
+      0,
+      0.95911,
+      0,
+      -0.28305
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3036,
+   "name": "Street decal x0_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -448.121,
+      0.24,
+      248.467
+     ],
+     "rotation": [
+      0,
+      0.71421,
+      0,
+      0.69994
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3037,
+   "name": "Street decal x0_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -272.361,
+      0.24,
+      250.957
+     ],
+     "rotation": [
+      0,
+      0.94308,
+      0,
+      -0.33257
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3038,
+   "name": "Street decal x0_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -455.395,
+      0.24,
+      250.913
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.963597687696842,
+      0.4,
+      2.3320433312130824
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3039,
+   "name": "Street decal x0_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -273.528,
+      0.24,
+      251.357
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.1028156324954614,
+      0.4,
+      2.5276641333453553
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3040,
+   "name": "Street decal x1_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -21.871,
+      0.24,
+      247.961
+     ],
+     "rotation": [
+      0,
+      0.02332,
+      0,
+      0.99973
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3041,
+   "name": "Street decal x1_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -73.783,
+      0.24,
+      252.088
+     ],
+     "rotation": [
+      0,
+      0.85775,
+      0,
+      -0.51406
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3042,
+   "name": "Street decal x1_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -188.509,
+      0.24,
+      247.892
+     ],
+     "rotation": [
+      0,
+      0.89378,
+      0,
+      -0.44851
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3043,
+   "name": "Street decal x1_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -202.473,
+      0.24,
+      251.215
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.0694281496152516,
+      0.4,
+      1.9140776507726294
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3044,
+   "name": "Street decal x1_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -158.709,
+      0.24,
+      249.014
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.396799158189002,
+      0.4,
+      1.8160957685674386
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3045,
+   "name": "Street decal x2_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      97.665,
+      0.24,
+      248.195
+     ],
+     "rotation": [
+      0,
+      0.00347,
+      0,
+      0.99999
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3046,
+   "name": "Street decal x2_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      153.843,
+      0.24,
+      251.771
+     ],
+     "rotation": [
+      0,
+      0.02286,
+      0,
+      -0.99974
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3047,
+   "name": "Street decal x2_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      56.788,
+      0.24,
+      248.09
+     ],
+     "rotation": [
+      0,
+      0.114,
+      0,
+      -0.99348
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3048,
+   "name": "Street decal x2_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      74.372,
+      0.24,
+      248.882
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8982334047770393,
+      0.4,
+      2.199121096958508
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3049,
+   "name": "Street decal x2_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      202.072,
+      0.24,
+      247.768
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.070903167680749,
+      0.4,
+      1.8142792379164412
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3050,
+   "name": "Street decal x3_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      380.612,
+      0.24,
+      251.292
+     ],
+     "rotation": [
+      0,
+      0.88274,
+      0,
+      0.46985
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3051,
+   "name": "Street decal x3_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      274.891,
+      0.24,
+      248.741
+     ],
+     "rotation": [
+      0,
+      0.99678,
+      0,
+      -0.08023
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3052,
+   "name": "Street decal x3_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      282.5,
+      0.24,
+      248.721
+     ],
+     "rotation": [
+      0,
+      0.83874,
+      0,
+      -0.54453
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3053,
+   "name": "Street decal x3_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      395.357,
+      0.24,
+      249.003
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.1495681688454553,
+      0.4,
+      1.6038264971532616
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3054,
+   "name": "Street decal x3_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      405.544,
+      0.24,
+      252.191
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.8829307247007807,
+      0.4,
+      2.1001428166764486
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3055,
+   "name": "Street decal x0_4 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -348.305,
+      0.24,
+      501.027
+     ],
+     "rotation": [
+      0,
+      0.9661,
+      0,
+      0.25815
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3056,
+   "name": "Street decal x0_4 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -413.018,
+      0.24,
+      500.881
+     ],
+     "rotation": [
+      0,
+      0.41502,
+      0,
+      0.90981
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3057,
+   "name": "Street decal x0_4 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -308.625,
+      0.24,
+      497.657
+     ],
+     "rotation": [
+      0,
+      0.23488,
+      0,
+      0.97202
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3058,
+   "name": "Street decal x0_4 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -284.148,
+      0.24,
+      501.434
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.207051544201531,
+      0.4,
+      2.0681868780621193
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3059,
+   "name": "Street decal x0_4 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -421.297,
+      0.24,
+      502.078
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.0148424822309456,
+      0.4,
+      1.4550532062614272
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3060,
+   "name": "Street decal x1_4 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -127.18,
+      0.24,
+      498.344
+     ],
+     "rotation": [
+      0,
+      0.33587,
+      0,
+      -0.94191
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3061,
+   "name": "Street decal x1_4 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -187.285,
+      0.24,
+      497.674
+     ],
+     "rotation": [
+      0,
+      0.99202,
+      0,
+      -0.12605
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3062,
+   "name": "Street decal x1_4 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -63.056,
+      0.24,
+      498.201
+     ],
+     "rotation": [
+      0,
+      0.72817,
+      0,
+      0.6854
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3063,
+   "name": "Street decal x1_4 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -85.257,
+      0.24,
+      501.609
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.1258377532888666,
+      0.4,
+      1.9106518245626383
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3064,
+   "name": "Street decal x1_4 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -113.488,
+      0.24,
+      502.07
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.4829964299496927,
+      0.4,
+      2.0381341873409813
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3065,
+   "name": "Street decal x2_4 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      164.883,
+      0.24,
+      501.743
+     ],
+     "rotation": [
+      0,
+      0.89643,
+      0,
+      -0.44319
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3066,
+   "name": "Street decal x2_4 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      105.103,
+      0.24,
+      498.708
+     ],
+     "rotation": [
+      0,
+      0.97865,
+      0,
+      -0.20552
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3067,
+   "name": "Street decal x2_4 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      61.171,
+      0.24,
+      498.931
+     ],
+     "rotation": [
+      0,
+      0.43886,
+      0,
+      0.89855
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3068,
+   "name": "Street decal x2_4 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      96.761,
+      0.24,
+      498.193
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.160379921984493,
+      0.4,
+      1.7793587617971416
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3069,
+   "name": "Street decal x2_4 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      124.128,
+      0.24,
+      501.152
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.0386058600383263,
+      0.4,
+      2.5705108589237606
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3070,
+   "name": "Street decal x3_4 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      474.275,
+      0.24,
+      497.934
+     ],
+     "rotation": [
+      0,
+      0.22359,
+      0,
+      0.97468
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3071,
+   "name": "Street decal x3_4 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      366.624,
+      0.24,
+      501.69
+     ],
+     "rotation": [
+      0,
+      0.22887,
+      0,
+      0.97346
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3072,
+   "name": "Street decal x3_4 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      278.13,
+      0.24,
+      498.094
+     ],
+     "rotation": [
+      0,
+      0.74395,
+      0,
+      0.66824
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3073,
+   "name": "Street decal x3_4 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      316.062,
+      0.24,
+      498.159
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.4952900790989694,
+      0.4,
+      1.661606557525035
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3074,
+   "name": "Street decal x3_4 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      281.127,
+      0.24,
+      498.24
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.9421729760360185,
+      0.4,
+      1.9966456973149096
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3075,
+   "name": "Street decal z0_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.008,
+      0.24,
+      -295.612
+     ],
+     "rotation": [
+      0,
+      0.82134,
+      0,
+      -0.57043
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3076,
+   "name": "Street decal z0_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -499.111,
+      0.24,
+      -365.58
+     ],
+     "rotation": [
+      0,
+      0.48273,
+      0,
+      -0.87577
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3077,
+   "name": "Street decal z0_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.851,
+      0.24,
+      -442.679
+     ],
+     "rotation": [
+      0,
+      0.76231,
+      0,
+      0.64721
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3078,
+   "name": "Street decal z0_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -502.325,
+      0.24,
+      -356.335
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.3058431821568925,
+      0.4,
+      2.457452760561652
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3079,
+   "name": "Street decal z0_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.561,
+      0.24,
+      -320.959
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.8099692973371857,
+      0.4,
+      1.5773060774691843
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3080,
+   "name": "Street decal z0_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -497.849,
+      0.24,
+      -180.303
+     ],
+     "rotation": [
+      0,
+      0.76383,
+      0,
+      -0.64542
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3081,
+   "name": "Street decal z0_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.266,
+      0.24,
+      -77.164
+     ],
+     "rotation": [
+      0,
+      0.01145,
+      0,
+      -0.99993
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3082,
+   "name": "Street decal z0_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.904,
+      0.24,
+      -187.367
+     ],
+     "rotation": [
+      0,
+      0.16952,
+      0,
+      -0.98553
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3083,
+   "name": "Street decal z0_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -498.668,
+      0.24,
+      -75.266
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.6363165329318994,
+      0.4,
+      1.8419884507618038
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3084,
+   "name": "Street decal z0_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.945,
+      0.24,
+      -229.82
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8756169747681843,
+      0.4,
+      1.4476441785014413
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3085,
+   "name": "Street decal z0_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -502.44,
+      0.24,
+      187.077
+     ],
+     "rotation": [
+      0,
+      0.89255,
+      0,
+      -0.45094
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3086,
+   "name": "Street decal z0_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -502.241,
+      0.24,
+      189.074
+     ],
+     "rotation": [
+      0,
+      0.37924,
+      0,
+      0.9253
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3087,
+   "name": "Street decal z0_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -498.562,
+      0.24,
+      160.973
+     ],
+     "rotation": [
+      0,
+      0.84379,
+      0,
+      0.53668
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3088,
+   "name": "Street decal z0_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.454,
+      0.24,
+      225.095
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8522231431426088,
+      0.4,
+      1.906672169552972
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3089,
+   "name": "Street decal z0_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.511,
+      0.24,
+      181.742
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.973081044400965,
+      0.4,
+      1.9684349318277858
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3090,
+   "name": "Street decal z0_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.636,
+      0.24,
+      272.088
+     ],
+     "rotation": [
+      0,
+      0.99924,
+      0,
+      0.03901
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3091,
+   "name": "Street decal z0_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -501.599,
+      0.24,
+      479.314
+     ],
+     "rotation": [
+      0,
+      0.92628,
+      0,
+      0.37685
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3092,
+   "name": "Street decal z0_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -498.864,
+      0.24,
+      426.865
+     ],
+     "rotation": [
+      0,
+      0.81573,
+      0,
+      0.57843
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3093,
+   "name": "Street decal z0_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -497.733,
+      0.24,
+      283.175
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.0154727192064916,
+      0.4,
+      1.90060326420847
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3094,
+   "name": "Street decal z0_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -498.735,
+      0.24,
+      403.147
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.7149439038295293,
+      0.4,
+      1.8334169343700426
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3095,
+   "name": "Street decal z1_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -250.94,
+      0.24,
+      -427.121
+     ],
+     "rotation": [
+      0,
+      0.49473,
+      0,
+      -0.86905
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3096,
+   "name": "Street decal z1_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -248.307,
+      0.24,
+      -361.918
+     ],
+     "rotation": [
+      0,
+      0.99999,
+      0,
+      0.00423
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3097,
+   "name": "Street decal z1_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -248.401,
+      0.24,
+      -296.578
+     ],
+     "rotation": [
+      0,
+      0.30753,
+      0,
+      -0.95154
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3098,
+   "name": "Street decal z1_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -248.813,
+      0.24,
+      -408.543
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.9349948913795365,
+      0.4,
+      1.5751375186410144
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3099,
+   "name": "Street decal z1_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -251.234,
+      0.24,
+      -473.395
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.7755977266277383,
+      0.4,
+      1.7356073105803573
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3100,
+   "name": "Street decal z1_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -251.95,
+      0.24,
+      -83.2
+     ],
+     "rotation": [
+      0,
+      0.23832,
+      0,
+      -0.97119
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3101,
+   "name": "Street decal z1_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -247.622,
+      0.24,
+      -114.288
+     ],
+     "rotation": [
+      0,
+      0.68351,
+      0,
+      0.72994
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3102,
+   "name": "Street decal z1_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -251.165,
+      0.24,
+      -63.729
+     ],
+     "rotation": [
+      0,
+      0.96076,
+      0,
+      0.27738
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3103,
+   "name": "Street decal z1_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -250.994,
+      0.24,
+      -163.862
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.9022537394900927,
+      0.4,
+      2.3549175089295513
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3104,
+   "name": "Street decal z1_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -247.933,
+      0.24,
+      -159.648
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.9457801077128956,
+      0.4,
+      1.450669558700607
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3105,
+   "name": "Street decal z1_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -248.544,
+      0.24,
+      49.709
+     ],
+     "rotation": [
+      0,
+      0.06278,
+      0,
+      0.99803
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3106,
+   "name": "Street decal z1_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -252.118,
+      0.24,
+      39.652
+     ],
+     "rotation": [
+      0,
+      0.83321,
+      0,
+      -0.55296
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3107,
+   "name": "Street decal z1_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -247.874,
+      0.24,
+      164.269
+     ],
+     "rotation": [
+      0,
+      0.95774,
+      0,
+      -0.28764
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3108,
+   "name": "Street decal z1_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -251.85,
+      0.24,
+      115.93
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.306655854995016,
+      0.4,
+      1.901375903769017
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3109,
+   "name": "Street decal z1_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -250.962,
+      0.24,
+      206.466
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.5036414860628815,
+      0.4,
+      2.18361905013283
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3110,
+   "name": "Street decal z1_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -247.577,
+      0.24,
+      354.915
+     ],
+     "rotation": [
+      0,
+      0.68863,
+      0,
+      -0.72511
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3111,
+   "name": "Street decal z1_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -248.253,
+      0.24,
+      473.663
+     ],
+     "rotation": [
+      0,
+      0.96058,
+      0,
+      0.278
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3112,
+   "name": "Street decal z1_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -251.433,
+      0.24,
+      313.52
+     ],
+     "rotation": [
+      0,
+      0.20026,
+      0,
+      0.97974
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3113,
+   "name": "Street decal z1_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -248.85,
+      0.24,
+      310.258
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.617894415944611,
+      0.4,
+      2.3219726398418508
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3114,
+   "name": "Street decal z1_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -251.956,
+      0.24,
+      273.87
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.874845348414694,
+      0.4,
+      2.584834396540657
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3115,
+   "name": "Street decal z2_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      4.869,
+      0.24,
+      -298.587
+     ],
+     "rotation": [
+      0,
+      0.73432,
+      0,
+      0.67881
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3116,
+   "name": "Street decal z2_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      2.584,
+      0.24,
+      -469.409
+     ],
+     "rotation": [
+      0,
+      0.46657,
+      0,
+      0.88448
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3117,
+   "name": "Street decal z2_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -3.162,
+      0.24,
+      -480.944
+     ],
+     "rotation": [
+      0,
+      0.8837,
+      0,
+      0.46806
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3118,
+   "name": "Street decal z2_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -4.226,
+      0.24,
+      -374.556
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8240996844731618,
+      0.4,
+      1.4542876229886652
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3119,
+   "name": "Street decal z2_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      3.493,
+      0.24,
+      -446.723
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.8013161893014487,
+      0.4,
+      1.9615340264358458
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3120,
+   "name": "Street decal z2_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -1.999,
+      0.24,
+      -204.847
+     ],
+     "rotation": [
+      0,
+      0.44085,
+      0,
+      0.89758
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3121,
+   "name": "Street decal z2_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -3.637,
+      0.24,
+      -200.392
+     ],
+     "rotation": [
+      0,
+      0.41159,
+      0,
+      -0.91137
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3122,
+   "name": "Street decal z2_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -2.158,
+      0.24,
+      -191.436
+     ],
+     "rotation": [
+      0,
+      0.99582,
+      0,
+      -0.09128
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3123,
+   "name": "Street decal z2_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      4.465,
+      0.24,
+      -204.54
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.2431660217272964,
+      0.4,
+      1.7195077053268664
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3124,
+   "name": "Street decal z2_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      3.505,
+      0.24,
+      -211.441
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.643678592657629,
+      0.4,
+      2.1518094984083747
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3125,
+   "name": "Street decal z2_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -4.055,
+      0.24,
+      178.832
+     ],
+     "rotation": [
+      0,
+      0.52925,
+      0,
+      -0.84846
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3126,
+   "name": "Street decal z2_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      3.878,
+      0.24,
+      26.27
+     ],
+     "rotation": [
+      0,
+      0.85838,
+      0,
+      0.51301
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3127,
+   "name": "Street decal z2_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      3.699,
+      0.24,
+      80.224
+     ],
+     "rotation": [
+      0,
+      0.9958,
+      0,
+      -0.0916
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3128,
+   "name": "Street decal z2_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -2.11,
+      0.24,
+      158.734
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.191447925433915,
+      0.4,
+      1.5190480409182463
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3129,
+   "name": "Street decal z2_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      3.66,
+      0.24,
+      106.327
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.4051489580848435,
+      0.4,
+      1.7449362802554864
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3130,
+   "name": "Street decal z2_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -4.163,
+      0.24,
+      416.545
+     ],
+     "rotation": [
+      0,
+      0.022,
+      0,
+      0.99976
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3131,
+   "name": "Street decal z2_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -2.283,
+      0.24,
+      423.879
+     ],
+     "rotation": [
+      0,
+      0.99956,
+      0,
+      0.02952
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3132,
+   "name": "Street decal z2_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      4.034,
+      0.24,
+      367.473
+     ],
+     "rotation": [
+      0,
+      0.91867,
+      0,
+      0.39503
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3133,
+   "name": "Street decal z2_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -1.756,
+      0.24,
+      295.299
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.108450580991905,
+      0.4,
+      2.35276712851794
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3134,
+   "name": "Street decal z2_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      2.7,
+      0.24,
+      371.782
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.341833676326996,
+      0.4,
+      1.9383491791152443
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3135,
+   "name": "Street decal z3_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.069,
+      0.24,
+      -458.388
+     ],
+     "rotation": [
+      0,
+      0.3143,
+      0,
+      0.94933
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3136,
+   "name": "Street decal z3_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      248.578,
+      0.24,
+      -330.011
+     ],
+     "rotation": [
+      0,
+      0.70561,
+      0,
+      0.7086
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3137,
+   "name": "Street decal z3_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.591,
+      0.24,
+      -395.639
+     ],
+     "rotation": [
+      0,
+      0.84694,
+      0,
+      -0.53169
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3138,
+   "name": "Street decal z3_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      250.888,
+      0.24,
+      -275.902
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.3500278058424984,
+      0.4,
+      2.5376258095195876
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3139,
+   "name": "Street decal z3_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      252.199,
+      0.24,
+      -466.731
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.305720187824725,
+      0.4,
+      2.4294777616500403
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3140,
+   "name": "Street decal z3_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      252.412,
+      0.24,
+      -140.538
+     ],
+     "rotation": [
+      0,
+      0.4794,
+      0,
+      -0.8776
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3141,
+   "name": "Street decal z3_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      247.997,
+      0.24,
+      -181.983
+     ],
+     "rotation": [
+      0,
+      0.57981,
+      0,
+      -0.81475
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3142,
+   "name": "Street decal z3_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      247.62,
+      0.24,
+      -82.804
+     ],
+     "rotation": [
+      0,
+      0.8789,
+      0,
+      0.477
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3143,
+   "name": "Street decal z3_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.799,
+      0.24,
+      -66.874
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.4037219809026036,
+      0.4,
+      2.573411670353561
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3144,
+   "name": "Street decal z3_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.533,
+      0.24,
+      -34.06
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.647389341844387,
+      0.4,
+      2.103840607004913
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3145,
+   "name": "Street decal z3_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      252.085,
+      0.24,
+      210.038
+     ],
+     "rotation": [
+      0,
+      0.76486,
+      0,
+      0.6442
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3146,
+   "name": "Street decal z3_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.103,
+      0.24,
+      109.155
+     ],
+     "rotation": [
+      0,
+      0.87188,
+      0,
+      -0.48971
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3147,
+   "name": "Street decal z3_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      250.977,
+      0.24,
+      116.921
+     ],
+     "rotation": [
+      0,
+      0.60841,
+      0,
+      -0.79363
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3148,
+   "name": "Street decal z3_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      248.998,
+      0.24,
+      56.017
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.60985922352197,
+      0.4,
+      1.699196714527552
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3149,
+   "name": "Street decal z3_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      248.453,
+      0.24,
+      145.45
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.7465879465543726,
+      0.4,
+      2.3524132681123073
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3150,
+   "name": "Street decal z3_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      248.144,
+      0.24,
+      421.121
+     ],
+     "rotation": [
+      0,
+      0.90208,
+      0,
+      -0.43157
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3151,
+   "name": "Street decal z3_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.523,
+      0.24,
+      270.514
+     ],
+     "rotation": [
+      0,
+      0.98112,
+      0,
+      -0.19338
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3152,
+   "name": "Street decal z3_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.511,
+      0.24,
+      344.22
+     ],
+     "rotation": [
+      0,
+      0.11372,
+      0,
+      0.99351
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3153,
+   "name": "Street decal z3_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.479,
+      0.24,
+      397.572
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.6210452319484414,
+      0.4,
+      2.0615441440864646
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3154,
+   "name": "Street decal z3_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      251.912,
+      0.24,
+      479.356
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.8921774861121263,
+      0.4,
+      2.025509288629917
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3155,
+   "name": "Street decal z4_0 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      497.844,
+      0.24,
+      -323.989
+     ],
+     "rotation": [
+      0,
+      0.96232,
+      0,
+      -0.27193
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3156,
+   "name": "Street decal z4_0 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      499.012,
+      0.24,
+      -306.373
+     ],
+     "rotation": [
+      0,
+      0.41907,
+      0,
+      -0.90796
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3157,
+   "name": "Street decal z4_0 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      501.436,
+      0.24,
+      -304.13
+     ],
+     "rotation": [
+      0,
+      0.91999,
+      0,
+      0.39193
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3158,
+   "name": "Street decal z4_0 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      498.47,
+      0.24,
+      -301.395
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.1273282483570655,
+      0.4,
+      1.4807609364798666
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3159,
+   "name": "Street decal z4_0 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      498.892,
+      0.24,
+      -470.873
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.7449102246665498,
+      0.4,
+      2.539884101689738
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3160,
+   "name": "Street decal z4_1 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      497.593,
+      0.24,
+      -22.445
+     ],
+     "rotation": [
+      0,
+      0.50076,
+      0,
+      -0.86559
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3161,
+   "name": "Street decal z4_1 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      498.862,
+      0.24,
+      -33.763
+     ],
+     "rotation": [
+      0,
+      0.62944,
+      0,
+      0.77705
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3162,
+   "name": "Street decal z4_1 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      501.871,
+      0.24,
+      -106.449
+     ],
+     "rotation": [
+      0,
+      0.40897,
+      0,
+      -0.91255
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3163,
+   "name": "Street decal z4_1 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      498.289,
+      0.24,
+      -168.345
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.278124747664931,
+      0.4,
+      1.5555603305556396
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3164,
+   "name": "Street decal z4_1 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      497.835,
+      0.24,
+      -114.985
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.210412084959166,
+      0.4,
+      1.54891389578459
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3165,
+   "name": "Street decal z4_2 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      502.44,
+      0.24,
+      144.165
+     ],
+     "rotation": [
+      0,
+      0.87192,
+      0,
+      0.48964
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3166,
+   "name": "Street decal z4_2 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      497.7,
+      0.24,
+      124.646
+     ],
+     "rotation": [
+      0,
+      0.68602,
+      0,
+      -0.72758
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3167,
+   "name": "Street decal z4_2 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      501.937,
+      0.24,
+      24.008
+     ],
+     "rotation": [
+      0,
+      0.56298,
+      0,
+      -0.82647
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3168,
+   "name": "Street decal z4_2 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      502.297,
+      0.24,
+      64.689
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      3.0361634543251275,
+      0.4,
+      1.5875257574292543
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3169,
+   "name": "Street decal z4_2 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      501.974,
+      0.24,
+      93.406
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.180900216951327,
+      0.4,
+      1.826523460242261
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3170,
+   "name": "Street decal z4_3 0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      499.011,
+      0.24,
+      452.237
+     ],
+     "rotation": [
+      0,
+      0.92477,
+      0,
+      0.38052
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3171,
+   "name": "Street decal z4_3 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      502.176,
+      0.24,
+      401.118
+     ],
+     "rotation": [
+      0,
+      0.62063,
+      0,
+      0.7841
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3172,
+   "name": "Street decal z4_3 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      502.284,
+      0.24,
+      363.025
+     ],
+     "rotation": [
+      0,
+      0.77786,
+      0,
+      -0.62844
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:4d4296b0-cb19-5c7f-ae2b-393ce9ad5324",
+     "size": [
+      0.9,
+      0.4,
+      0.9
+     ],
+     "roughness": 0.55,
+     "metallic": 0.5
+    }
+   }
+  },
+  {
+   "id": 3173,
+   "name": "Street decal z4_3 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      498.216,
+      0.24,
+      466.556
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      2.3974626936351218,
+      0.4,
+      1.437035404191979
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
+  },
+  {
+   "id": 3174,
+   "name": "Street decal z4_3 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      498.4,
+      0.24,
+      432.308
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:a4dd9f7b-9a4c-5d3b-a6e2-7801c2f8458a",
+     "size": [
+      1.7968195448114817,
+      0.4,
+      2.1921080355136677
+     ],
+     "roughness": 0.85,
+     "metallic": 0.0
+    }
+   }
   }
  ]
 }

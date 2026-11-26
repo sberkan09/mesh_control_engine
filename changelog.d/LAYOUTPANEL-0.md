@@ -1,0 +1,1 @@
+- editor: a Layout panel (Window menu) gathers align, space, flip, snap, grid and ring copies, turn and resize, and randomize with a live read-out of the selection (M-LAYOUTPANEL).

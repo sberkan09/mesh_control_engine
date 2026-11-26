@@ -804,6 +804,7 @@ void add_default_panels(EditorShell& shell) {
     add_strings_panel(shell);
     add_source_panel(shell);
     add_mixer_panel(shell);
+    add_layout_panel(shell);
     add_project_settings_panel(shell);
 }
 
