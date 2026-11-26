@@ -1270,6 +1270,7 @@ def prefabs():
 
 NIGHT_SHOT = bool(os.environ.get("MCE_NIGHT_SHOT"))
 NIGHT_WET = os.environ.get("MCE_NIGHT_SHOT") == "wet"   # M-NIGHTSHOT 2: the same shot in rain (wet roads)   # M-NIGHTSHOT: capture-only variant, never committed (tools/night_shot.sh)
+NIGHT_BEAM = os.environ.get("MCE_NIGHT_SHOT") == "beam"   # M-VISUAL4 4: night + volumetric fog + a side camera, to see the headlight beams
 START_HOUR = 22.0 if NIGHT_SHOT else 9.0      # the game starts on a morning
 DAY_SECONDS = 720     # twelve real minutes for 24 hours
 WEATHER_SEED = 55     # the first ten weather picks (150 s each) are clear, rain, clear, storm, overcast ... and none is snow
@@ -1463,7 +1464,8 @@ def scene():
                                             "color_grade": "guid:" + G_GRADE, "color_grade_strength": 0.8,
                                             # sky IBL (scaled to the DayCycle's ambient by Kit3DExtract) and auto exposure clamped
                                             # to -1/3 .. +1 stop, so a night stays a night
-                                            "sky_ibl": 1, "auto_exposure": 1, "auto_exposure_min": 0.8, "auto_exposure_max": 2.0},
+                                            "sky_ibl": 1, "auto_exposure": 1, "auto_exposure_min": 0.8, "auto_exposure_max": 2.0,
+                                            **({"volumetric_fog": 1, "fog_density": 0.02} if NIGHT_BEAM else {})},
                        "LocalTransform": {}})
     net = s.add("Road network", {"LocalTransform": {}, "RoadNetwork3D": {"roads": "guid:" + G_ROADS}})
     node_half = city_surface(s)
@@ -1571,7 +1573,7 @@ def scene():
                               "size_start": 0.35, "size_end": 0.05, "max_particles": 64, "seed": 5, "collide": 0, "additive": 1, "emitting": 1},
         "ParticleBurst": {"count": 6, "on": "Fired"},
         "ShakeTrigger": {"trauma": 0.04, "on": "Fired"},
-        "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
+        "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": 0.0 if NIGHT_BEAM else math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True,
                            "chase": 1, "chase_rate": 2.5, "chase_hold": 1.5, "chase_min_speed": 3},
     })

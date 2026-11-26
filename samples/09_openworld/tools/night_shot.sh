@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # M-NIGHTSHOT: headless night capture of the headlight retro-reflection (M-HEADLIGHT) on the city's road paint.
-# usage: [NIGHT=wet] night_shot.sh <out.png> [retro]   (retro: marking paint reflectivity, default 0.8; 0 is the baseline; NIGHT=wet adds rain)
+# usage: [NIGHT=wet|beam] night_shot.sh <out.png> [retro]   (retro: marking paint reflectivity, default 0.8; 0 is the baseline; NIGHT=wet adds rain)
 # Regenerates the content with MCE_NIGHT_SHOT=1 (22:00, a lit parked car behind the camera), captures, then restores the committed content.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."

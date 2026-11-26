@@ -7,7 +7,7 @@ Added 2026-11-26, owner: the M-VISUAL routine 2 thread, from the audit `assessme
 | 1 | Runtime ground cover: instanced grass tufts, flowers and pebbles over lawns and verges, wind sway, density by quality tier. Render core and kit, design note first; coordinator review | planned |
 | 2 | Life density at the first frame (spawner density, start view) | done 2026-11-26, no change: measured, the 12-frame capture predates the spawners; after 150 frames (`notes/life-150.png`) the avenue has cars and walkers (24 cars / 70 walkers allowed). Spawners fill over the first seconds, which the headless capture length hid |
 | 3 | Street decal variety (manhole covers, asphalt patches) with the existing `Decal3D` | done 2026-11-26 (data only; posters left out) |
-| 4 | Headlight beam demo: fog on and a side camera in the open-world sample (`NIGHT=beam` capture) | planned |
+| 4 | Headlight beam demo: fog on and a side camera in the open-world sample (`NIGHT=beam` capture) | done 2026-11-26, capture-only (`tools/night_shot.sh`, `volumetric_fog` on, side camera); the beam shows as a lit cone from the parked car (`notes/headbeam-demo.png`). The committed scene is unchanged |
 | 5 | Window interior mapping (shader, render core) | planned |
 | 6 | Per-instance tree tone variation | planned |
 
