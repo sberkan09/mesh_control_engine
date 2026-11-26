@@ -6,7 +6,7 @@ Added 2026-11-26, owner: the M-VISUAL routine 2 thread, from the audit `assessme
 |---|---|---|
 | 1 | Runtime ground cover: instanced grass tufts, flowers and pebbles over lawns and verges, wind sway, density by quality tier. Render core and kit, design note first; coordinator review | planned |
 | 2 | Life density at the first frame (spawner density, start view) | done 2026-11-26, no change: measured, the 12-frame capture predates the spawners; after 150 frames (`notes/life-150.png`) the avenue has cars and walkers (24 cars / 70 walkers allowed). Spawners fill over the first seconds, which the headless capture length hid |
-| 3 | Street decal variety (manholes, patches, posters) with the existing decal system | planned |
+| 3 | Street decal variety (manhole covers, asphalt patches) with the existing `Decal3D` | done 2026-11-26 (data only; posters left out) |
 | 4 | Headlight beam demo: fog on and a side camera in the open-world sample (`NIGHT=beam` capture) | planned |
 | 5 | Window interior mapping (shader, render core) | planned |
 | 6 | Per-instance tree tone variation | planned |
@@ -24,3 +24,7 @@ Added 2026-11-26, owner: the M-VISUAL routine 2 thread, from the audit `assessme
 **Sample.** Two low-poly tuft meshes and a pebble from `gen_models.py`, three `GroundCover3D` entities over the city's park lawns and verges. A before/after capture goes to `notes/`.
 
 **Order.** Design review (this note) first; implementation is the next PR.
+
+## Step 3: street decals (2026-11-26) — done, data only
+
+`gen_assets.py` writes two 64 x 64 RGBA decal textures (`manhole.png`, `asphalt_patch.png`) and `street_decals()` puts three covers and two patches on every road (a private `random.Random` per road, so no other sequence moves; added after everything else so the older entities keep their order). The 3 distinct textures of the frame budget are used by these two plus the hidden bullet-hole ring. Captures: `notes/streetdecals-after.png` (the start view: one patch beside the avenue) and `notes/streetdecals-manhole.png` / `-zoom.png` (a cover and a patch from the avenue's middle). Honest read: the covers are small and dark, so they read as a dark disc with a faint ring at street distance; the patches read well. Posters (a vertical decal on building walls) were not added.
