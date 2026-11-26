@@ -1191,7 +1191,8 @@ def prefabs():
 
 # --- day and night, sky, street lamps, weather (M-OPENWORLD E6) ---------------------------------------------
 
-NIGHT_SHOT = bool(os.environ.get("MCE_NIGHT_SHOT"))   # M-NIGHTSHOT: capture-only variant, never committed (tools/night_shot.sh)
+NIGHT_SHOT = bool(os.environ.get("MCE_NIGHT_SHOT"))
+NIGHT_WET = os.environ.get("MCE_NIGHT_SHOT") == "wet"   # M-NIGHTSHOT 2: the same shot in rain (wet roads)   # M-NIGHTSHOT: capture-only variant, never committed (tools/night_shot.sh)
 START_HOUR = 22.0 if NIGHT_SHOT else 9.0      # the game starts on a morning
 DAY_SECONDS = 720     # twelve real minutes for 24 hours
 WEATHER_SEED = 55     # the first ten weather picks (150 s each) are clear, rain, clear, storm, overcast ... and none is snow
@@ -1226,7 +1227,7 @@ def atmosphere(s, net, node_half):
                      "DayCycle": {"k1_sky": [0.70, 0.74, 0.90, 1], "k1_ground": [0.38, 0.34, 0.30, 1],
                                   "k2_sky": [1.00, 1.15, 1.40, 1], "k2_ground": [0.55, 0.52, 0.45, 1],
                                   "k3_sky": [0.80, 0.65, 0.75, 1], "k3_ground": [0.35, 0.28, 0.25, 1]}})
-    s.add("Weather", {"LocalTransform": {}, "Weather": {"transition_seconds": 20, "auto_change_seconds": 150, "seed": WEATHER_SEED},
+    s.add("Weather", {"LocalTransform": {}, "Weather": ({"target": "Rain", "transition_seconds": 0.05, "auto_change_seconds": 0, "seed": WEATHER_SEED} if NIGHT_WET else {"transition_seconds": 20, "auto_change_seconds": 150, "seed": WEATHER_SEED}),
                       "WindGust": {}, "GroundMist": {}, "Moon": {}, "WetSurfaces": {"strength": 4, "darken": 0.5, "puddles": 0.6},
                       "RainRipples": {}, "ThunderDelay": {"clip": "guid:" + audio_guid("thunder"), "volume": 1.5}, "WindDirection": {"degrees": 0, "drift_degrees_per_minute": 6}, "CloudLayer": {}})
     s.add("Rain", {"LocalTransform": tf((0, 20, 34)),

@@ -18,6 +18,11 @@ the light's axis for glass-bead paint to read as bright, so this milestone adds 
 by any amount, max channel sum 114), against 127 from the default camera. The yellow centre line and the white lane dashes in the lit cone
 are visibly brighter; the paint outside the cone is unchanged.
 
-## Not done
+## Step 2: the wet variant (2026-11-26)
 
-A wet-road variant (WetSurfaces on) is the next visual check, since wet paint changes how much the beads throw back.
+`MCE_NIGHT_SHOT=wet` (or `NIGHT=wet tools/night_shot.sh`) adds rain: the Weather starts on Rain with a 0.05 s fade, so the roads are wet by
+the capture. `notes/headlight-seat-wet-diff.png` (same layout): 5949 pixels differ by more than 10 against 5819 dry, so the paint
+term is unchanged by rain. That is by design: the retro term reads only the material's `retro_reflect` and the light, not the wet-surface
+state, and the wet-road darkening and puddles act on the road, not on the markings. The wet frame shows the rain's fog and the darker
+asphalt, with the same bright lane dashes and centre line. A wet-dependent retro (beads under a water film throw back less) would be a
+material-model change in render core and is not planned.
