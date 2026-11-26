@@ -9,6 +9,7 @@
 
 #include "cook_test_util.h"
 #include "mce/asset/asset_system.h"
+#include "mce/asset/material_interior.h"
 #include "mce/asset/material_retro.h"
 #include "mce/asset/material_translucency.h"
 #include "mce/asset/xxhash.h"
@@ -1033,6 +1034,42 @@ TEST_CASE("material: retro_reflect cooks into flags bits 24..31 beside transluce
         const CookReport bad = svc.cook(root.c_str(), CookOptions{});
         CHECK(!bad.ok());
         CHECK(diag_text(bad).find("must be within [0, 1]") != std::string::npos);
+    }
+}
+
+TEST_CASE("material: interior_cells cooks into flags bits 6..7 (M-VISUAL4 5); a plain material keeps 0; other values fail") {
+    const std::string root = make_project("cook_material_interior");
+    const std::string head = std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid;
+    auto cooked_chunk = [&](MaterialChunk& out) {
+        CookService cs;
+        const CookReport rep = cs.cook(root.c_str(), CookOptions{});
+        REQUIRE(rep.ok());
+        AssetSystem as;
+        const std::string cooked = root + "/cooked";
+        const StringView roots[] = {StringView(cooked.c_str())};
+        REQUIRE(as.mount(Span<const StringView>(roots, 1)).has_value());
+        auto mh = as.load_sync<Material>(G(kMatGuid));
+        REQUIRE(mh);
+        const Span<const byte> payload = as.resolve(mh.value());
+        out = *MaterialChunk::read(payload).value();
+        as.release(AnyHandle(mh.value()));
+    };
+    write_file(root + "/assets/materials/hero.mcmat", head + R"(", "double_sided": true, "retro_reflect": 1, "interior_cells": 4 })");
+    MaterialChunk m{};
+    cooked_chunk(m);
+    CHECK(material_interior_cells(m) == 4);
+    CHECK(material_retro(m) == 1.0f);
+    CHECK((m.flags & MaterialFlags::DoubleSided) != 0u);
+    write_file(root + "/assets/materials/hero.mcmat", head + R"(" })");
+    MaterialChunk plain{};
+    cooked_chunk(plain);
+    CHECK((plain.flags & MaterialInterior::Mask) == 0u);
+    CookService svc;
+    for (const char* body : {R"(", "interior_cells": 3 })", R"(", "interior_cells": -1 })", R"(", "interior_cells": 2.5 })"}) {
+        write_file(root + "/assets/materials/hero.mcmat", head + body);
+        const CookReport bad = svc.cook(root.c_str(), CookOptions{});
+        CHECK(!bad.ok());
+        CHECK(diag_text(bad).find("'interior_cells' must be 0 (off), 1, 2 or 4") != std::string::npos);
     }
 }
 

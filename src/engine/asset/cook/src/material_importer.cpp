@@ -15,6 +15,8 @@
 //   quantized to 8 bits into the material's flags word (mce/asset/material_translucency.h),
 //   (M-HEADLIGHT 1, 0 = off) "retro_reflect": 0..1 (reflective paint: light thrown back toward its source), quantized to 8 bits
 //   into the flags word (mce/asset/material_retro.h),
+//   (M-VISUAL4 5, 0 = off) "interior_cells": 0 | 1 | 2 | 4 (window cells across one texture repeat: the glossy texels of each
+//   cell show a room behind the glass), into flags bits 6..7 (mce/asset/material_interior.h),
 //   (M-VISUAL3 2, parallax occlusion mapping, 0 = off) "height_scale": 0..0.5 (depth in texture repeats),
 //   "parallax_steps": [min, max] (4..64, march steps looking straight on and at a grazing angle),
 //   "textures": { "base_color": "guid:<uuid>", "normal": ..., "metallic_roughness": ..., "emissive": ...,
@@ -25,6 +27,7 @@
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
+#include "mce/asset/material_interior.h"
 #include "mce/asset/material_retro.h"
 #include "mce/asset/material_translucency.h"
 
@@ -97,7 +100,8 @@ public:
         if (!detail::check_keys(doc, {"format", "version", "guid", "name", "base_color", "metallic", "roughness", "emissive", "alpha_mode",
                                       "alpha_cutoff", "double_sided", "unlit", "uv_scale", "textures", "clearcoat",
                                       "clearcoat_roughness", "sheen_color", "sheen_roughness", "anisotropy", "anisotropy_rotation",
-                                      "transmission", "ior", "height_scale", "parallax_steps", "translucency", "wrap", "retro_reflect"},
+                                      "transmission", "ior", "height_scale", "parallax_steps", "translucency", "wrap", "retro_reflect",
+                                      "interior_cells"},
                                 file, kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -191,6 +195,12 @@ public:
         f32 retro = 0.0f;
         ranged("retro_reflect", 0, 1, retro);
         asset::set_material_retro(m, retro);
+        if (const JsonValue ic = doc.get("interior_cells"); ic.valid()) {
+            if (!ic.is_integer() || ic.as_number() < 0 || ic.as_number() > 4 || !asset::valid_interior_cells(static_cast<u32>(ic.as_number())))
+                detail::error_at(diags, Errc::ParseError, file, ic, kStage,
+                                 "'interior_cells' must be 0 (off), 1, 2 or 4: window cells across one texture repeat");
+            else asset::set_material_interior_cells(m, static_cast<u32>(ic.as_number()));
+        }
         e.set_height(height);
         // Height is data, not color: an sRGB import (the texture default) would be uploaded as sRGB and bend the depth.
         if (ChunkType ht = ChunkType::Manifest; !height.is_null() && in.lookup && in.lookup->type_of(height, ht) && ht == ChunkType::Texture) {
