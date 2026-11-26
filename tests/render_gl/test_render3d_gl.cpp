@@ -1270,6 +1270,7 @@ TEST_CASE("render3d_gl: a wet road throws a headlight back less than a dry one (
         local_lit(s, false, Span<const PointLight>(&head, 1));
         WetSurfaces w;
         w.wetness = wetness;
+        w.darken = 0.0f;  // isolate the retro scale: apply_wet's albedo loss would halve the gain on its own
         w.puddles_enabled = false;
         s.set_wet_surfaces(w);
     };
@@ -1289,6 +1290,9 @@ TEST_CASE("render3d_gl: a wet road throws a headlight back less than a dry one (
     INFO("retro gain: dry " << dry << ", wet " << wet);
     CHECK(dry > 10);
     CHECK(wet > 0);
+    // With darken 0 only the new scale separates the two gains (without it they are equal). 40% of the return remains in linear light;
+    // the tonemapper compresses the dry highlight more, so the measured ratio is a little higher: accept 30%..70%.
+    CHECK(wet * 10 > dry * 3);
     CHECK(wet * 10 < dry * 7);
     CHECK(f.device->validation_error_count() == 0);
 }

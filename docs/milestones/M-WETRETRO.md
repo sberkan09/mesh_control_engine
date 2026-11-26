@@ -8,6 +8,6 @@ Follow-up of [M-HEADLIGHT](M-HEADLIGHT.md) and [M-NIGHTSHOT](M-NIGHTSHOT.md), ad
 
 **Glare is not added.** The wet road already pulls roughness toward `wet_roughness` (`apply_wet`), so the existing specular term of the headlight spot gives the glare of wet asphalt; a second glare term would double count.
 
-**Test.** `test_render_gl`: the retro gain on the lit box (reflective minus plain) at wetness 1 must stay above 0 and below 70% of the dry gain. The existing headlight test and every golden run with wetness 0 and are unchanged.
+**Test.** `test_render_gl`: with `darken` 0 (so `apply_wet`'s albedo loss does not halve the gain by itself), the retro gain on the lit box (reflective minus plain) at wetness 1 must lie between 30% and 70% of the dry gain (measured 49 against 88; the tonemapper makes it a little above the linear 40%). Without the shader scale the two gains are equal. The existing headlight test and every golden run with wetness 0 and are unchanged.
 
-**Status.** Implemented in the same PR.
+**Status.** Implemented in the same PR. The ROADMAP row is the coordinator's to add.
