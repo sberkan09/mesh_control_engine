@@ -1032,6 +1032,63 @@ vec2 parallax_uv(vec3 p, vec3 n, vec2 uv, float view_depth) {
 }
 )"
 
+// The lit stage's window interiors (spliced into MCE_GLSL_MESH_FS inside its #ifndef MCE_TERRAIN; M-VISUAL4 5,
+// docs/milestones/M-VISUAL4.md): o_retro.y window cells across one texture repeat (0 = off, a uniform branch, so a
+// material without it runs today's statements). In each cell the view ray, taken into the uv frame with parallax_uv's
+// Jacobian, is slab-tested against a room box one cell wide and high and 0.6..1.0 cells deep (hashed per cell); the face
+// it meets sets the albedo (a hashed wall tint, a dark floor, a light ceiling; which is up comes from the uv frame) and
+// how much of the window's own emission (a point lamp under the ceiling, soft falloff) and of the daylight it gets. g_int_mask (the glass:
+// a mirror-smooth texel) is set by the caller; g_int_lamp multiplies the emission there, g_int_day the irradiance.
+#define MCE_GLSL_INTERIOR R"(
+float g_int_mask = 0.0;
+vec3 g_int_lamp = vec3(1.0), g_int_day = vec3(0.0);
+void interior_room(vec3 p, vec3 n, vec3 v, vec2 uv) {
+    vec3 dp1 = dFdx(p), dp2 = dFdy(p);
+    vec2 duv1 = dFdx(uv), duv2 = dFdy(uv);
+    float det = duv1.x * duv2.y - duv1.y * duv2.x;
+    float vn = dot(v, n);
+    if (abs(det) < 1e-20 || vn <= 1e-3) { g_int_mask = 0.0; return; }
+    vec3 t = (dp1 * duv2.y - dp2 * duv1.y) / det;  // d p / d u
+    vec3 b = (dp2 * duv1.x - dp1 * duv2.x) / det;  // d p / d v
+    float tt = dot(t, t), bb = dot(b, b), tb = dot(t, b);
+    float gram = tt * bb - tb * tb;
+    if (gram < 1e-20) { g_int_mask = 0.0; return; }
+    vec2 c = uv * o_retro.y, cell = floor(c), f = c - cell;
+    uvec2 id = uvec2(ivec2(cell) + 32768);
+    vec3 wt = v * -1.0 + n * vn;  // the ray's part along the surface
+    vec2 duv = vec2(dot(wt, t) * bb - dot(wt, b) * tb, dot(wt, b) * tt - dot(wt, t) * tb) / gram;
+    float depth = sqrt(tt) / o_retro.y * mix(0.6, 1.0, wet_lattice(id, 0x3C6EF372u));  // metres
+    vec3 d = vec3(duv * o_retro.y, vn / depth);  // cells (x, y) and room depths (z) per metre along the ray
+    float tx = d.x > 0.0 ? (1.0 - f.x) / d.x : d.x < 0.0 ? -f.x / d.x : 1e30;
+    float ty = d.y > 0.0 ? (1.0 - f.y) / d.y : d.y < 0.0 ? -f.y / d.y : 1e30;
+    float tz = 1.0 / d.z, th = min(tz, min(tx, ty));
+    vec3 h = vec3(f, 0.0) + d * th;
+    const vec3 kWalls[4] = vec3[4](vec3(0.80, 0.76, 0.68), vec3(0.72, 0.62, 0.48), vec3(0.58, 0.66, 0.56), vec3(0.56, 0.62, 0.70));
+    vec3 alb = kWalls[min(int(wet_lattice(id, 0x9E3779B9u) * 4.0), 3)];
+    float lamp, day;
+    if (th == tz) {  // the back wall
+        lamp = 1.0;
+        day = 0.7;
+    } else if (th == tx) {  // a side wall
+        alb *= 0.9;
+        lamp = 0.85;
+        day = 0.85;
+    } else if ((h.y > 0.5) == (b.y > 0.0)) {  // the ceiling
+        alb = vec3(0.86, 0.85, 0.82);
+        lamp = 0.6;
+        day = 0.6;
+    } else {  // the floor
+        alb = vec3(0.34, 0.26, 0.19);
+        lamp = 1.2;
+        day = 1.0;
+    }
+    float glass = 1.0 - (0.04 + 0.96 * pow(1.0 - vn, 5.0));  // what the glass lets through
+    vec3 q = vec3(h.x, b.y > 0.0 ? h.y : 1.0 - h.y, h.z) - vec3(0.5, 0.85, 0.55);  // to the lamp under the ceiling (x, up, depth)
+    g_int_lamp = alb * (lamp * 2.4 / (1.0 + 6.0 * dot(q, q))) * glass;
+    g_int_day = alb * (day * 0.4 * (1.0 - 0.6 * h.z)) * glass;
+}
+)"
+
 // The forward material shader. kTerrainFS is the same with MCE_TERRAIN: the surface comes from the
 // splat layers (terrain_surface) instead of the material's maps.
 //
@@ -1206,7 +1263,7 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
 )" MCE_GLSL_MAP_ANISO R"(
 
 #ifndef MCE_TERRAIN
-)" MCE_GLSL_PARALLAX R"(
+)" MCE_GLSL_PARALLAX MCE_GLSL_INTERIOR R"(
 #endif
 
 void main() {
@@ -1248,6 +1305,9 @@ void main() {
                 metallic *= orm.b;
             }
         }
+#ifndef MCE_TERRAIN
+        if (o_retro.y > 0.0) g_int_mask = 1.0 - smoothstep(0.12, 0.25, rough);  // window interiors: the glass, before rain wets it
+#endif
         float fill = 0.0, pud = 0.0, snow = 0.0, bump = 0.0;  // bump: the map's tilt (48d)
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
         if (p_wet.x > 0.0) pud = apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
@@ -1282,6 +1342,9 @@ void main() {
         float ior_f0 = o_ext.y > 0.0 ? ((o_ext.y - 1.0) / (o_ext.y + 1.0)) * ((o_ext.y - 1.0) / (o_ext.y + 1.0)) : 0.04;
         vec3 f0 = mix(vec3(ior_f0), base.rgb, metallic);
         vec3 v = normalize(u_camera_pos.xyz - v_world);
+#ifndef MCE_TERRAIN
+        if (o_retro.y > 0.0) interior_room(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), v, v_uv);  // uniform branch: derivatives
+#endif
         if (o_ext.x > 0.5) {  // uniform branch: the tangent frame takes derivatives
             g_coat_n = normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0);
             vec3 dp1 = dFdx(v_world), dp2 = dFdy(v_world);
@@ -1478,6 +1541,10 @@ void main() {
             }
         }
         color += (amb_diffuse * sun_side + amb_spec) * ao;
+#ifndef MCE_TERRAIN
+        if (g_int_mask > 0.0)  // the room's daylight (the sky's irradiance at the window)
+            color += g_int_mask * g_int_day * (p_ibl.x > 0.5 ? sh_irradiance(n) * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5));
+#endif
         if (thin_amb) color += amb_back * ao;
         if (trans > 0.0) {  // thin-walled refraction: the opaque frame (bank kAo), shifted by the view normal, tinted
             vec4 c = u_view_proj * vec4(v_world, 1.0);
@@ -1490,6 +1557,9 @@ void main() {
     }
     vec3 emissive = o_emissive.rgb;
     if (o_emissive.w > 0.5) emissive *= MCE_MAP(u_emissive, uv).rgb;
+#ifndef MCE_TERRAIN
+    if (g_int_mask > 0.0) emissive = mix(emissive, emissive * g_int_lamp, g_int_mask);  // a lit window lights its room
+#endif
     color += emissive + decal_emit;
     if (p_vol.x > 0.5) {  // volumetric fog in place of the exp² fog
         vec4 c = u_view_proj * vec4(v_world, 1.0);
