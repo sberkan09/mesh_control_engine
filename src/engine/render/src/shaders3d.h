@@ -1048,17 +1048,17 @@ void interior_room(vec3 p, vec3 n, vec3 v, vec2 uv) {
     float det = duv1.x * duv2.y - duv1.y * duv2.x;
     float vn = dot(v, n);
     if (abs(det) < 1e-20 || vn <= 1e-3) { g_int_mask = 0.0; return; }
-    vec3 t = (dp1 * duv2.y - dp2 * duv1.y) / det;  // d p / d u
-    vec3 b = (dp2 * duv1.x - dp1 * duv2.x) / det;  // d p / d v
+    vec3 t = (dp1 * duv2.y - dp2 * duv1.y) / det;
+    vec3 b = (dp2 * duv1.x - dp1 * duv2.x) / det;
     float tt = dot(t, t), bb = dot(b, b), tb = dot(t, b);
     float gram = tt * bb - tb * tb;
     if (gram < 1e-20) { g_int_mask = 0.0; return; }
     vec2 c = uv * o_retro.y, cell = floor(c), f = c - cell;
     uvec2 id = uvec2(ivec2(cell) + 32768);
-    vec3 wt = v * -1.0 + n * vn;  // the ray's part along the surface
+    vec3 wt = v * -1.0 + n * vn;
     vec2 duv = vec2(dot(wt, t) * bb - dot(wt, b) * tb, dot(wt, b) * tt - dot(wt, t) * tb) / gram;
-    float depth = sqrt(tt) / o_retro.y * mix(0.6, 1.0, wet_lattice(id, 0x3C6EF372u));  // metres
-    vec3 d = vec3(duv * o_retro.y, vn / depth);  // cells (x, y) and room depths (z) per metre along the ray
+    float depth = sqrt(tt) / o_retro.y * mix(0.6, 1.0, wet_lattice(id, 0x3C6EF372u));
+    vec3 d = vec3(duv * o_retro.y, vn / depth);
     float tx = d.x > 0.0 ? (1.0 - f.x) / d.x : d.x < 0.0 ? -f.x / d.x : 1e30;
     float ty = d.y > 0.0 ? (1.0 - f.y) / d.y : d.y < 0.0 ? -f.y / d.y : 1e30;
     float tz = 1.0 / d.z, th = min(tz, min(tx, ty));
@@ -1066,24 +1066,24 @@ void interior_room(vec3 p, vec3 n, vec3 v, vec2 uv) {
     const vec3 kWalls[4] = vec3[4](vec3(0.80, 0.76, 0.68), vec3(0.72, 0.62, 0.48), vec3(0.58, 0.66, 0.56), vec3(0.56, 0.62, 0.70));
     vec3 alb = kWalls[min(int(wet_lattice(id, 0x9E3779B9u) * 4.0), 3)];
     float lamp, day;
-    if (th == tz) {  // the back wall
+    if (th == tz) {
         lamp = 1.0;
         day = 0.7;
-    } else if (th == tx) {  // a side wall
+    } else if (th == tx) {
         alb *= 0.9;
         lamp = 0.85;
         day = 0.85;
-    } else if ((h.y > 0.5) == (b.y > 0.0)) {  // the ceiling
+    } else if ((h.y > 0.5) == (b.y > 0.0)) {
         alb = vec3(0.86, 0.85, 0.82);
         lamp = 0.6;
         day = 0.6;
-    } else {  // the floor
+    } else {
         alb = vec3(0.34, 0.26, 0.19);
         lamp = 1.2;
         day = 1.0;
     }
-    float glass = 1.0 - (0.04 + 0.96 * pow(1.0 - vn, 5.0));  // what the glass lets through
-    vec3 q = vec3(h.x, b.y > 0.0 ? h.y : 1.0 - h.y, h.z) - vec3(0.5, 0.85, 0.55);  // to the lamp under the ceiling (x, up, depth)
+    float glass = 1.0 - (0.04 + 0.96 * pow(1.0 - vn, 5.0));
+    vec3 q = vec3(h.x, b.y > 0.0 ? h.y : 1.0 - h.y, h.z) - vec3(0.5, 0.85, 0.55);
     g_int_lamp = alb * (lamp * 2.4 / (1.0 + 6.0 * dot(q, q))) * glass;
     g_int_day = alb * (day * 0.4 * (1.0 - 0.6 * h.z)) * glass;
 }
@@ -1116,12 +1116,12 @@ layout(binding = 6) uniform sampler2DArray u_albedo;
 layout(binding = 7) uniform sampler2DArray u_normal_map;
 layout(binding = 8) uniform sampler2DArray u_orm;
 layout(binding = 13) uniform sampler2DArray u_emissive;
-layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility, g = the sun's contact visibility
-layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
+layout(binding = 11) uniform sampler2D u_ao;
+layout(binding = 3) uniform sampler2D u_ssr;
 // M-REFLECT2 48c: SSR roughness blur (CPU twin: ssr_blur.h)
 const float kSsrBlurMinRough = 0.1, kSsrBlurScale = 24.0, kSsrBlurMax = 8.0, kSsrBumpGain = 3.0;
 const int kSsrTaps = 8;
-float ssr_blur_radius(float rough, float bump) {  // half-size texels; 0 = the single sharp tap
+float ssr_blur_radius(float rough, float bump) {
     if (!(rough > kSsrBlurMinRough)) return 0.0;
     float r = min(rough, 1.0);
     return min(kSsrBlurScale * (r * r - kSsrBlurMinRough * kSsrBlurMinRough + max(bump, 0.0)), kSsrBlurMax);
@@ -1133,10 +1133,10 @@ vec4 ssr_gather(vec2 uv, float radius) {
     vec3 rgb = vec3(0.0);
     float aw = 0.0, kw = 0.0;
     for (int i = 0; i < kSsrTaps; ++i) {
-        float t = (float(i) + 0.5) / float(kSsrTaps);  // radius^2 of the tap, 0..1: an even disc
+        float t = (float(i) + 0.5) / float(kSsrTaps);
         float th = float(i) * 2.39996323 + rot;
         vec2 o = vec2(cos(th), sin(th)) * (sqrt(t) * radius);
-        float k = 1.0 - 0.75 * t * t;  // smooth radial falloff
+        float k = 1.0 - 0.75 * t * t;
         vec4 s = textureLod(u_ssr, clamp(uv + o * texel, 0.5 * texel, 1.0 - 0.5 * texel), 0.0);
         rgb += s.rgb * (s.a * k);
         aw += s.a * k;
@@ -1166,12 +1166,12 @@ uint cluster_of(float depth) {
 // ---- splat-layered terrain (M-TERRAIN 2): the layers' maps are layers of u_albedo / u_normal_map /
 // u_orm, the weights two RGBA layers of u_emissive (no emissive on a terrain), the parameters TerrainU.
 layout(std140, binding = 2) uniform TerrainU {
-    mat4 t_to_local;     // world -> terrain space (the layers tile in its xz metres)
-    vec4 t_size;         // xy: size along x and z, z: splat samples per side, w: layer count
-    vec4 t_flags;        // x: triplanar allowed, y: height blend allowed, z: height blend depth
-    vec4 t_color[8];     // rgb: base color, a: albedo map
-    vec4 t_params[8];    // x: 1 / tile, y: roughness, z: metallic, w: height strength
-    vec4 t_maps[8];      // x: normal map, y: ORM map, z: triplanar, w: occlusion in ORM.r
+    mat4 t_to_local;
+    vec4 t_size;
+    vec4 t_flags;
+    vec4 t_color[8];
+    vec4 t_params[8];
+    vec4 t_maps[8];
 };
 // One layer's map: projected along y, or along x, y and z blended by `bw` (zero weights skip their fetch).
 // Explicit gradients: the layer loop branches per fragment.
@@ -1203,13 +1203,13 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
     vec3 p = (t_to_local * vec4(world, 1.0)).xyz;
     vec3 dx = dFdx(p), dy = dFdy(p);
     float res = t_size.z;
-    vec2 suv = (p.xz / t_size.xy + 0.5) * ((res - 1.0) / res) + 0.5 / res;  // sample centres span the extent
+    vec2 suv = (p.xz / t_size.xy + 0.5) * ((res - 1.0) / res) + 0.5 / res;
     vec4 s0 = textureLod(u_emissive, vec3(suv, 0.0), 0.0), s1 = textureLod(u_emissive, vec3(suv, 1.0), 0.0);
     float w[8] = float[8](s0.x, s0.y, s0.z, s0.w, s1.x, s1.y, s1.z, s1.w);
     int count = int(t_size.w);
     vec3 tri = pow(abs(n), vec3(4.0));
     tri /= max(tri.x + tri.y + tri.z, 1e-5);
-    tri = mix(vec3(0.0, 1.0, 0.0), tri, step(0.02, 1.0 - tri.y));  // nearly flat: the top projection alone
+    tri = mix(vec3(0.0, 1.0, 0.0), tri, step(0.02, 1.0 - tri.y));
     vec3 bws[8];
     vec4 col[8];
     float sum = 0.0;
@@ -1221,7 +1221,7 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
         col[i].rgb *= t_color[i].rgb;
     }
     for (int i = 0; i < count; ++i) w[i] /= max(sum, 1e-5);
-    if (t_flags.y > 0.5) {  // height blend: the layer that rises highest above its weight wins at the seam
+    if (t_flags.y > 0.5) {
         float top = -1e9;
         float h[8];
         for (int i = 0; i < count; ++i) {
@@ -1279,9 +1279,9 @@ void main() {
     terrain_surface(v_world, n, base.rgb, t_n, t_rough, t_metallic, t_ao);
     base *= o_base_color;
 #else
-    if (o_pom.x > 0.0) uv = parallax_uv(v_world, n, v_uv, -(u_view * vec4(v_world, 1.0)).z);  // uniform branch: it takes derivatives
+    if (o_pom.x > 0.0) uv = parallax_uv(v_world, n, v_uv, -(u_view * vec4(v_world, 1.0)).z);
     vec4 base = MCE_MAP(u_albedo, uv) * o_base_color * v_tint;
-    if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
+    if (o_params.x > 0.0 && base.a < o_params.x) discard;
 #endif
     vec3 color;
     vec3 decal_emit = vec3(0.0);
@@ -1290,7 +1290,7 @@ void main() {
             float r0 = 1.0, m0 = 0.0, f0 = 0.0;
             apply_decals(v_world, n, base.rgb, r0, m0, decal_emit, f0);
         }
-        color = base.rgb;  // unlit
+        color = base.rgb;
     } else {
 #ifdef MCE_TERRAIN
         float rough = t_rough, metallic = t_metallic, ao = t_ao;
@@ -1306,28 +1306,28 @@ void main() {
             }
         }
 #ifndef MCE_TERRAIN
-        if (o_retro.y > 0.0) g_int_mask = 1.0 - smoothstep(0.12, 0.25, rough);  // window interiors: the glass, before rain wets it
+        if (o_retro.y > 0.0) g_int_mask = 1.0 - smoothstep(0.12, 0.25, rough);
 #endif
-        float fill = 0.0, pud = 0.0, snow = 0.0, bump = 0.0;  // bump: the map's tilt (48d)
+        float fill = 0.0, pud = 0.0, snow = 0.0, bump = 0.0;
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
-        if (p_wet.x > 0.0) pud = apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
-        if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill, pud, snow);  // after the water: snow wins
+        if (p_wet.x > 0.0) pud = apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);
+        if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill, pud, snow);
 #ifdef MCE_TERRAIN
         bump = (1.0 - fill) * (1.0 - dot(t_n, n));
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
-        if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
+        if (o_maps.x > 0.5) {
             vec3 nb = perturb_normal(n, v_world, v_uv, unpack_normal(MCE_MAP(u_normal_map, uv)));
             bump = (1.0 - fill) * (1.0 - dot(nb, n));
             n = normalize(mix(nb, n, fill));
         }
 #endif
-        if (p_ripple.x > 0.0 && pud > 0.0) apply_ripples(v_world, pud, n, rough);  // on the water the snow left
+        if (p_ripple.x > 0.0 && pud > 0.0) apply_ripples(v_world, pud, n, rough);
         rough = clamp(rough, 0.045, 1.0);
         metallic = clamp(metallic, 0.0, 1.0);
         float a = rough * rough;
         vec3 diffuse = base.rgb * (1.0 - metallic);
-        float trans = o_ext.w > 0.5 ? o_ext.z * (1.0 - metallic) : 0.0;  // transmission takes the diffuse's place
+        float trans = o_ext.w > 0.5 ? o_ext.z * (1.0 - metallic) : 0.0;
         diffuse *= 1.0 - trans;
         bool thin = o_skin.w > 0.0;
         float tr = 0.0, wr = 0.0;
@@ -1343,9 +1343,9 @@ void main() {
         vec3 f0 = mix(vec3(ior_f0), base.rgb, metallic);
         vec3 v = normalize(u_camera_pos.xyz - v_world);
 #ifndef MCE_TERRAIN
-        if (o_retro.y > 0.0) interior_room(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), v, v_uv);  // uniform branch: derivatives
+        if (o_retro.y > 0.0) interior_room(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), v, v_uv);
 #endif
-        if (o_ext.x > 0.5) {  // uniform branch: the tangent frame takes derivatives
+        if (o_ext.x > 0.5) {
             g_coat_n = normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0);
             vec3 dp1 = dFdx(v_world), dp2 = dFdy(v_world);
             vec2 duv1 = dFdx(v_uv), duv2 = dFdy(v_uv);
@@ -1369,7 +1369,7 @@ void main() {
         } else {
             sh = dot(n, l) > 0.0 ? shadow_term(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), l, depth) : 0.0;
         }
-        if (p_ao.y > 0.5 && o_ext.w < 0.5 && sh > 0.0 && dot(n, l) > 0.0) {  // contact shadows: what the cascades are too coarse to see
+        if (p_ao.y > 0.5 && o_ext.w < 0.5 && sh > 0.0 && dot(n, l) > 0.0) {
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             sh *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).g;
         }
@@ -1391,7 +1391,7 @@ void main() {
             } else {
                 color = sun;
             }
-        } else if (p_sun_cookie.w > 0.5) {  // the sun's cookie multiplies its direct term only (after the shadows; sh stays for the ambient)
+        } else if (p_sun_cookie.w > 0.5) {
             vec3 sc = vec3(0.0);
             if (sh > 0.0) {
                 float size = float(textureSize(u_slot2, 0).y);
@@ -1410,9 +1410,9 @@ void main() {
             float d2 = dot(dl, dl);
             float f = d2 * L.color.w;
             float win = clamp(1.0 - f * f, 0.0, 1.0);
-            float att = win * win / max(d2, 0.01);  // inverse square, windowed to 0 at the radius
+            float att = win * win / max(d2, 0.01);
             vec3 ld = dl * inversesqrt(d2);
-            float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);  // point lights: 0·x + 1
+            float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);
             att *= cone * cone;
             if (att <= 0.0) continue;
             // The light's cookie (a spot's record, before the shadow: a black texel skips its taps). lc multiplies the
@@ -1430,7 +1430,7 @@ void main() {
                         tint = cookie_sample(cuv, c.params.x, cookie_lod(cookie_px, q.w, c.params.w, size), size) * cookie_edge(cuv, c.params.z);
                     }
                 }
-                lc = 1.0 + (tint - 1.0) * c.params.y;  // mix(1, tint, strength), exactly 1 for a white texel or strength 0
+                lc = 1.0 + (tint - 1.0) * c.params.y;
                 if (max(lc.r, max(lc.g, lc.b)) <= 0.0) continue;
             }
             if (L.shadow.x >= 0.0 && p_local.x > 0.5) {
@@ -1438,8 +1438,8 @@ void main() {
                 att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * side, ld);
                 if (att <= 0.0) continue;
             }
-            if (o_retro.x > 0.0) {  // M-HEADLIGHT 2: reflective paint throws a local light back at its source (uniform branch)
-                float back = pow(max(dot(v, ld), 0.0), 24.0);  // eye on the light's axis: the headlight case
+            if (o_retro.x > 0.0) {
+                float back = pow(max(dot(v, ld), 0.0), 24.0);
                 // M-WETRETRO: a water film over the glass beads scatters the return, so a wet road throws back up to 60% less (p_wet.x 0 = dry, unchanged)
                 float retro = o_retro.x * (1.0 - 0.6 * min(p_wet.x, 1.0));
                 color += retro * 3.0 * back * max(dot(n, ld), 0.0) * diffuse * (cookied ? L.color.rgb * att * lc : L.color.rgb * att);
@@ -1456,7 +1456,7 @@ void main() {
         // image-based lighting the SH9 sky irradiance + the pre-filtered sky through the BRDF LUT.
         float NoV = max(dot(n, v), 1e-4);
         vec3 r = reflect(-v, n);
-        if (o_ext.x > 0.5 && o_coat.z != 0.0) {  // anisotropy bends the reflection toward the stretch (Filament)
+        if (o_ext.x > 0.5 && o_coat.z != 0.0) {
             vec3 dir = o_coat.z >= 0.0 ? g_bitangent : g_tangent;
             vec3 an = cross(cross(dir, v), dir);
             r = reflect(-v, normalize(mix(n, an, abs(o_coat.z) * clamp(5.0 * rough, 0.0, 1.0))));
@@ -1509,7 +1509,7 @@ void main() {
             spec_brdf = env_brdf(f0, rough, NoV);
             amb_spec = sky_radiance(r, rough * 8.0) * sky_vis * spec_brdf * p_sky_horizon.w * horizon * horizon;
         }
-        if (p_ssr.x > 0.5) {  // what the screen saw along r, over the probes, by confidence and roughness
+        if (p_ssr.x > 0.5) {
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             vec2 suv = c.xy / c.w * 0.5 + 0.5;
             float rfade = clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
@@ -1518,35 +1518,35 @@ void main() {
             float w = s.a * rfade;
             amb_spec = mix(amb_spec, s.rgb * spec_brdf * p_ssr.w, w);
         }
-        if (p_ao.x > 0.5 && o_ext.w < 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
+        if (p_ao.x > 0.5 && o_ext.w < 0.5) {
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             ao *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).r;
         }
         // The sky's flat ambient is darkened away from the sun; the volume's light is not (it saw the shadows).
         float sun_side = mix(mix(0.55, 1.0, sh * clamp(dot(n, l), 0.0, 1.0)), 1.0, gi_w);
         if (o_ext.x > 0.5) {
-            if (o_sheen.r + o_sheen.g + o_sheen.b > 0.0) {  // the sheen under the ambient: the irradiance times an approximate albedo
+            if (o_sheen.r + o_sheen.g + o_sheen.b > 0.0) {
                 vec3 irr = p_ibl.x > 0.5 ? sh_irradiance(n) * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5);
                 if (p_gi.x > 0.5) irr = mix(irr, gi_irradiance(v_world, n).rgb * p_gi.y, gi_w);
                 amb_diffuse += irr * o_sheen.rgb * mix(0.1, 0.5, pow(1.0 - NoV, 2.0)) * (1.0 - o_sheen.w * 0.5);
             }
-            if (o_coat.x > 0.0) {  // the coat reflects the sky (not the probes or SSR); the base below loses its share
+            if (o_coat.x > 0.0) {
                 float cNoV = max(dot(g_coat_n, v), 1e-4);
                 float Fc = (0.04 + 0.96 * pow(1.0 - cNoV, 5.0)) * o_coat.x;
                 vec3 rc = reflect(-v, g_coat_n);
                 float c_rough = sqrt(o_coat.y);
                 vec3 env = p_ibl.x > 0.5 ? prefiltered_sky(rc, c_rough) : sky_radiance(rc, c_rough * 8.0);
-                amb_diffuse *= 1.0 - Fc;  // the direct light took its share in direct_ext
+                amb_diffuse *= 1.0 - Fc;
                 amb_spec = amb_spec * (1.0 - Fc) + env * sky_vis * Fc * p_sky_horizon.w;
             }
         }
         color += (amb_diffuse * sun_side + amb_spec) * ao;
 #ifndef MCE_TERRAIN
-        if (g_int_mask > 0.0)  // the room's daylight (the sky's irradiance at the window)
+        if (g_int_mask > 0.0)
             color += g_int_mask * g_int_day * (p_ibl.x > 0.5 ? sh_irradiance(n) * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5));
 #endif
         if (thin_amb) color += amb_back * ao;
-        if (trans > 0.0) {  // thin-walled refraction: the opaque frame (bank kAo), shifted by the view normal, tinted
+        if (trans > 0.0) {
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             float ior = o_ext.y > 0.0 ? o_ext.y : 1.5;
             vec2 shift = (mat3(u_view) * n).xy * (1.0 - 1.0 / ior) * 0.1;
@@ -1558,10 +1558,10 @@ void main() {
     vec3 emissive = o_emissive.rgb;
     if (o_emissive.w > 0.5) emissive *= MCE_MAP(u_emissive, uv).rgb;
 #ifndef MCE_TERRAIN
-    if (g_int_mask > 0.0) emissive = mix(emissive, emissive * g_int_lamp, g_int_mask);  // a lit window lights its room
+    if (g_int_mask > 0.0) emissive = mix(emissive, emissive * g_int_lamp, g_int_mask);
 #endif
     color += emissive + decal_emit;
-    if (p_vol.x > 0.5) {  // volumetric fog in place of the exp² fog
+    if (p_vol.x > 0.5) {
         vec4 c = u_view_proj * vec4(v_world, 1.0);
         vec4 f = vol_fog(c.xy / c.w * 0.5 + 0.5, -(u_view * vec4(v_world, 1.0)).z);
         color = color * f.a + f.rgb;
