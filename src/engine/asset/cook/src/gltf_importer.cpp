@@ -9,7 +9,7 @@
 // factors of KHR_materials_clearcoat / _sheen / _anisotropy / _transmission / _ior (their textures are not
 // imported); M-TRANSLUCENT 41c: KHR_materials_diffuse_transmission's diffuseTransmissionFactor (the translucency; its colour factor
 // and textures are not used), KHR_materials_volume (accepted, the surface stays thin) and the material extras
-// mce_translucency / mce_wrap (0..1; they win over the extension); node TRS (or a decomposable matrix); translation/rotation/scale animation channels; skins with
+// mce_translucency / mce_wrap (0..1; they win over the extension), M-VISUAL4 5: the extra mce_interior_cells (0, 1, 2, 4); node TRS (or a decomposable matrix); translation/rotation/scale animation channels; skins with
 // JOINTS_n / WEIGHTS_n (the 4 largest of up to 8 sets, renormalized; up to 256 joints per skin) and inverse
 // bind matrices.
 //
@@ -72,6 +72,7 @@
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
+#include "mce/asset/material_interior.h"
 #include "mce/asset/material_translucency.h"
 #include "mce/math/math.h"
 #include "mesh_build.h"
@@ -1053,6 +1054,12 @@ void convert_translucency(Ctx& cx, JsonValue mat, asset::MaterialChunk& m) {
         };
         read("mce_translucency", translucency);
         read("mce_wrap", wrap);
+        // M-VISUAL4 5: mce_interior_cells (0, 1, 2 or 4 window cells across one texture repeat; mce/asset/material_interior.h).
+        if (const JsonValue ic = extras.get("mce_interior_cells"); ic.valid()) {
+            if (ic.is_integer() && ic.as_number() >= 0 && ic.as_number() <= 4 && asset::valid_interior_cells(static_cast<u32>(ic.as_number())))
+                asset::set_material_interior_cells(m, static_cast<u32>(ic.as_number()));
+            else cx.warning(ic, "mce_interior_cells must be 0, 1, 2 or 4; ignored");
+        }
     }
     asset::set_material_translucency(m, translucency, wrap);
 }

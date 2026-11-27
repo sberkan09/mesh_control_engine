@@ -917,6 +917,17 @@ def city_surface(scene):
     return node_half
 
 
+def tree_mesh(model, x, z):
+    """M-VISUAL4 6: a tree's MeshRef with its own tone. A hash of the position (not the rng, so no layout shifts) picks a brightness
+    0.8..1.12 and a warm/cool lean, so a row of one species is no longer one colour."""
+    h = math.sin(x * 12.9898 + z * 78.233) * 43758.5453
+    a, b = h - math.floor(h), math.sin(x * 4.1414 + z * 9.2653) * 0.5 + 0.5
+    v = 0.8 + 0.32 * a
+    m = model_mesh(model)
+    m["tint"] = [round(v * (0.95 + 0.1 * b), 3), round(v, 3), round(v * (1.05 - 0.1 * b), 3), 1.0]
+    return m
+
+
 def canopy(scene, name, model, x, y0, z, sc):
     """A camera-only collider over a tree's crown (layer 15, mask 0: nothing collides with it, default queries skip it), so the follow
     camera's spring arm stops at the leaves. y0 is where the tree's foot stands, sc its scale."""
@@ -945,7 +956,7 @@ def street_furniture(scene, rng, node_half):
                 model = "tree_oak" if rng.random() < 0.65 else "tree_pine"
                 sc = rng.uniform(0.7, 0.95)
                 scene.add("Street tree %s %+d %d" % (road_name(r), side, count),
-                          {"LocalTransform": tf((x, SIDEWALK_TOP, z), (sc, sc, sc), rng.uniform(0, 2 * math.pi)), "MeshRef": model_mesh(model)})
+                          {"LocalTransform": tf((x, SIDEWALK_TOP, z), (sc, sc, sc), rng.uniform(0, 2 * math.pi)), "MeshRef": tree_mesh(model, x, z)})
                 canopy(scene, "Street tree %s %+d %d" % (road_name(r), side, count), model, x, SIDEWALK_TOP, z, sc)
                 count += 1
                 lx += rng.uniform(26, 34)
@@ -1020,7 +1031,7 @@ def buildings(scene, rng):
                             e = scene.add(name + " tree %d" % t, {"LocalTransform": tf((tx, 1.5, tz)), "BoxCollider3D": {"half": [0.25, 1.5, 0.25]}})
                             scene.add(name + " tree %d mesh" % t, {"ChildOf": {"parent": scene.ref(e)},
                                                                    "LocalTransform": tf((0, -1.5, 0), (sc, sc, sc), rng.uniform(0, 6.28)),
-                                                                   "MeshRef": model_mesh(model)})
+                                                                   "MeshRef": tree_mesh(model, tx, tz)})
                             canopy(scene, name + " tree %d" % t, model, tx, 0.0, tz, sc)
                         for t in range(2):
                             scene.add(name + " bush %d" % t, {"LocalTransform": tf((cx + rng.uniform(-lw / 3, lw / 3), 0.1, cz + rng.uniform(-ld / 3, ld / 3)),
@@ -1055,7 +1066,7 @@ def buildings(scene, rng):
                     lot_yaw = rng.uniform(0, 6.28)  # drawn before the model, as the dict literal did
                     lot_tree = "tree_oak" if rng.random() < 0.6 else "tree_pine"
                     scene.add(name + " tree", {"LocalTransform": tf((tx, 0.0, tz), (sc, sc, sc), lot_yaw),
-                                               "MeshRef": model_mesh(lot_tree)})
+                                               "MeshRef": tree_mesh(lot_tree, tx, tz)})
                     canopy(scene, name + " tree", lot_tree, tx, 0.0, tz, sc)
                     count += 1
     return count
@@ -1285,6 +1296,7 @@ def prefabs():
 
 NIGHT_SHOT = bool(os.environ.get("MCE_NIGHT_SHOT"))
 NIGHT_WET = os.environ.get("MCE_NIGHT_SHOT") == "wet"   # M-NIGHTSHOT 2: the same shot in rain (wet roads)   # M-NIGHTSHOT: capture-only variant, never committed (tools/night_shot.sh)
+NIGHT_BEAM = os.environ.get("MCE_NIGHT_SHOT") == "beam"   # M-VISUAL4 4: night + volumetric fog + a side camera, to see the headlight beams
 START_HOUR = 22.0 if NIGHT_SHOT else 9.0      # the game starts on a morning
 DAY_SECONDS = 720     # twelve real minutes for 24 hours
 WEATHER_SEED = 55     # the first ten weather picks (150 s each) are clear, rain, clear, storm, overcast ... and none is snow
@@ -1478,7 +1490,8 @@ def scene():
                                             "color_grade": "guid:" + G_GRADE, "color_grade_strength": 0.8,
                                             # sky IBL (scaled to the DayCycle's ambient by Kit3DExtract) and auto exposure clamped
                                             # to -1/3 .. +1 stop, so a night stays a night
-                                            "sky_ibl": 1, "auto_exposure": 1, "auto_exposure_min": 0.8, "auto_exposure_max": 2.0},
+                                            "sky_ibl": 1, "auto_exposure": 1, "auto_exposure_min": 0.8, "auto_exposure_max": 2.0,
+                                            **({"volumetric_fog": 1, "fog_density": 0.02} if NIGHT_BEAM else {})},
                        "LocalTransform": {}})
     net = s.add("Road network", {"LocalTransform": {}, "RoadNetwork3D": {"roads": "guid:" + G_ROADS}})
     node_half = city_surface(s)
@@ -1586,7 +1599,7 @@ def scene():
                               "size_start": 0.35, "size_end": 0.05, "max_particles": 64, "seed": 5, "collide": 0, "additive": 1, "emitting": 1},
         "ParticleBurst": {"count": 6, "on": "Fired"},
         "ShakeTrigger": {"trauma": 0.04, "on": "Fired"},
-        "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
+        "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": 0.0 if NIGHT_BEAM else math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True,
                            "chase": 1, "chase_rate": 2.5, "chase_hold": 1.5, "chase_min_speed": 3},
     })

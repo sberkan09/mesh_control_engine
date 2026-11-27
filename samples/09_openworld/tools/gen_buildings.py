@@ -328,6 +328,10 @@ def _material(name, tex_dir):
         m["emissiveTexture"] = tex("emissive")
         m["emissiveFactor"] = [1.0, 1.0, 1.0]
         m["extensions"] = {"KHR_materials_emissive_strength": {"emissiveStrength": 0.5}}
+    if name in STYLES:
+        # M-VISUAL4 5: a room behind every window of the upper floors (one repeat = TILE_BAYS x TILE_FLOORS cells; the glass is
+        # the only mirror-smooth texel, which is the shader's window mask). The shop band's tile is not a square grid: no rooms.
+        m["extras"] = {"mce_interior_cells": TILE_BAYS}
     return m, uris
 
 

@@ -20,6 +20,7 @@
 #include "cook_test_util.h"
 #include "mce/asset/container.h"
 #include "mce/asset/formats.h"
+#include "mce/asset/material_interior.h"
 #include "mce/asset/material_translucency.h"
 #include "mce/cook/importer.h"
 #include "mce/math/math.h"
@@ -459,6 +460,22 @@ TEST_CASE("gltf ext: material extras mce_translucency and mce_wrap cook the bits
     CHECK(submesh_translucency(bad) == 0.0f);
     CHECK(bad.warning_count("must be a number in [0, 1]; ignored") == 1);
     CHECK(bad.warning_count("outside [0, 1]; clamped") == 1);
+}
+
+TEST_CASE("gltf ext: the material extra mce_interior_cells cooks the window grid (M-VISUAL4 5)") {
+    const Cooked plain = cook_with_material("{}");
+    REQUIRE(plain.ok);
+    CHECK(asset::material_interior_cells(plain.view().submeshes[0].material) == 0);
+    const Cooked four = cook_with_material("{\"extras\":{\"mce_interior_cells\":4,\"mce_wrap\":0.5}}");
+    INFO(four.text());
+    REQUIRE(four.ok);
+    CHECK(asset::material_interior_cells(four.view().submeshes[0].material) == 4);
+    CHECK(submesh_wrap(four) == doctest::Approx(0.5f).epsilon(0.005));  // the bits sit side by side
+    CHECK(four.warnings.empty());
+    const Cooked bad = cook_with_material("{\"extras\":{\"mce_interior_cells\":3}}");
+    REQUIRE(bad.ok);
+    CHECK(asset::material_interior_cells(bad.view().submeshes[0].material) == 0);
+    CHECK(bad.warning_count("mce_interior_cells must be 0, 1, 2 or 4; ignored") == 1);
 }
 
 // ---- sparse accessors -------------------------------------------------------------------------------------------
