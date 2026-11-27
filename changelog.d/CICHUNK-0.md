@@ -1,0 +1,1 @@
+- CI: `local_ci.sh` test chunks select by position in the filtered list, so no test is skipped or run twice and the last chunk no longer fails with "No tests were found".

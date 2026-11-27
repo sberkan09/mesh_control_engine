@@ -524,6 +524,10 @@ run_tests() {
     local preset="$1"; shift
     local nums=() n chunk=${MCE_CI_TEST_CHUNK:-60} rc=0 i ck
     mapfile -t nums < <(ctest --preset "$preset" -N "$@" 2> /dev/null | sed -n 's/^ *Test *#\([0-9]*\):.*/\1/p')
+    # `-I ...,<list>` counts positions in the filtered selection (-L/-LE/-R), not test numbers: with a label
+    # filter the numbers past the filtered total matched nothing ("No tests were found") and the rest named
+    # other tests. So chunk by position 1..N.
+    mapfile -t nums < <(seq 1 "${#nums[@]}")
     if [[ ${#nums[@]} -le $chunk || -z "${run_key:-}" ]]; then
         ctest_xvfb --preset "$preset" -j "$JOBS" "$@"; return
     fi
