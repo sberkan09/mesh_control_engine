@@ -1,0 +1,1 @@
+- editor: the Reset transform fuzz test judges the identity with the same tolerance as the command, which turned the clang-release integration run green again (M-RESETFIX).
