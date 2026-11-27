@@ -548,6 +548,7 @@ const Golden kGolden[] = {
     {"samples/09_openworld/models/surface/slab_paving_21p00_0p10_21p00.glb", 0x7c05d52e2847761dull},
     {"samples/09_openworld/models/surface/slab_paving_236p00_0p20_2p50.glb", 0xc2a2f8d009d7d6b6ull},
     {"samples/09_openworld/models/surface/slab_paving_243p00_0p20_2p50.glb", 0x3666d636a851f049ull},
+    {"samples/09_openworld/models/surface/tuft_grass.glb", 0x151b2cfc9b536f6bull},
     {"samples/09_openworld/third_party/kenney-blocky-characters/models/character-a.glb", 0xb485884391ad2ab4ull},
     {"samples/09_openworld/third_party/kenney-blocky-characters/models/character-b.glb", 0xaa8d8dc7f79e1cf5ull},
     {"samples/09_openworld/third_party/kenney-blocky-characters/models/character-c.glb", 0xfe6ca0625397d828ull},
