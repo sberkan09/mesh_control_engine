@@ -25,10 +25,14 @@ EntityId place(EditorScene& s, const char* name, f32 x, f32 y) {
     return id;
 }
 
+// Same tolerance as reset_transforms: set_parent keeps the world position, and the rounding of that
+// (fused multiply-add on clang release) leaves a local transform a hair away from the exact identity.
+bool near(f32 a, f32 b) { return std::fabs(a - b) <= 1e-6f; }
+
 bool is_identity(const LocalTransform& t) {
-    return t.position.x == 0.0f && t.position.y == 0.0f && t.position.z == 0.0f && t.rotation.x == 0.0f &&
-           t.rotation.y == 0.0f && t.rotation.z == 0.0f && t.rotation.w == 1.0f && t.scale.x == 1.0f &&
-           t.scale.y == 1.0f && t.scale.z == 1.0f;
+    return near(t.position.x, 0.0f) && near(t.position.y, 0.0f) && near(t.position.z, 0.0f) &&
+           near(t.rotation.x, 0.0f) && near(t.rotation.y, 0.0f) && near(t.rotation.z, 0.0f) &&
+           near(t.rotation.w, 1.0f) && near(t.scale.x, 1.0f) && near(t.scale.y, 1.0f) && near(t.scale.z, 1.0f);
 }
 
 }  // namespace
