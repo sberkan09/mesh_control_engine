@@ -561,7 +561,14 @@ run_scoped_tests() {
             run_tests "$preset" -LE "gpu|$ex" ;;
         smoke)
             echo "tests: without the gpu, ${ex//|/, } label(s), then the GPU smoke subset $GPU_SMOKE (simulation-only change)"
-            run_tests "$preset" -LE "gpu|$ex" && run_tests "$preset" -L gpu -LE "$ex" -R "$GPU_SMOKE" ;;
+            run_tests "$preset" -LE "gpu|$ex" || return 1
+            # A runner without GPU tests (MCE_GPU_TESTS off) registers none of the smoke tests; ctest then
+            # exits non-zero with "No tests were found", which failed an otherwise green run.
+            if [[ -n "$(ctest --preset "$preset" -N -L gpu -LE "$ex" -R "$GPU_SMOKE" 2> /dev/null | sed -n 's/^ *Test *#\([0-9]*\):.*/\1/p')" ]]; then
+                run_tests "$preset" -L gpu -LE "$ex" -R "$GPU_SMOKE"
+            else
+                echo "tests: no GPU smoke test is registered in this tree, skipped"
+            fi ;;
     esac
 }
 

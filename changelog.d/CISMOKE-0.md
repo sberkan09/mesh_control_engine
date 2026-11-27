@@ -1,0 +1,1 @@
+- CI: `local_ci.sh --task` no longer fails when the GPU smoke subset matches no registered test (a tree without `MCE_GPU_TESTS`).
