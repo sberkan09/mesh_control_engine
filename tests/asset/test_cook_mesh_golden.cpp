@@ -540,6 +540,7 @@ const Golden kGolden[] = {
     {"samples/09_openworld/models/surface/slab_asphalt_241p00_0p14_7p00.glb", 0x964dc7f48be38bd0ull},
     {"samples/09_openworld/models/surface/slab_asphalt_9p00_0p14_9p00.glb", 0xb2380b853d94c112ull},
     {"samples/09_openworld/models/surface/slab_grass_1120p00_0p50_1120p00.glb", 0x40a6cf29d780325dull},
+    {"samples/09_openworld/models/surface/slab_grass_5p00_0p02_1120p00.glb", 0x07f51b1fc16c32cbull},
     {"samples/09_openworld/models/surface/slab_grass_70p83_0p10_70p83.glb", 0x3cbc310655ea3329ull},
     {"samples/09_openworld/models/surface/slab_grass_70p83_0p10_72p00.glb", 0x7a07c2f0e4c070f5ull},
     {"samples/09_openworld/models/surface/slab_grass_72p00_0p10_70p83.glb", 0x914fc41a9b555bb1ull},

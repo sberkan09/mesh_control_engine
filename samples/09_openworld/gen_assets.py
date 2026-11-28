@@ -1690,8 +1690,24 @@ def scene():
                         "GiVisibility3D": {"relocate": 1, "follow_camera": 1}})
     signal_heads(s, node_half)
     street_decals(s, node_half)
+    lawn_bands(s)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
+
+
+def lawn_bands(s):
+    """M-VISUAL6 2: mowing bands. The ground is one uniform slab, so a big lawn has no variation. Every other 5 m band across the world is a thin
+    slab of the same grass whose tint is a little lighter (a per-instance MeshRef tint, no shader change); the roads, kerbs, lots and park lawns
+    sit above the bands (tops 0.1 and up against 0.04), so they only show on the open lawn. Added after everything else so older entities keep their order."""
+    half = GRID // 2 * SPACING + 60
+    width = 5.0
+    n = int(2 * half / width)
+    for k in range(1, n, 2):
+        x = -half + (k + 0.5) * width
+        shade = 1.12 + 0.2 * (0.5 + 0.5 * math.sin(k * 0.9))
+        m = slab(width, 0.02, 2 * half, "grass")
+        m["tint"] = [round(shade * 1.04, 3), round(shade * 1.06, 3), round(shade, 3), 1.0]
+        s.add("Lawn band %d" % k, {"LocalTransform": tf((x, 0.01, 0)), "MeshRef": m})
 
 
 def signal_heads(s, node_half):
