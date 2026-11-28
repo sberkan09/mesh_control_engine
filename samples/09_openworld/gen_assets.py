@@ -575,6 +575,7 @@ PAINT = {"marking_white": [0.92, 0.92, 0.88, 1.0], "marking_yellow": [0.95, 0.74
 PAINT_RETRO = {"marking_white": 0.8, "marking_yellow": 0.6}   # M-HEADLIGHT 3: glass-bead paint throws a car's headlights back
 G_MAT = {name: guid("materials/%s.mcmat" % name) for name in list(SURFACES) + list(PAINT)}
 PAINT_UV_M = 3.0     # the worn-paint texture repeats every 3 m
+GUTTER_W = 0.2      # M-VISUAL6 3: the pale gutter strip along each kerb, outside the white edge line (which ends 0.225 m from the kerb)
 PAINT_H = 0.03       # paint is a 3 cm slab on the road, so it never fights the road for the depth buffer
 ROAD_TOP = 0.14
 SIDEWALK_TOP = 0.2
@@ -908,6 +909,12 @@ def city_surface(scene):
         if yellow:
             scene.add("Paint yellow " + road_name(r), {"LocalTransform": tf(at(0, ROAD_TOP), yaw=yaw),
                                                        "MeshRef": paint(key + "_yellow", yellow, "marking_yellow")})
+        # M-VISUAL6 3: a pale concrete gutter along both kerbs (the paint's height), so the road edge reads against the dark asphalt;
+        # decals there were lost beside the bright kerb bevel (docs/milestones/M-VISUAL6.md).
+        gutter = [((xa + xb) / 2, PAINT_H / 2, side * (h - GUTTER_W / 2), xb - xa, PAINT_H, GUTTER_W) for side in (-1, 1)]
+        gm = paint(key + "_gutter", gutter, "concrete")
+        gm["tint"] = [0.9, 0.9, 0.88, 1.0]
+        scene.add("Gutter " + road_name(r), {"LocalTransform": tf(at(0, ROAD_TOP), yaw=yaw), "MeshRef": gm})
         trim = max(ha, hb)
         span = SPACING - 2 * trim
         for side in (-1, 1):
